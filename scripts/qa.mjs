@@ -497,9 +497,9 @@ if (hasWatchBtn > 0) {
     const title = await page.evaluate(() => document.title);
     ok('watch: embeds vidcore.io player with TMDB ID',
       /^https:\/\/vidcore\.io\/movie\/278/.test(frameSrc || ''), frameSrc || 'no src');
-    ok('watch: iframe has no sandbox so player streams without error',
-      sandbox === null,
-      sandbox ? `has sandbox: ${sandbox}` : 'clean');
+    ok('watch: iframe has sandbox for extra protection',
+      sandbox === 'allow-scripts allow-same-origin allow-forms allow-presentation',
+      sandbox ? `unexpected sandbox: ${sandbox}` : 'missing sandbox');
     ok('watch: external player button is removed', extBtnCount === 0, `btnCount=${extBtnCount}`);
     ok('watch: server switcher bar is removed', serverBarCount === 0, `barCount=${serverBarCount}`);
     ok('watch: document title carries the title', title.includes('— مشاهدة — hwto.kurd'), title);

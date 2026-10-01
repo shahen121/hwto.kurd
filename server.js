@@ -13,6 +13,11 @@ const UPSTREAM_HOST = 'kurdcinama.com';
 const API_PREFIX = '/api/';
 const API_TTL = 180 * 1000;
 const UPSTREAM_TIMEOUT = 20000;
+const MAX_API_RESPONSE = 2 * 1024 * 1024; // 2 MB
+const MAX_CACHE_ENTRIES = 400;
+const MAX_CACHE_KEY_LEN = 512;
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 30; // requests per window per IP
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -31,6 +36,7 @@ const MIME = {
 };
 
 const apiCache = new Map();
+const rateLimitMap = new Map();
 
 /* Response hardening + compression -------------------------------------- */
 
@@ -38,8 +44,15 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'DENY',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()'
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin'
 };
+
+// HSTS only in production (HTTPS). Local dev uses HTTP.
+const HSTS_HEADER = process.env.NODE_ENV === 'production'
+  ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' }
+  : {};
 
 // Everything the app is allowed to reach: its own files, the Google Fonts
 // stylesheet + font files, TMDB images and the site's own photo bucket.
@@ -74,9 +87,9 @@ function wantsGzip(req) {
  * Single write path: attaches the security headers, gzips text payloads when
  * the client asked for it and only when that actually shrinks the body.
  */
-function sendBuffer(req, res, status, data, headers = {}, { compress = false, csp = false } = {}) {
+function sendBuffer(req, res, status, data, headers = {}, { compress = false, csp = false, noBody = false } = {}) {
   const send = (body, gzipped) => {
-    const out = { ...SECURITY_HEADERS, ...headers, 'Content-Length': body.length };
+    const out = { ...SECURITY_HEADERS, ...HSTS_HEADER, ...headers, 'Content-Length': body.length };
     if (gzipped) {
       out['Content-Encoding'] = 'gzip';
       out.Vary = 'Accept-Encoding';
@@ -89,7 +102,11 @@ function sendBuffer(req, res, status, data, headers = {}, { compress = false, cs
       }
     }
     res.writeHead(status, out);
-    res.end(body);
+    if (!noBody) {
+      res.end(body);
+    } else {
+      res.end();
+    }
   };
 
   if (!compress || !wantsGzip(req) || data.length < MIN_COMPRESS_BYTES) {
@@ -102,25 +119,74 @@ function sendBuffer(req, res, status, data, headers = {}, { compress = false, cs
   });
 }
 
-function sendJson(req, res, status, payload, extraHeaders = {}) {
+function sendJson(req, res, status, payload, extraHeaders = {}, noBody = false) {
   sendBuffer(
     req,
     res,
     status,
     Buffer.from(JSON.stringify(payload), 'utf8'),
-    { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', ...extraHeaders },
-    { compress: true }
+    { 'Content-Type': 'application/json; charset=utf-8', ...extraHeaders },
+    { compress: true, noBody }
   );
 }
 
-function proxyApi(req, res, reqUrl) {
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW;
+  const entry = rateLimitMap.get(ip);
+  if (!entry) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  if (entry.resetTime < now) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return false;
+  }
+  entry.count++;
+  return true;
+}
+
+function isAllowedApiPath(pathname, search) {
+  if (pathname !== '/api/TMDBCache.aspx') return false;
+  const params = new URLSearchParams(search);
+  const action = params.get('action');
+  const allowedActions = new Set([
+    'trending', 'upcoming', 'toprated', 'search',
+    'mycontent', 'stats', 'movie', 'tv'
+  ]);
+  return allowedActions.has(action);
+}
+
+function proxyApi(req, res, reqUrl, isHead = false) {
+  // Rate limiting
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  if (!checkRateLimit(ip)) {
+    sendJson(req, res, 429, { error: 'Too many requests, please slow down' }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  // Validate API path and action
+  if (!isAllowedApiPath(reqUrl.pathname, reqUrl.search)) {
+    sendJson(req, res, 404, { error: 'Not Found' }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  // Validate cache key length
   const target = reqUrl.pathname + reqUrl.search;
+  if (target.length > MAX_CACHE_KEY_LEN) {
+    sendJson(req, res, 400, { error: 'Query too long' }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
   const hit = apiCache.get(target);
   if (hit && hit.expires > Date.now()) {
     sendJson(req, res, 200, JSON.parse(hit.body.toString('utf8')), {
       'Cache-Control': 'public, max-age=180',
       'X-Cache': 'HIT'
-    });
+    }, isHead);
     return;
   }
 
@@ -138,13 +204,22 @@ function proxyApi(req, res, reqUrl) {
 
   const upstream = https.request(options, (ures) => {
     const chunks = [];
-    ures.on('data', (c) => chunks.push(c));
+    let totalSize = 0;
+    ures.on('data', (c) => {
+      totalSize += c.length;
+      if (totalSize > MAX_API_RESPONSE) {
+        upstream.destroy(new Error('Response too large'));
+        return;
+      }
+      chunks.push(c);
+    });
     ures.on('end', () => {
+      if (totalSize > MAX_API_RESPONSE) return;
       const body = Buffer.concat(chunks);
       const ok = ures.statusCode >= 200 && ures.statusCode < 300;
       if (ok) {
         apiCache.set(target, { body, expires: Date.now() + API_TTL });
-        if (apiCache.size > 400) {
+        if (apiCache.size > MAX_CACHE_ENTRIES) {
           const oldest = apiCache.keys().next().value;
           apiCache.delete(oldest);
         }
@@ -156,11 +231,10 @@ function proxyApi(req, res, reqUrl) {
         body,
         {
           'Content-Type': ures.headers['content-type'] || 'application/json; charset=utf-8',
-          'Access-Control-Allow-Origin': '*',
           'Cache-Control': ok ? 'public, max-age=180' : 'no-store',
           'X-Cache': 'MISS'
         },
-        { compress: true }
+        { compress: true, noBody: isHead }
       );
     });
   });
@@ -177,14 +251,14 @@ function proxyApi(req, res, reqUrl) {
   upstream.end();
 }
 
-function sendText(req, res, status, message) {
+function sendText(req, res, status, message, noBody = false) {
   sendBuffer(req, res, status, Buffer.from(message, 'utf8'), {
     'Content-Type': 'text/plain; charset=utf-8',
     'Cache-Control': 'no-store'
-  });
+  }, { noBody });
 }
 
-function serveFile(req, res, filePath, status = 200) {
+function serveFile(req, res, filePath, status = 200, isHead = false) {
   fs.readFile(filePath, (err, data) => {
     if (err) {
       sendText(req, res, 404, 'Not Found');
@@ -200,7 +274,7 @@ function serveFile(req, res, filePath, status = 200) {
         'Content-Type': MIME[ext] || 'application/octet-stream',
         'Cache-Control': 'no-cache, must-revalidate'
       },
-      { compress: COMPRESSIBLE.has(ext), csp: ext === '.html' }
+      { compress: COMPRESSIBLE.has(ext), csp: ext === '.html', noBody: isHead }
     );
   });
 }
@@ -217,7 +291,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       ...SECURITY_HEADERS,
-      'Access-Control-Allow-Origin': '*',
+      ...HSTS_HEADER,
       'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Accept',
       'Access-Control-Max-Age': '86400'
@@ -231,8 +305,10 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  const isHead = req.method === 'HEAD';
+
   if (reqUrl.pathname.startsWith(API_PREFIX)) {
-    proxyApi(req, res, reqUrl);
+    proxyApi(req, res, reqUrl, isHead);
     return;
   }
 
@@ -254,11 +330,11 @@ const server = http.createServer((req, res) => {
 
   fs.stat(filePath, (err, stat) => {
     if (!err && stat.isFile()) {
-      serveFile(req, res, filePath);
+      serveFile(req, res, filePath, isHead);
       return;
     }
     if (!path.extname(relative)) {
-      serveFile(req, res, path.join(PUBLIC_DIR, 'index.html'));
+      serveFile(req, res, path.join(PUBLIC_DIR, 'index.html'), isHead);
       return;
     }
     sendText(req, res, 404, 'Not Found');
