@@ -1,0 +1,17 @@
+{
+  "name": "hwto.kurd",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Modern streaming/cinema frontend (hwto.kurd) powered by TMDB cache API",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "check": "node scripts/check.js",
+    "check:smoke": "node scripts/check.js --smoke",
+    "qa": "node scripts/qa.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
