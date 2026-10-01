@@ -2,8 +2,8 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "https://kurdcinama.com/api/$1"
+      "source": "/api/:path*",
+      "destination": "/api/proxy?path=:path*"
     },
     {
       "source": "/",
