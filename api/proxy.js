@@ -4,14 +4,11 @@
  * Replaces the vercel.json rewrite (which sent no headers → 403 from upstream).
  * vercel.json rewrites /api/:path* to /api/proxy?path=:path* and the original
  * query string is preserved. This function rebuilds the upstream URL and
- * forwards browser-like headers, mirroring server.js.
+ * forwards a minimal fixed header set.
  */
 
 const UPSTREAM = 'https://kurdcinama.com';
 const API_TIMEOUT = 20000;
-
-const BROWSER_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
@@ -43,10 +40,7 @@ export default async function handler(req, res) {
   const headers = {
     'Accept': 'application/json',
     'Accept-Encoding': 'identity',
-    'Host': 'kurdcinama.com',
-    'User-Agent': req.headers['user-agent'] || BROWSER_UA,
-    'Referer': 'https://kurdcinama.com/',
-    'Accept-Language': 'ar,en;q=0.8'
+    'User-Agent': 'hwto-kurd-proxy/1.0'
   };
 
   const controller = new AbortController();
