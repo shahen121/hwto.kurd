@@ -125,6 +125,7 @@ const expected = [
   'public/css/components.css',
   'public/js/config.js',
   'public/js/tv_catalog.js',
+  'public/js/catalog_data.js',
   'public/js/cache.js',
   'public/js/api.js',
   'public/js/store.js',

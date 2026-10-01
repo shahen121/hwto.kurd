@@ -53,6 +53,13 @@
 
 import { CONFIG, LIMITS } from './config.js';
 import { cacheGet, cacheSet, cacheKey, runOnce } from './cache.js';
+import {
+  FALLBACK_STATS,
+  FALLBACK_TRENDING,
+  FALLBACK_UPCOMING,
+  FALLBACK_TOPRATED,
+  FALLBACK_LIBRARY
+} from './catalog_data.js';
 
 export class ApiError extends Error {
   constructor(message, { code = 'unknown', status = 0, retriable = true } = {}) {
@@ -147,6 +154,83 @@ function detach(promise, signal) {
   });
 }
 
+function getCatalogFallback(params) {
+  const action = params.action;
+  if (action === 'stats') {
+    return FALLBACK_STATS;
+  }
+  if (action === 'trending') {
+    return FALLBACK_TRENDING;
+  }
+  if (action === 'upcoming') {
+    const limit = Number(params.limit) || 20;
+    return {
+      results: FALLBACK_UPCOMING.results ? FALLBACK_UPCOMING.results.slice(0, limit) : [],
+      total: FALLBACK_UPCOMING.total || 40,
+      cached: true
+    };
+  }
+  if (action === 'toprated') {
+    return FALLBACK_TOPRATED;
+  }
+  if (action === 'mycontent') {
+    const limit = Number(params.limit) || 20;
+    const type = params.type;
+    let list = FALLBACK_LIBRARY;
+    if (type === 'movie' || type === 'tv') {
+      list = list.filter((item) => item.media_type === type);
+    }
+    return {
+      results: list.slice(0, limit),
+      total: list.length,
+      cached: true
+    };
+  }
+  if (action === 'search') {
+    const q = String(params.q || '').trim().toLowerCase();
+    const type = params.type;
+    if (!q) return { results: [], total: 0, cached: true };
+    let list = FALLBACK_LIBRARY.filter((item) =>
+      item.title && item.title.toLowerCase().includes(q)
+    );
+    if (type === 'movie' || type === 'tv') {
+      list = list.filter((item) => item.media_type === type);
+    }
+    return {
+      results: list.slice(0, 40),
+      total: list.length,
+      cached: true
+    };
+  }
+  if (action === 'movie' || action === 'tv') {
+    const id = Number(params.id);
+    const fromTrending = (FALLBACK_TRENDING.results || []).find((i) => i.id === id);
+    if (fromTrending) return fromTrending;
+    const fromTop = (FALLBACK_TOPRATED.results || []).find((i) => i.id === id);
+    if (fromTop) return fromTop;
+    const fromUp = (FALLBACK_UPCOMING.results || []).find((i) => i.id === id);
+    if (fromUp) return fromUp;
+    const fromLib = FALLBACK_LIBRARY.find((i) => i.id === id);
+    if (fromLib) {
+      return {
+        id: fromLib.id,
+        title: fromLib.title,
+        name: fromLib.title,
+        original_title: fromLib.title,
+        original_name: fromLib.title,
+        overview: 'مشاهدة مباشرة بدقة عالية عبر مشغّل hwto.kurd.',
+        poster_path: fromLib.poster_path || '',
+        backdrop_path: '',
+        vote_average: 8.0,
+        release_date: '',
+        media_type: fromLib.media_type,
+        db_photo: fromLib.db_photo
+      };
+    }
+  }
+  return null;
+}
+
 async function request(params, { ttl = CONFIG.cacheTTL, signal } = {}) {
   const qs = cacheKey(params);
   const cached = cacheGet(qs);
@@ -164,9 +248,23 @@ async function request(params, { ttl = CONFIG.cacheTTL, signal } = {}) {
       } catch (err) {
         if (err && err.name === 'AbortError') throw err;
         lastErr = err;
+        if (err instanceof ApiError && err.status === 403) {
+          const fallback = getCatalogFallback(params);
+          if (fallback) {
+            cacheSet(qs, fallback, ttl);
+            return fallback;
+          }
+        }
         const retriable = err instanceof ApiError ? err.retriable : true;
         if (!retriable || attempt === CONFIG.retries) break;
         await sleep(400 * 2 ** attempt + Math.random() * 250);
+      }
+    }
+    if (lastErr && lastErr.status === 403) {
+      const fallback = getCatalogFallback(params);
+      if (fallback) {
+        cacheSet(qs, fallback, ttl);
+        return fallback;
       }
     }
     throw lastErr;
