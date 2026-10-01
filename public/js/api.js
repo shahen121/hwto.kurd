@@ -196,9 +196,18 @@ function getCatalogFallback(params) {
     if (type === 'movie' || type === 'tv') {
       list = list.filter((item) => item.media_type === type);
     }
+    const page = Math.max(1, Number(params.page) || 1);
+    const pageSize = 20;
+    const start = (page - 1) * pageSize;
+    const items = list.slice(start, start + pageSize);
+    const totalPages = Math.ceil(list.length / pageSize);
     return {
-      results: list.slice(0, 40),
+      results: items,
       total: list.length,
+      page,
+      total_pages: totalPages,
+      total_results: list.length,
+      has_more: page < totalPages,
       cached: true
     };
   }

@@ -3,6 +3,7 @@
  *
  * The page owns its input so typing never re-mounts the view: app.js routes
  * "same page, new query" calls into onRoute() instead of a full remount.
+ * "Load More" does NOT change the URL (keeps #/search?q=... stable).
  */
 
 import { api } from '../api.js';
@@ -31,11 +32,10 @@ function syncHeaderInput(value) {
   if (input && document.activeElement !== input && input.value !== value) input.value = value;
 }
 
-function hashFor(q, type, page) {
+function hashFor(q, type) {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (type) params.set('type', type);
-  if (page && page > 1) params.set('page', page);
   const s = params.toString();
   return s ? `#/search?${s}` : '#/search';
 }
@@ -53,7 +53,6 @@ export async function mount(params, view, { signal }) {
 
   const q = params.q || '';
   const type = params.type || '';
-  const page = Math.max(1, Number(params.page) || 1);
 
   view.innerHTML = `
     <div class="container page search-page">
@@ -91,6 +90,7 @@ export async function mount(params, view, { signal }) {
   const results = view.querySelector('#search-results');
   const tabs = Array.from(view.querySelectorAll('.tab'));
 
+  // State: items accumulate across pages, page tracks API response
   const state = { q, type, page: 1, items: [], totalPages: 1, totalResults: 0, hasMore: false, loading: false };
 
   const setTabs = (nextType) => {
@@ -101,39 +101,43 @@ export async function mount(params, view, { signal }) {
     });
   };
 
-  const renderResults = (list, append = false) => {
+  const renderResults = (list, append = false, newItems = []) => {
     if (append) {
-      // Append new items to existing grid
       const grid = results.querySelector('.movie-grid');
-      if (grid) {
-        const newItemsHtml = ui.movieGrid(list.items.slice(state.items.length));
-        grid.insertAdjacentHTML('beforeend', newItemsHtml);
+      if (grid && newItems.length) {
+        grid.insertAdjacentHTML('beforeend', ui.movieGrid(newItems));
         ui.hydrate(grid);
       }
-      // Update count
       const countEl = results.querySelector('.results-count');
       if (countEl) {
         countEl.innerHTML = `تم العثور على <strong>${state.items.length}</strong> نتيجة من ${state.totalResults}`;
       }
-    } else {
-      // Full render
-      if (!list.items.length) {
-        const scope = state.type ? (state.type === 'tv' ? ' في المسلسلات' : ' في الأفلام') : '';
-        results.innerHTML = ui.emptyState(`لا توجد نتائج تطابق «${state.q}»${scope}.`, {
-          title: 'لا نتائج',
-          hint: 'جرّب كلمة أقصر أو أزِل تصفية النوع.'
-        });
-        return;
+      const btn = results.querySelector('#load-more-btn');
+      if (btn) {
+        btn.hidden = !state.hasMore;
+        btn.disabled = false;
+        btn.textContent = 'عرض المزيد';
       }
-
-      const shown = list.items.slice(0, LIMITS.search.max);
-      results.innerHTML = `
-        <p class="results-count">تم العثور على <strong>${shown.length}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}</p>
-        ${ui.movieGrid(shown)}
-        ${list.hasMore ? `<button class="btn btn-primary load-more-btn" id="load-more-btn" type="button">عرض المزيد</button>` : ''}
-      `;
-      ui.hydrate(results);
+      return;
     }
+
+    // Full render (first page or new query)
+    if (!list.items.length) {
+      const scope = state.type ? (state.type === 'tv' ? ' في المسلسلات' : ' في الأفلام') : '';
+      results.innerHTML = ui.emptyState(`لا توجد نتائج تطابق «${state.q}»${scope}.`, {
+        title: 'لا نتائج',
+        hint: 'جرّب كلمة أقصر أو أزِل تصفية النوع.'
+      });
+      return;
+    }
+
+    const shown = list.items.slice(0, LIMITS.search.max);
+    results.innerHTML = `
+      <p class="results-count">تم العثور على <strong>${shown.length}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}</p>
+      ${ui.movieGrid(shown)}
+      ${list.hasMore ? `<button class="btn btn-primary load-more-btn" id="load-more-btn" type="button">عرض المزيد</button>` : ''}
+    `;
+    ui.hydrate(results);
   };
 
   const run = async (nextPage = 1, append = false) => {
@@ -155,7 +159,6 @@ export async function mount(params, view, { signal }) {
     if (!append) {
       results.innerHTML = ui.loadingBlock('جارٍ البحث…');
     } else {
-      // Show loading state on button
       const btn = results.querySelector('#load-more-btn');
       if (btn) {
         btn.disabled = true;
@@ -171,19 +174,25 @@ export async function mount(params, view, { signal }) {
 
       // Update state
       if (append) {
-        // Deduplicate by id
-        const existingIds = new Set(state.items.map(i => i.id));
-        const newItems = list.items.filter(i => !existingIds.has(i.id));
-        state.items = [...state.items, ...newItems];
+        const existingKeys = new Set(state.items.map(item => `${item.mediaType}:${item.id}`));
+        const newItems = list.items.filter(item => !existingKeys.has(`${item.mediaType}:${item.id}`));
+        state.items.push(...newItems);
+
+        state.page = list.page;
+        state.totalPages = list.totalPages;
+        state.totalResults = list.totalResults;
+        state.hasMore = list.hasMore;
+
+        renderResults(list, true, newItems);
       } else {
         state.items = list.items;
-      }
-      state.page = list.page;
-      state.totalPages = list.totalPages;
-      state.totalResults = list.totalResults;
-      state.hasMore = list.hasMore;
+        state.page = list.page;
+        state.totalPages = list.totalPages;
+        state.totalResults = list.totalResults;
+        state.hasMore = list.hasMore;
 
-      renderResults(list, append);
+        renderResults(list, false);
+      }
     } catch (err) {
       if (isAbort(err) || localSignal.aborted) return;
       if (!append) {
@@ -203,7 +212,7 @@ export async function mount(params, view, { signal }) {
     }
   };
 
-  const requested = { q, type, page };
+  const requested = { q, type };
 
   const applyQuery = (nextQ) => {
     if (nextQ === requested.q) return;
@@ -215,11 +224,6 @@ export async function mount(params, view, { signal }) {
     if (nextType === requested.type) return;
     requested.type = nextType;
     navigate(hashFor(requested.q, nextType), { replace: true });
-  };
-
-  const applyPage = (nextPage) => {
-    requested.page = nextPage;
-    navigate(hashFor(requested.q, requested.type, nextPage), { replace: true });
   };
 
   const debouncedSearch = debounce((value) => applyQuery(value), CONFIG.searchDebounce);
@@ -248,7 +252,7 @@ export async function mount(params, view, { signal }) {
     tab.addEventListener('click', () => applyType(tab.dataset.type || ''));
   });
 
-  // Load more button delegation
+  // Load more button - does NOT change URL
   results.addEventListener('click', (e) => {
     const btn = e.target.closest('#load-more-btn');
     if (btn && state.hasMore && !state.loading) {
@@ -260,21 +264,18 @@ export async function mount(params, view, { signal }) {
   handler = (next) => {
     const nextQ = next.q || '';
     const nextType = next.type || '';
-    const nextPage = Math.max(1, Number(next.page) || 1);
-    const changed = nextQ !== state.q || nextType !== state.type || nextPage !== state.page;
+    const changed = nextQ !== state.q || nextType !== state.type;
     state.q = nextQ;
     state.type = nextType;
-    state.page = nextPage;
     requested.q = nextQ;
     requested.type = nextType;
-    requested.page = nextPage;
     if (document.activeElement !== input && input.value !== nextQ) input.value = nextQ;
     syncHeaderInput(nextQ);
     setTabs(nextType);
-    if (changed) run(nextPage, false);
+    if (changed) run(1, false);
   };
 
-  if (q) run(page, false);
+  if (q) run(1, false);
   else results.innerHTML = emptyPrompt();
 }
 
