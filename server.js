@@ -130,9 +130,26 @@ function sendJson(req, res, status, payload, extraHeaders = {}, noBody = false) 
   );
 }
 
+function getRealIp(req) {
+  // Only trust X-Forwarded-For when behind a reverse proxy (set TRUST_PROXY=1).
+  // Otherwise a client can spoof it to bypass rate limiting.
+  if (process.env.TRUST_PROXY === '1') {
+    const xff = req.headers['x-forwarded-for'];
+    if (xff) return String(xff).split(',')[0].trim();
+  }
+  return req.socket.remoteAddress || 'unknown';
+}
+
+function cleanupRateLimit() {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (entry.resetTime < now) rateLimitMap.delete(ip);
+  }
+}
+setInterval(cleanupRateLimit, RATE_LIMIT_WINDOW * 2).unref();
+
 function checkRateLimit(ip) {
   const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW;
   const entry = rateLimitMap.get(ip);
   if (!entry) {
     rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
@@ -162,7 +179,7 @@ function isAllowedApiPath(pathname, search) {
 
 function proxyApi(req, res, reqUrl, isHead = false) {
   // Rate limiting
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  const ip = getRealIp(req);
   if (!checkRateLimit(ip)) {
     sendJson(req, res, 429, { error: 'Too many requests, please slow down' }, { 'Cache-Control': 'no-store' });
     return;

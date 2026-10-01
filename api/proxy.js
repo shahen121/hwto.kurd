@@ -134,11 +134,6 @@ function interleave(a, b) {
 }
 
 
-function list(results) {
-  return { results, total: results.length, cached: true };
-}
-
-
 const genreIds = (genres) =>
   Array.isArray(genres) ? genres.map((g) => g.id).filter(Number.isFinite).join(',') : '';
 
