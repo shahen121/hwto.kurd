@@ -1,117 +1,104 @@
 /**
- * Vercel serverless proxy — official TMDB API.
+ * Vercel serverless proxy: replaces the kurdcinama.com TMDBCache API with the
+ * official TMDB API and reshapes responses to what public/js/api.js expects.
  *
- * Replaces the kurdcinama.com upstream (Cloudflare bot-challenges Vercel IPs).
- * Reads TMDB_API_KEY from environment variables — never exposed to the browser.
+ * Needs the environment variable TMDB_API_KEY (v3 key, or a v4 read token).
+ * Optional: TMDB_LANGUAGE (default "en-US", e.g. "ar" for Arabic metadata).
  *
- * Accepts the same query params the frontend already sends:
- *   /api/TMDBCache.aspx?action=trending&type=movie&limit=20
- *
- * Reshapes TMDB responses to match the kurdcinama.com shapes documented in
- * public/js/api.js, so the frontend needs no changes.
+ * vercel.json keeps the rewrite:
+ *   /api/:path*  ->  /api/proxy?path=:path*
+ * so /api/TMDBCache.aspx?action=... lands here with the query string intact.
  */
 
-const TMDB_BASE = 'https://api.themoviedb.org/3';
-const API_TIMEOUT = 15000;
 
-export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
-    res.setHeader('Access-Control-Max-Age', '86400');
-    res.status(204).end();
-    return;
+const BASE = 'https://api.themoviedb.org/3';
+const LANGUAGE = process.env.TMDB_LANGUAGE || 'en-US';
+const TIMEOUT_MS = 15000;
+const PAGE_SIZE = 20;
+const MAX_PAGES = 5;
+
+
+/* ---------- TMDB client ---------- */
+
+
+async function tmdb(path, params = {}) {
+  const key = process.env.TMDB_API_KEY;
+  if (!key) {
+    const err = new Error('TMDB_API_KEY is not configured');
+    err.isConfig = true;
+    throw err;
   }
 
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
+
+  const url = new URL(BASE + path);
+  url.searchParams.set('language', LANGUAGE);
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
   }
 
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: 'TMDB_API_KEY is not configured' });
-    return;
-  }
 
-  const url = new URL(req.url, 'http://localhost');
-  const action = url.searchParams.get('action') || '';
-  const type = url.searchParams.get('type') || '';
-  const limit = Number(url.searchParams.get('limit')) || 0;
-  const q = url.searchParams.get('q') || '';
-  const id = url.searchParams.get('id') || '';
+  const headers = { Accept: 'application/json' };
+  if (key.length > 40) headers.Authorization = `Bearer ${key}`; // v4 read token
+  else url.searchParams.set('api_key', key); // v3 key
+
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), API_TIMEOUT);
-
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    let payload;
-
-    switch (action) {
-      case 'trending':
-        payload = await fetchTrending(type, limit, controller.signal);
-        break;
-      case 'upcoming':
-        payload = await fetchUpcoming(limit, controller.signal);
-        break;
-      case 'toprated':
-        payload = await fetchTopRated(controller.signal);
-        break;
-      case 'search':
-        payload = await fetchSearch(q, type, controller.signal);
-        break;
-      case 'mycontent':
-        payload = await fetchMyContent(type, limit, controller.signal);
-        break;
-      case 'stats':
-        payload = STATS_PLACEHOLDER;
-        break;
-      case 'movie':
-        payload = await fetchDetail('movie', id, controller.signal);
-        break;
-      case 'tv':
-        payload = await fetchDetail('tv', id, controller.signal);
-        break;
-      default:
-        res.status(400).json({ error: 'Unknown action' });
-        return;
+    const res = await fetch(url, { headers, signal: controller.signal });
+    if (res.status === 404) {
+      const err = new Error('Not found');
+      err.isNotFound = true;
+      throw err;
     }
-
-    const ok = payload && !payload.error;
-    res.status(200);
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', ok ? 's-maxage=180, stale-while-revalidate=60' : 'no-store');
-    res.send(JSON.stringify(payload));
-  } catch (err) {
-    const aborted = err && err.name === 'AbortError';
-    res.status(502).json({
-      error: aborted ? 'انتهت مهلة الاتصال بخادم البيانات' : 'تعذّر الوصول إلى خادم البيانات، حاول مجدداً'
-    });
+    if (!res.ok) throw new Error(`TMDB responded with ${res.status}`);
+    return await res.json();
   } finally {
     clearTimeout(timer);
   }
 }
 
-/* ------------------------------------------------------------------ *
- * TMDB fetch helpers                                                 *
- * ------------------------------------------------------------------ */
 
-async function tmdb(path, params, signal) {
-  const url = new URL(`${TMDB_BASE}${path}`);
-  url.searchParams.set('api_key', process.env.TMDB_API_KEY);
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
+/** Fetch enough pages of a list endpoint to cover `limit` items (deduped). */
+async function collect(path, params, limit) {
+  const pages = Math.max(1, Math.min(MAX_PAGES, Math.ceil(limit / PAGE_SIZE)));
+  const responses = await Promise.all(
+    Array.from({ length: pages }, (_, i) => tmdb(path, { ...params, page: i + 1 }))
+  );
+  const seen = new Set();
+  const out = [];
+  for (const r of responses) {
+    for (const item of r.results || []) {
+      const key = `${item.media_type || ''}:${item.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
   }
-  const res = await fetch(url.toString(), { signal, headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`TMDB ${res.status}`);
-  return res.json();
+  return out.slice(0, limit);
 }
 
-/** TMDB list row → kurdcinama row shape. */
-function toRow(item, mediaType) {
-  const mt = mediaType || item.media_type || 'movie';
+
+/* ---------- helpers ---------- */
+
+
+const first = (v) => (Array.isArray(v) ? v[0] : v);
+
+
+function toLimit(value, fallback, max) {
+  const n = Number(first(value));
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(Math.floor(n), max);
+}
+
+
+function toType(value) {
+  const t = first(value);
+  return t === 'movie' || t === 'tv' ? t : '';
+}
+
+
+function baseRow(item, mediaType) {
   return {
     id: item.id,
     title: item.title || item.name || '',
@@ -120,150 +107,223 @@ function toRow(item, mediaType) {
     vote_average: item.vote_average || 0,
     release_date: item.release_date || item.first_air_date || '',
     overview: item.overview || '',
-    media_type: mt,
-    rank: null,
-    local_id: null,
-    local_photo: ''
+    media_type: mediaType || item.media_type
   };
 }
 
-function toList(results, extra = {}) {
-  return { results, total: results.length, cached: true, ...extra };
-}
 
-/* ------------------------------------------------------------------ *
- * Endpoints                                                          *
- * ------------------------------------------------------------------ */
-
-async function fetchTrending(type, limit, signal) {
-  const data = await tmdb('/trending/all/week', {}, signal);
-  let results = (data.results || []).map((r) => toRow(r));
-  if (type === 'movie' || type === 'tv') {
-    results = results.filter((r) => r.media_type === type);
+function interleave(a, b) {
+  const out = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (i < a.length) out.push(a[i]);
+    if (i < b.length) out.push(b[i]);
   }
-  if (limit > 0) results = results.slice(0, limit);
-  return toList(results);
+  return out;
 }
 
-async function fetchUpcoming(limit, signal) {
-  const data = await tmdb('/movie/upcoming', {}, signal);
-  let results = (data.results || []).map((r) => toRow(r, 'movie'));
-  if (limit > 0) results = results.slice(0, limit);
-  return toList(results);
+
+function list(results) {
+  return { results, total: results.length, cached: true };
 }
 
-async function fetchTopRated(signal) {
-  const [movies, tv] = await Promise.all([
-    tmdb('/movie/top_rated', {}, signal),
-    tmdb('/tv/top_rated', {}, signal)
+
+const genreIds = (genres) =>
+  Array.isArray(genres) ? genres.map((g) => g.id).filter(Number.isFinite).join(',') : '';
+
+
+/* ---------- actions ---------- */
+
+
+async function trending(q) {
+  const type = toType(q.type);
+  const limit = toLimit(q.limit, 20, 60);
+  const items = await collect(`/trending/${type || 'all'}/week`, {}, limit);
+  const rows = items
+    .filter((i) => type || i.media_type === 'movie' || i.media_type === 'tv')
+    .map((item, idx) => ({
+      ...baseRow(item, type),
+      rank: idx + 1,
+      local_id: null,
+      local_photo: ''
+    }));
+  return list(rows);
+}
+
+
+async function upcoming(q) {
+  const limit = toLimit(q.limit, 20, 40); // old server capped at 40
+  const items = await collect('/movie/upcoming', {}, limit);
+  return list(items.map((item) => baseRow(item, 'movie')));
+}
+
+
+async function toprated(q) {
+  const type = toType(q.type);
+  const limit = toLimit(q.limit, 100, 100);
+  const perType = type ? limit : Math.ceil(limit / 2);
+  const [movies, shows] = await Promise.all([
+    type === 'tv' ? [] : collect('/movie/top_rated', {}, perType),
+    type === 'movie' ? [] : collect('/tv/top_rated', {}, perType)
   ]);
-  const results = [
-    ...(movies.results || []).map((r) => toRow(r, 'movie')),
-    ...(tv.results || []).map((r) => toRow(r, 'tv'))
-  ];
-  return toList(results);
+  const rows = [
+    ...movies.map((i) => baseRow(i, 'movie')),
+    ...shows.map((i) => baseRow(i, 'tv'))
+  ].sort((a, b) => b.vote_average - a.vote_average);
+  return list(rows.slice(0, limit));
 }
 
-async function fetchSearch(q, type, signal) {
-  if (!q.trim()) return toList([]);
-  const params = { query: q.trim() };
-  if (type === 'movie' || type === 'tv') params.media_type = type;
-  const data = await tmdb('/search/multi', params, signal);
-  const results = (data.results || [])
-    .filter((r) => r.media_type !== 'person')
-    .map((r) => toRow(r));
-  return toList(results);
+
+async function search(q) {
+  const query = String(first(q.q) || '').trim();
+  if (!query) return list([]);
+  const type = toType(q.type);
+  const data = await tmdb(type ? `/search/${type}` : '/search/multi', {
+    query,
+    include_adult: 'false',
+    page: 1
+  });
+  const rows = (data.results || [])
+    .filter((i) => type || i.media_type === 'movie' || i.media_type === 'tv')
+    .map((i) => baseRow(i, type));
+  return list(rows);
 }
 
-/**
- * "Site library" substitute — popular movies + popular TV.
- * kurdcinama.com had a private catalogue; TMDB has no equivalent.
- */
-async function fetchMyContent(type, limit, signal) {
-  const calls = [];
-  if (type !== 'tv') calls.push(tmdb('/movie/popular', {}, signal));
-  if (type !== 'movie') calls.push(tmdb('/tv/popular', {}, signal));
-  const responses = await Promise.all(calls);
 
-  let results = [];
-  for (const data of responses) {
-    const rows = (data.results || []).map((r) => {
-      const row = toRow(r);
-      row.db_id = null;
-      row.db_photo = '';
-      row.in_database = true;
-      return row;
-    });
-    results = results.concat(rows);
-  }
-  if (limit > 0) results = results.slice(0, limit);
-  return toList(results);
+/** Substitute for the private "site library": popular titles (limit is per type). */
+async function mycontent(q) {
+  const type = toType(q.type);
+  const limit = toLimit(q.limit, 20, 100);
+  const [movies, shows] = await Promise.all([
+    type === 'tv' ? [] : collect('/movie/popular', {}, limit),
+    type === 'movie' ? [] : collect('/tv/popular', {}, limit)
+  ]);
+  const toRow = (item, mediaType) => ({
+    db_id: item.id,
+    ...baseRow(item, mediaType),
+    db_photo: '',
+    in_database: true
+  });
+  const rows = interleave(
+    movies.map((i) => toRow(i, 'movie')),
+    shows.map((i) => toRow(i, 'tv'))
+  );
+  return list(rows);
 }
 
-/**
- * Detail response — reshapes TMDB genres array → comma-separated genre_ids
- * string, which is what api.js normaliseDetail() expects.
- */
-async function fetchDetail(mediaType, id, signal) {
-  if (!id || !/^\d+$/.test(id)) {
-    return { error: 'معرّف غير صالح' };
-  }
-  const path = `/${mediaType}/${id}`;
-  let data;
-  try {
-    data = await tmdb(path, {}, signal);
-  } catch {
-    return { error: 'المحتوى غير موجود' };
-  }
-  if (!data || data.success === false || data.status_message) {
-    return { error: 'المحتوى غير موجود' };
-  }
 
-  const genreIds = Array.isArray(data.genres)
-    ? data.genres.map((g) => g.id).join(',')
-    : '';
-
-  const base = {
-    id: data.id,
-    overview: data.overview || '',
-    poster_path: data.poster_path || '',
-    backdrop_path: data.backdrop_path || '',
-    vote_average: data.vote_average || 0,
-    vote_count: data.vote_count || 0,
-    popularity: data.popularity || 0,
-    original_language: data.original_language || '',
-    genre_ids: genreIds,
-    cached: true
+async function stats() {
+  const [m, t] = await Promise.allSettled([tmdb('/discover/movie', { page: 1 }), tmdb('/discover/tv', { page: 1 })]);
+  if (m.status === 'rejected' && t.status === 'rejected') throw m.reason;
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  return {
+    movies: m.status === 'fulfilled' ? m.value.total_results || 0 : 0,
+    tv_shows: t.status === 'fulfilled' ? t.value.total_results || 0 : 0,
+    trending: 20,
+    upcoming: 40,
+    top_rated: 100,
+    oldest_cache: now,
+    newest_cache: now
   };
+}
 
-  if (mediaType === 'tv') {
+
+async function details(q, kind) {
+  const id = String(first(q.id) || '').trim();
+  if (!/^\d+$/.test(id)) return { error: 'Invalid id' };
+
+
+  let json;
+  try {
+    json = await tmdb(`/${kind}/${id}`);
+  } catch (err) {
+    if (err.isNotFound) return { error: kind === 'tv' ? 'TV show not found' : 'Movie not found' };
+    throw err;
+  }
+
+
+  if (kind === 'tv') {
     return {
-      ...base,
-      name: data.name || '',
-      original_name: data.original_name || '',
-      first_air_date: data.first_air_date || '',
-      origin_country: Array.isArray(data.origin_country) ? data.origin_country[0] || '' : ''
+      id: json.id,
+      name: json.name || '',
+      original_name: json.original_name || '',
+      overview: json.overview || '',
+      poster_path: json.poster_path || '',
+      backdrop_path: json.backdrop_path || '',
+      first_air_date: json.first_air_date || '',
+      vote_average: json.vote_average || 0,
+      vote_count: json.vote_count || 0,
+      popularity: json.popularity || 0,
+      original_language: json.original_language || '',
+      genre_ids: genreIds(json.genres),
+      origin_country: json.origin_country || [],
+      cached: true
     };
   }
-
   return {
-    ...base,
-    title: data.title || '',
-    original_title: data.original_title || '',
-    release_date: data.release_date || ''
+    id: json.id,
+    title: json.title || '',
+    original_title: json.original_title || '',
+    overview: json.overview || '',
+    poster_path: json.poster_path || '',
+    backdrop_path: json.backdrop_path || '',
+    release_date: json.release_date || '',
+    vote_average: json.vote_average || 0,
+    vote_count: json.vote_count || 0,
+    popularity: json.popularity || 0,
+    original_language: json.original_language || '',
+    genre_ids: genreIds(json.genres),
+    cached: true
   };
 }
 
-/* ------------------------------------------------------------------ *
- * Stats placeholder                                                   *
- * ------------------------------------------------------------------ */
 
-const STATS_PLACEHOLDER = {
-  movies: 6928,
-  tv_shows: 2235,
-  trending: 20,
-  upcoming: 60,
-  top_rated: 40,
-  oldest_cache: '2025-12-22 00:00',
-  newest_cache: '2025-12-25 22:24'
-};
+/* ---------- handler ---------- */
+
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.status(405).json({ error: 'Method Not Allowed' });
+    return;
+  }
+
+
+  const q = req.query || {};
+  const action = String(first(q.action) || '').toLowerCase();
+
+
+  try {
+    let payload;
+    switch (action) {
+      case 'trending': payload = await trending(q); break;
+      case 'upcoming': payload = await upcoming(q); break;
+      case 'toprated': payload = await toprated(q); break;
+      case 'search': payload = await search(q); break;
+      case 'mycontent': payload = await mycontent(q); break;
+      case 'stats': payload = await stats(); break;
+      case 'movie': payload = await details(q, 'movie'); break;
+      case 'tv': payload = await details(q, 'tv'); break;
+      default:
+        res.setHeader('Cache-Control', 'no-store');
+        res.status(400).json({ error: 'Unknown action' });
+        return;
+    }
+
+
+    // Unknown ids answer HTTP 200 with {"error": "..."} and must not be cached.
+    res.setHeader(
+      'Cache-Control',
+      payload.error ? 'no-store' : 's-maxage=180, stale-while-revalidate=60'
+    );
+    res.status(200).json(payload);
+  } catch (err) {
+    res.setHeader('Cache-Control', 'no-store');
+    if (err && err.isConfig) {
+      res.status(500).json({ error: 'TMDB_API_KEY is not configured on the server' });
+      return;
+    }
+    const aborted = err && err.name === 'AbortError';
+    res.status(502).json({
+      error: aborted ? 'انتهت مهلة الاتصال بخادم البيانات' : 'تعذّر الوصول إلى خادم البيانات، حاول مجدداً'
+    });
+  }
+}
