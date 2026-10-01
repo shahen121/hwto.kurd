@@ -23,7 +23,7 @@ const ROUTES = [
   { re: /^\/upcoming\/?$/, make: () => ({ name: 'list', section: 'upcoming', type: 'movie' }) },
   { re: /^\/toprated\/(movie|tv)\/?$/, make: (m) => ({ name: 'list', section: 'toprated', type: m[1] }) },
   { re: /^\/site(?:\/(movie|tv))?\/?$/, make: (m) => ({ name: 'list', section: 'site', type: m[1] || '' }) },
-  { re: /^\/search\/?$/, make: () => ({ name: 'search', q: '', type: '' }) },
+  { re: /^\/search\/?$/, make: () => ({ name: 'search', q: '', type: '', page: 1 }) },
   { re: /^\/watch\/tv\/(\d+)\/(\d+)\/(\d+)\/?$/, make: (m) => ({ name: 'watch', type: 'tv', id: Number(m[1]), season: m[2], episode: m[3] }) },
   { re: /^\/watch\/(movie|tv)\/(\d+)\/?$/, make: (m) => ({ name: 'watch', type: m[1], id: Number(m[2]) }) },
   { re: /^\/(movie|tv)\/(\d+)\/?$/, make: (m) => ({ name: 'details', type: m[1], id: Number(m[2]) }) }
@@ -42,6 +42,7 @@ export function parseHash(hash) {
     if (params.name === 'search') {
       params.q = query.get('q') || '';
       params.type = ['movie', 'tv'].includes(query.get('type')) ? query.get('type') : '';
+      params.page = Math.max(1, Number(query.get('page')) || 1);
     }
     if (params.name === 'watch') {
       params.title = query.get('title') || params.title || '';
@@ -67,6 +68,7 @@ export function buildHash(params) {
       const q = new URLSearchParams();
       if (params.q) q.set('q', params.q);
       if (params.type) q.set('type', params.type);
+      if (params.page && params.page > 1) q.set('page', params.page);
       const s = q.toString();
       return s ? `#/search?${s}` : '#/search';
     }

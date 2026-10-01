@@ -98,6 +98,18 @@ function toType(value) {
 }
 
 
+function toPage(value) {
+  const n = Number(first(value));
+  if (!Number.isInteger(n) || n < 1) return 1;
+  return Math.min(n, 500);
+}
+
+
+function list(results, meta = {}) {
+  return { results, total: results.length, cached: true, ...meta };
+}
+
+
 function baseRow(item, mediaType) {
   return {
     id: item.id,
@@ -137,7 +149,8 @@ const genreIds = (genres) =>
 async function trending(q) {
   const type = toType(q.type);
   const limit = toLimit(q.limit, 20, 60);
-  const items = await collect(`/trending/${type || 'all'}/week`, {}, limit);
+  const page = toPage(q.page);
+  const items = await collect(`/trending/${type || 'all'}/week`, { page }, limit);
   const rows = items
     .filter((i) => type || i.media_type === 'movie' || i.media_type === 'tv')
     .map((item, idx) => ({
@@ -146,46 +159,57 @@ async function trending(q) {
       local_id: null,
       local_photo: ''
     }));
-  return list(rows);
+  return list(rows, { page, total_pages: 1, total_results: rows.length, has_more: false });
 }
 
 
 async function upcoming(q) {
-  const limit = toLimit(q.limit, 20, 40); // old server capped at 40
-  const items = await collect('/movie/upcoming', {}, limit);
-  return list(items.map((item) => baseRow(item, 'movie')));
+  const limit = toLimit(q.limit, 20, 40);
+  const page = toPage(q.page);
+  const items = await collect('/movie/upcoming', { page }, limit);
+  const rows = items.map((item) => baseRow(item, 'movie'));
+  return list(rows, { page, total_pages: 1, total_results: rows.length, has_more: false });
 }
 
 
 async function toprated(q) {
   const type = toType(q.type);
   const limit = toLimit(q.limit, 100, 100);
+  const page = toPage(q.page);
   const perType = type ? limit : Math.ceil(limit / 2);
   const [movies, shows] = await Promise.all([
-    type === 'tv' ? [] : collect('/movie/top_rated', {}, perType),
-    type === 'movie' ? [] : collect('/tv/top_rated', {}, perType)
+    type === 'tv' ? [] : collect('/movie/top_rated', { page }, perType),
+    type === 'movie' ? [] : collect('/tv/top_rated', { page }, perType)
   ]);
   const rows = [
     ...movies.map((i) => baseRow(i, 'movie')),
     ...shows.map((i) => baseRow(i, 'tv'))
   ].sort((a, b) => b.vote_average - a.vote_average);
-  return list(rows.slice(0, limit));
+  return list(rows.slice(0, limit), { page, total_pages: 1, total_results: rows.length, has_more: false });
 }
 
 
 async function search(q) {
   const query = String(first(q.q) || '').trim();
-  if (!query) return list([]);
+  if (!query) return list([], { page: 1, total_pages: 1, total_results: 0, has_more: false });
   const type = toType(q.type);
+  const page = toPage(q.page);
   const data = await tmdb(type ? `/search/${type}` : '/search/multi', {
     query,
     include_adult: 'false',
-    page: 1
+    page
   });
   const rows = (data.results || [])
     .filter((i) => type || i.media_type === 'movie' || i.media_type === 'tv')
     .map((i) => baseRow(i, type));
-  return list(rows);
+  const totalPages = data.total_pages || 1;
+  const totalResults = data.total_results || 0;
+  return list(rows, {
+    page,
+    total_pages: totalPages,
+    total_results: totalResults,
+    has_more: page < totalPages
+  });
 }
 
 
@@ -193,9 +217,10 @@ async function search(q) {
 async function mycontent(q) {
   const type = toType(q.type);
   const limit = toLimit(q.limit, 20, 100);
+  const page = toPage(q.page);
   const [movies, shows] = await Promise.all([
-    type === 'tv' ? [] : collect('/movie/popular', {}, limit),
-    type === 'movie' ? [] : collect('/tv/popular', {}, limit)
+    type === 'tv' ? [] : collect('/movie/popular', { page }, limit),
+    type === 'movie' ? [] : collect('/tv/popular', { page }, limit)
   ]);
   const toRow = (item, mediaType) => ({
     db_id: item.id,
@@ -207,7 +232,7 @@ async function mycontent(q) {
     movies.map((i) => toRow(i, 'movie')),
     shows.map((i) => toRow(i, 'tv'))
   );
-  return list(rows);
+  return list(rows, { page, total_pages: 1, total_results: rows.length, has_more: false });
 }
 
 

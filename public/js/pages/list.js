@@ -1,6 +1,6 @@
 /**
  * pages/list.js — every browse page (trending / upcoming / top rated / site).
- * Supports real load-more and client-side sorting (by rating, date, title).
+ * Supports real page-based pagination (load-more fetches next page from API).
  */
 
 import { api } from '../api.js';
@@ -16,28 +16,28 @@ const SECTIONS = {
     subtitle: 'ما يشاهده الجمهور الآن',
     initial: LIMITS.trending.initial,
     max: LIMITS.trending.max,
-    fetch: ({ type, limit, signal }) => api.getTrending({ type, limit, signal })
+    fetch: ({ type, limit, page, signal }) => api.getTrending({ type, limit, page, signal })
   },
   upcoming: {
     title: () => 'أفلام قادمة',
     subtitle: 'إصدارات على وشك الوصول',
     initial: LIMITS.upcoming.initial,
     max: LIMITS.upcoming.max,
-    fetch: ({ type, limit, signal }) => api.getUpcoming({ limit, signal })
+    fetch: ({ type, limit, page, signal }) => api.getUpcoming({ limit, page, signal })
   },
   toprated: {
     title: (type) => (type === 'tv' ? 'المسلسلات الأعلى تقييماً' : 'الأفلام الأعلى تقييماً'),
     subtitle: 'حسب تقييم الجمهور',
     initial: 0,
     max: 0,
-    fetch: ({ type, limit, signal }) => api.getTopRated({ type, limit, signal })
+    fetch: ({ type, limit, page, signal }) => api.getTopRated({ type, limit, page, signal })
   },
   site: {
     title: (type) => (type === 'tv' ? 'مسلسلات مكتبة الموقع' : type === 'movie' ? 'أفلام مكتبة الموقع' : 'مكتبة الموقع'),
     subtitle: 'محتوى محفوظ في قاعدة بيانات الموقع',
     initial: LIMITS.myContent.initial,
     max: LIMITS.myContent.max,
-    fetch: ({ type, limit, signal }) => api.getMyContent({ type, limit, signal })
+    fetch: ({ type, limit, page, signal }) => api.getMyContent({ type, limit, page, signal })
   }
 };
 
@@ -72,7 +72,7 @@ function sortItems(items, sortBy) {
     return list.sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || '')));
   }
   if (sortBy === 'title') {
-    return list.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ar'));
+    return list.sort((a, b) => String(a.title || '').localeCompare(String(a.title || ''), 'ar'));
   }
   return list;
 }
@@ -84,7 +84,17 @@ export async function mount(params, view, { signal }) {
   const { initial, max } = limitsFor(section, type);
   const title = cfg.title(type);
 
-  const state = { all: [], shown: 0, limit: initial, loading: false, sort: 'default' };
+  // State: page-based pagination
+  const state = {
+    all: [],
+    shown: 0,
+    page: 1,
+    totalPages: 1,
+    totalResults: 0,
+    hasMore: false,
+    loading: false,
+    sort: 'default'
+  };
 
   view.innerHTML = `
     <div class="container page">
@@ -124,31 +134,31 @@ export async function mount(params, view, { signal }) {
       });
       return;
     }
-    const canLoadMore = state.shown < state.all.length || state.limit < max;
+    const canLoadMore = state.hasMore && !state.loading;
     body.innerHTML =
       ui.movieGrid(visible, { showRank: (section === 'trending' || section === 'toprated') && state.sort === 'default' }) +
       ui.loadMoreButton({ id: 'list-more', label: 'عرض المزيد', hidden: !canLoadMore });
     ui.hydrate(body);
     if (meta) {
-      meta.textContent = `عرض ${visible.length} من ${state.all.length} عنوان`;
+      meta.textContent = `عرض ${visible.length} من ${state.totalResults || state.all.length} عنوان`;
     }
     const btn = body.querySelector('#list-more');
     if (btn) btn.addEventListener('click', onLoadMore);
   };
 
-  const fetchPage = async () => {
-    const list = await cfg.fetch({ type, limit: state.limit, signal });
+  const fetchPage = async (page) => {
+    const list = await cfg.fetch({ type, limit: initial, page, signal });
     const items = list.items;
     if (type) rememberMany(type, items);
     else {
       rememberMany('movie', items.filter((i) => i.mediaType === 'movie'));
       rememberMany('tv', items.filter((i) => i.mediaType === 'tv'));
     }
-    state.all = dedupe([...state.all, ...items]);
+    return { items, hasMore: list.hasMore, totalPages: list.totalPages, totalResults: list.totalResults };
   };
 
   const onLoadMore = async () => {
-    if (state.loading) return;
+    if (state.loading || !state.hasMore) return;
 
     // There are already-fetched items waiting below the fold — reveal them.
     if (state.shown < state.all.length) {
@@ -157,17 +167,24 @@ export async function mount(params, view, { signal }) {
       return;
     }
 
-    if (state.limit >= max) return;
     state.loading = true;
     const btn = body.querySelector('#list-more');
     if (btn) {
       btn.disabled = true;
       btn.textContent = 'جارٍ التحميل…';
     }
-    const before = state.all.length;
-    state.limit = Math.min(max, Math.max(state.limit * 2, initial));
+
+    const nextPage = state.page + 1;
     try {
-      await fetchPage();
+      const { items, hasMore, totalPages, totalResults } = await fetchPage(nextPage);
+      state.page = nextPage;
+      state.totalPages = totalPages || 1;
+      state.totalResults = totalResults || 0;
+      state.hasMore = hasMore;
+      const existingIds = new Set(state.all.map(i => `${i.mediaType}:${i.id}`));
+      const newItems = items.filter(i => !existingIds.has(`${i.mediaType}:${i.id}`));
+      state.all = dedupe([...state.all, ...newItems]);
+      state.shown = Math.min(state.all.length, state.shown + initial);
     } catch (err) {
       if (isAbort(err)) return;
       state.loading = false;
@@ -176,13 +193,17 @@ export async function mount(params, view, { signal }) {
       return;
     }
     state.loading = false;
-    if (state.all.length === before) state.limit = max; // server returned nothing new
-    state.shown = Math.min(state.all.length, state.shown + initial);
     paint();
   };
 
+  // Initial load
   try {
-    await fetchPage();
+    const { items, hasMore, totalPages, totalResults } = await fetchPage(1);
+    state.page = 1;
+    state.totalPages = totalPages || 1;
+    state.totalResults = totalResults || 0;
+    state.hasMore = hasMore;
+    state.all = dedupe(items);
   } catch (err) {
     if (isAbort(err)) return;
     body.innerHTML = ui.errorState(err && err.message, { onRetry: true });

@@ -1,5 +1,5 @@
 /**
- * pages/search.js — debounced search with type filters.
+ * pages/search.js — debounced search with type filters and pagination.
  *
  * The page owns its input so typing never re-mounts the view: app.js routes
  * "same page, new query" calls into onRoute() instead of a full remount.
@@ -31,10 +31,11 @@ function syncHeaderInput(value) {
   if (input && document.activeElement !== input && input.value !== value) input.value = value;
 }
 
-function hashFor(q, type) {
+function hashFor(q, type, page) {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (type) params.set('type', type);
+  if (page && page > 1) params.set('page', page);
   const s = params.toString();
   return s ? `#/search?${s}` : '#/search';
 }
@@ -52,6 +53,7 @@ export async function mount(params, view, { signal }) {
 
   const q = params.q || '';
   const type = params.type || '';
+  const page = Math.max(1, Number(params.page) || 1);
 
   view.innerHTML = `
     <div class="container page search-page">
@@ -89,7 +91,7 @@ export async function mount(params, view, { signal }) {
   const results = view.querySelector('#search-results');
   const tabs = Array.from(view.querySelectorAll('.tab'));
 
-  const state = { q, type };
+  const state = { q, type, page: 1, items: [], totalPages: 1, totalResults: 0, hasMore: false, loading: false };
 
   const setTabs = (nextType) => {
     tabs.forEach((tab) => {
@@ -99,7 +101,43 @@ export async function mount(params, view, { signal }) {
     });
   };
 
-  const run = async () => {
+  const renderResults = (list, append = false) => {
+    if (append) {
+      // Append new items to existing grid
+      const grid = results.querySelector('.movie-grid');
+      if (grid) {
+        const newItemsHtml = ui.movieGrid(list.items.slice(state.items.length));
+        grid.insertAdjacentHTML('beforeend', newItemsHtml);
+        ui.hydrate(grid);
+      }
+      // Update count
+      const countEl = results.querySelector('.results-count');
+      if (countEl) {
+        countEl.innerHTML = `تم العثور على <strong>${state.items.length}</strong> نتيجة من ${state.totalResults}`;
+      }
+    } else {
+      // Full render
+      if (!list.items.length) {
+        const scope = state.type ? (state.type === 'tv' ? ' في المسلسلات' : ' في الأفلام') : '';
+        results.innerHTML = ui.emptyState(`لا توجد نتائج تطابق «${state.q}»${scope}.`, {
+          title: 'لا نتائج',
+          hint: 'جرّب كلمة أقصر أو أزِل تصفية النوع.'
+        });
+        return;
+      }
+
+      const shown = list.items.slice(0, LIMITS.search.max);
+      results.innerHTML = `
+        <p class="results-count">تم العثور على <strong>${shown.length}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}</p>
+        ${ui.movieGrid(shown)}
+        ${list.hasMore ? `<button class="btn btn-primary load-more-btn" id="load-more-btn" type="button">عرض المزيد</button>` : ''}
+      `;
+      ui.hydrate(results);
+    }
+  };
+
+  const run = async (nextPage = 1, append = false) => {
+    if (state.loading) return;
     if (runCtrl) runCtrl.abort();
     runCtrl = new AbortController();
     const localSignal = runCtrl.signal;
@@ -114,47 +152,58 @@ export async function mount(params, view, { signal }) {
       return;
     }
 
-    results.innerHTML = ui.loadingBlock('جارٍ البحث…');
+    if (!append) {
+      results.innerHTML = ui.loadingBlock('جارٍ البحث…');
+    } else {
+      // Show loading state on button
+      const btn = results.querySelector('#load-more-btn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'جارٍ التحميل…';
+      }
+    }
+
+    state.loading = true;
 
     try {
-      const list = await api.search({ q: query, type: state.type, signal: localSignal });
+      const list = await api.search({ q: query, type: state.type, page: nextPage, signal: localSignal });
       if (localSignal.aborted) return;
 
-      if (!list.items.length) {
-        const scope = state.type ? (state.type === 'tv' ? ' في المسلسلات' : ' في الأفلام') : '';
-        results.innerHTML = ui.emptyState(`لا توجد نتائج تطابق «${query}»${scope}.`, {
-          title: 'لا نتائج',
-          hint: 'جرّب كلمة أقصر أو أزِل تصفية النوع.'
-        });
-        return;
+      // Update state
+      if (append) {
+        // Deduplicate by id
+        const existingIds = new Set(state.items.map(i => i.id));
+        const newItems = list.items.filter(i => !existingIds.has(i.id));
+        state.items = [...state.items, ...newItems];
+      } else {
+        state.items = list.items;
       }
+      state.page = list.page;
+      state.totalPages = list.totalPages;
+      state.totalResults = list.totalResults;
+      state.hasMore = list.hasMore;
 
-      if (state.type) rememberMany(state.type, list.items);
-      else {
-        rememberMany('movie', list.items.filter((i) => i.mediaType === 'movie'));
-        rememberMany('tv', list.items.filter((i) => i.mediaType === 'tv'));
-      }
-
-      const shown = list.items.slice(0, LIMITS.search.max);
-      results.innerHTML = `
-        <p class="results-count">تم العثور على <strong>${shown.length}</strong> نتيجة</p>
-        ${ui.movieGrid(shown)}`;
-      ui.hydrate(results);
+      renderResults(list, append);
     } catch (err) {
       if (isAbort(err) || localSignal.aborted) return;
-      results.innerHTML = ui.errorState(err && err.message, { onRetry: true, retryId: 'search-retry' });
-      const retry = results.querySelector('#search-retry');
-      if (retry) retry.addEventListener('click', () => run());
+      if (!append) {
+        results.innerHTML = ui.errorState(err && err.message, { onRetry: true, retryId: 'search-retry' });
+        const retry = results.querySelector('#search-retry');
+        if (retry) retry.addEventListener('click', () => run(1, false));
+      } else {
+        const btn = results.querySelector('#load-more-btn');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'عرض المزيد';
+        }
+      }
     } finally {
+      state.loading = false;
       if (pageSignal) pageSignal.removeEventListener('abort', onOuterAbort);
     }
   };
 
-  // `state` is only ever mutated by the route handler below. `requested`
-  // mirrors what the user last asked for, so a navigation triggered from this
-  // page always counts as a change and re-runs the query — even when the
-  // hashchange event has not fired yet.
-  const requested = { q, type };
+  const requested = { q, type, page };
 
   const applyQuery = (nextQ) => {
     if (nextQ === requested.q) return;
@@ -166,6 +215,11 @@ export async function mount(params, view, { signal }) {
     if (nextType === requested.type) return;
     requested.type = nextType;
     navigate(hashFor(requested.q, nextType), { replace: true });
+  };
+
+  const applyPage = (nextPage) => {
+    requested.page = nextPage;
+    navigate(hashFor(requested.q, requested.type, nextPage), { replace: true });
   };
 
   const debouncedSearch = debounce((value) => applyQuery(value), CONFIG.searchDebounce);
@@ -194,22 +248,33 @@ export async function mount(params, view, { signal }) {
     tab.addEventListener('click', () => applyType(tab.dataset.type || ''));
   });
 
+  // Load more button delegation
+  results.addEventListener('click', (e) => {
+    const btn = e.target.closest('#load-more-btn');
+    if (btn && state.hasMore && !state.loading) {
+      run(state.page + 1, true);
+    }
+  });
+
   // Called by app.js when the route changes but the page stays on `search`.
   handler = (next) => {
     const nextQ = next.q || '';
     const nextType = next.type || '';
-    const changed = nextQ !== state.q || nextType !== state.type;
+    const nextPage = Math.max(1, Number(next.page) || 1);
+    const changed = nextQ !== state.q || nextType !== state.type || nextPage !== state.page;
     state.q = nextQ;
     state.type = nextType;
+    state.page = nextPage;
     requested.q = nextQ;
     requested.type = nextType;
+    requested.page = nextPage;
     if (document.activeElement !== input && input.value !== nextQ) input.value = nextQ;
     syncHeaderInput(nextQ);
     setTabs(nextType);
-    if (changed) run();
+    if (changed) run(nextPage, false);
   };
 
-  if (q) run();
+  if (q) run(page, false);
   else results.innerHTML = emptyPrompt();
 }
 

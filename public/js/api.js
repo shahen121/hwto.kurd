@@ -355,31 +355,29 @@ function normaliseDetail(json, mediaType) {
  * Endpoints                                                           *
  * ------------------------------------------------------------------ */
 
-export async function getTrending({ type = '', limit = LIMITS.trending.initial, signal } = {}) {
-  const params = { action: 'trending' };
+export async function getTrending({ type = '', limit = LIMITS.trending.initial, page = 1, signal } = {}) {
+  const params = { action: 'trending', page: Math.max(1, Math.floor(page)) };
   if (type) params.type = type;
   if (limit && Number.isFinite(Number(limit))) params.limit = limit;
 
   const json = await request(params, { signal });
   const list = normaliseList(json, type || null);
 
-  // The server ignores `type` on this endpoint — filter locally so the
-  // "Trending Movies" and "Trending TV" pages actually differ.
   const items = type ? list.items.filter((i) => i.mediaType === type) : list.items;
   return { ...list, items, serverCount: list.items.length };
 }
 
-export async function getUpcoming({ limit = LIMITS.upcoming.initial, signal } = {}) {
-  const params = { action: 'upcoming' };
+export async function getUpcoming({ limit = LIMITS.upcoming.initial, page = 1, signal } = {}) {
+  const params = { action: 'upcoming', page: Math.max(1, Math.floor(page)) };
   if (limit && Number.isFinite(Number(limit))) params.limit = limit;
   const json = await request(params, { signal });
   return normaliseList(json, 'movie');
 }
 
-export async function getTopRated({ type = '', limit = 0, signal } = {}) {
-  // Never ask the server for a typed list — those two variants are broken.
-  // The unfiltered list is the one source of truth, filtered by `media_type`.
-  const json = await request({ action: 'toprated', limit: 100 }, { signal });
+export async function getTopRated({ type = '', limit = 0, page = 1, signal } = {}) {
+  const params = { action: 'toprated', limit: 100, page: Math.max(1, Math.floor(page)) };
+  if (type) params.type = type;
+  const json = await request(params, { signal });
   const list = normaliseList(json, null);
   const items = type ? list.items.filter((item) => item.mediaType === type) : list.items;
   const capped = limit && Number.isFinite(Number(limit)) ? Number(limit) : 0;
@@ -387,18 +385,26 @@ export async function getTopRated({ type = '', limit = 0, signal } = {}) {
   return { ...list, items: visible, total: items.length, serverCount: list.items.length };
 }
 
-export async function search({ q = '', type = '', signal } = {}) {
+export async function search({ q = '', type = '', page = 1, signal } = {}) {
   const query = String(q || '').trim();
-  if (!query) return { items: [], total: 0, cached: false };
+  if (!query) return { items: [], page: 1, totalPages: 1, totalResults: 0, hasMore: false, cached: false };
 
-  const params = { action: 'search', q: query };
+  const params = { action: 'search', q: query, page: Math.max(1, Math.floor(page)) };
   if (type) params.type = type;
   const json = await request(params, { signal });
-  return normaliseList(json, type || null);
+  const list = normaliseList(json, type || null);
+  return {
+    items: list.items,
+    page: json.page || 1,
+    totalPages: json.total_pages || 1,
+    totalResults: json.total_results || 0,
+    hasMore: json.has_more || false,
+    cached: list.cached
+  };
 }
 
-export async function getMyContent({ type = '', limit = LIMITS.myContent.initial, signal } = {}) {
-  const params = { action: 'mycontent' };
+export async function getMyContent({ type = '', limit = LIMITS.myContent.initial, page = 1, signal } = {}) {
+  const params = { action: 'mycontent', page: Math.max(1, Math.floor(page)) };
   if (type) params.type = type;
   if (limit && Number.isFinite(Number(limit))) params.limit = limit;
   const json = await request(params, { signal });
