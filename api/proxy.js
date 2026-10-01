@@ -59,11 +59,14 @@ async function tmdb(path, params = {}) {
 }
 
 
-/** Fetch enough pages of a list endpoint to cover `limit` items (deduped). */
+/** Fetch enough pages of a list endpoint to cover `limit` items (deduped).
+ *  Starts at the requested `params.page` (so page=5 really means page 5).
+ *  Returns `{ items, totalPages, totalResults }` taken from the first TMDB page. */
 async function collect(path, params, limit) {
+  const startPage = toPage(params.page);
   const pages = Math.max(1, Math.min(MAX_PAGES, Math.ceil(limit / PAGE_SIZE)));
   const responses = await Promise.all(
-    Array.from({ length: pages }, (_, i) => tmdb(path, { ...params, page: i + 1 }))
+    Array.from({ length: pages }, (_, i) => tmdb(path, { ...params, page: startPage + i }))
   );
   const seen = new Set();
   const out = [];
@@ -75,7 +78,12 @@ async function collect(path, params, limit) {
       out.push(item);
     }
   }
-  return out.slice(0, limit);
+  const firstPage = responses[0] || {};
+  return {
+    items: out.slice(0, limit),
+    totalPages: firstPage.total_pages || 1,
+    totalResults: firstPage.total_results || out.length
+  };
 }
 
 
@@ -145,7 +153,7 @@ async function trending(q) {
   const type = toType(q.type);
   const limit = toLimit(q.limit, 20, 60);
   const page = toPage(q.page);
-  const items = await collect(`/trending/${type || 'all'}/week`, { page }, limit);
+  const { items, totalPages, totalResults } = await collect(`/trending/${type || 'all'}/week`, { page }, limit);
   const rows = items
     .filter((i) => type || i.media_type === 'movie' || i.media_type === 'tv')
     .map((item, idx) => ({
@@ -154,16 +162,16 @@ async function trending(q) {
       local_id: null,
       local_photo: ''
     }));
-  return list(rows, { page, total_pages: 1, total_results: rows.length, has_more: false });
+  return list(rows, { page, total_pages: totalPages, total_results: totalResults, has_more: page < totalPages });
 }
 
 
 async function upcoming(q) {
   const limit = toLimit(q.limit, 20, 40);
   const page = toPage(q.page);
-  const items = await collect('/movie/upcoming', { page }, limit);
+  const { items, totalPages, totalResults } = await collect('/movie/upcoming', { page }, limit);
   const rows = items.map((item) => baseRow(item, 'movie'));
-  return list(rows, { page, total_pages: 1, total_results: rows.length, has_more: false });
+  return list(rows, { page, total_pages: totalPages, total_results: totalResults, has_more: page < totalPages });
 }
 
 
@@ -172,15 +180,20 @@ async function toprated(q) {
   const limit = toLimit(q.limit, 100, 100);
   const page = toPage(q.page);
   const perType = type ? limit : Math.ceil(limit / 2);
+  const unused = { items: [], totalPages: 0, totalResults: 0 };
   const [movies, shows] = await Promise.all([
-    type === 'tv' ? [] : collect('/movie/top_rated', { page }, perType),
-    type === 'movie' ? [] : collect('/tv/top_rated', { page }, perType)
+    type === 'tv' ? Promise.resolve(unused) : collect('/movie/top_rated', { page }, perType),
+    type === 'movie' ? Promise.resolve(unused) : collect('/tv/top_rated', { page }, perType)
   ]);
   const rows = [
-    ...movies.map((i) => baseRow(i, 'movie')),
-    ...shows.map((i) => baseRow(i, 'tv'))
+    ...movies.items.map((i) => baseRow(i, 'movie')),
+    ...shows.items.map((i) => baseRow(i, 'tv'))
   ].sort((a, b) => b.vote_average - a.vote_average);
-  return list(rows.slice(0, limit), { page, total_pages: 1, total_results: rows.length, has_more: false });
+  const used = [movies, shows].filter((r) => r.totalPages > 0);
+  const totalPages = used.length ? Math.min(...used.map((r) => r.totalPages)) : 1;
+  const totalResults = movies.totalResults + shows.totalResults;
+  const cut = rows.slice(0, limit);
+  return list(cut, { page, total_pages: totalPages, total_results: totalResults, has_more: page < totalPages });
 }
 
 
@@ -214,9 +227,10 @@ async function mycontent(q) {
   const type = toType(q.type);
   const limit = toLimit(q.limit, 20, 100);
   const page = toPage(q.page);
+  const unused = { items: [], totalPages: 0, totalResults: 0 };
   const [movies, shows] = await Promise.all([
-    type === 'tv' ? [] : collect('/movie/popular', { page }, limit),
-    type === 'movie' ? [] : collect('/tv/popular', { page }, limit)
+    type === 'tv' ? Promise.resolve(unused) : collect('/movie/popular', { page }, limit),
+    type === 'movie' ? Promise.resolve(unused) : collect('/tv/popular', { page }, limit)
   ]);
   const toRow = (item, mediaType) => ({
     db_id: item.id,
@@ -225,10 +239,13 @@ async function mycontent(q) {
     in_database: true
   });
   const rows = interleave(
-    movies.map((i) => toRow(i, 'movie')),
-    shows.map((i) => toRow(i, 'tv'))
+    movies.items.map((i) => toRow(i, 'movie')),
+    shows.items.map((i) => toRow(i, 'tv'))
   );
-  return list(rows, { page, total_pages: 1, total_results: rows.length, has_more: false });
+  const used = [movies, shows].filter((r) => r.totalPages > 0);
+  const totalPages = used.length ? Math.min(...used.map((r) => r.totalPages)) : 1;
+  const totalResults = movies.totalResults + shows.totalResults;
+  return list(rows, { page, total_pages: totalPages, total_results: totalResults, has_more: page < totalPages });
 }
 
 

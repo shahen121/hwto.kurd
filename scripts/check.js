@@ -318,15 +318,14 @@ if (process.argv.includes('--smoke') && !problems.length) {
             throw new Error(`Server switcher bar should be removed, found: ${serverBarCount}`);
           }
           const movieSandbox = await page.getAttribute('.watch-frame iframe', 'sandbox');
-          const expectedSandbox = 'allow-scripts allow-same-origin allow-forms allow-presentation';
-          if (movieSandbox !== expectedSandbox) {
-            throw new Error(`Iframe should have sandbox="${expectedSandbox}", found: ${movieSandbox}`);
+          if (movieSandbox !== null) {
+            throw new Error(`Iframe must NOT have sandbox (broke VidCore playback), found: ${movieSandbox}`);
           }
           const extBtnCount = await page.$$eval('#btn-external-player', els => els.length);
           if (extBtnCount !== 0) {
             throw new Error(`External player button should be removed, found: ${extBtnCount}`);
           }
-          console.log('  ok  e2e: single primary server VidCore verified with sandbox');
+          console.log('  ok  e2e: single primary server VidCore verified (no sandbox)');
 
           // 2. TV watch route with season and episode
           await page.goto(`${base}/#/watch/tv/1396?title=${encodeURIComponent('Breaking Bad')}&season=1&episode=1`, { waitUntil: 'domcontentloaded' });

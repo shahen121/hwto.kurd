@@ -331,9 +331,16 @@ function normaliseRow(row, fallbackType) {
 function normaliseList(json, fallbackType) {
   const rows = Array.isArray(json && json.results) ? json.results : [];
   const items = rows.map((r) => normaliseRow(r, fallbackType)).filter(Boolean);
+  const page = Number(json && json.page) || 1;
+  const totalPages = Number(json && json.total_pages) || 1;
+  const totalResults = Number(json && json.total_results);
   return {
     items,
     total: json && json.total !== undefined ? Number(json.total) : items.length,
+    page,
+    totalPages,
+    totalResults: Number.isFinite(totalResults) && totalResults > 0 ? totalResults : items.length,
+    hasMore: json && json.has_more === true ? true : page < totalPages,
     cached: Boolean(json && json.cached)
   };
 }

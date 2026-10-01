@@ -3,17 +3,26 @@
  *
  * The page owns its input so typing never re-mounts the view: app.js routes
  * "same page, new query" calls into onRoute() instead of a full remount.
- * "Load More" does NOT change the URL (keeps #/search?q=... stable).
+ *
+ * Pagination model:
+ *   page 1 → 20 results → [ عرض المزيد ]
+ *   click  → page 2 → 20 new results appended under the old ones
+ *   click  → page 3 → ...
+ *
+ * The "Load More" button lives in a static wrapper OUTSIDE #search-results,
+ * so re-rendering the results container can never destroy it. Clicking it
+ * never changes the URL (#/search?q=... stays stable).
  */
 
 import { api } from '../api.js';
 import * as ui from '../ui.js';
-import { CONFIG, LIMITS } from '../config.js';
+import { CONFIG } from '../config.js';
 import { debounce, escapeHtml } from '../utils.js';
 import { navigate } from '../router.js';
-import { rememberMany } from '../store.js';
 
 const isAbort = (err) => Boolean(err && err.name === 'AbortError');
+
+const PAGE_SIZE = 20;
 
 const TABS = [
   { value: '', label: 'الكل' },
@@ -81,6 +90,11 @@ export async function mount(params, view, { signal }) {
       </div>
 
       <div id="search-results" class="search-results" aria-live="polite"></div>
+
+      <div class="load-more-wrap" id="search-more-wrap" hidden>
+        <button class="btn btn-primary load-more-btn" id="search-more-btn" type="button">عرض المزيد</button>
+        <p class="load-more-meta" id="search-more-meta" aria-live="polite"></p>
+      </div>
     </div>`;
 
   ui.hydrate(view);
@@ -90,7 +104,12 @@ export async function mount(params, view, { signal }) {
   const results = view.querySelector('#search-results');
   const tabs = Array.from(view.querySelectorAll('.tab'));
 
-  // State: items accumulate across pages, page tracks API response
+  // Persistent load-more controls: never re-created by a results re-render.
+  const moreWrap = view.querySelector('#search-more-wrap');
+  const moreBtn = view.querySelector('#search-more-btn');
+  const moreMeta = view.querySelector('#search-more-meta');
+
+  // State: items accumulate across pages; page tracks the last API page used.
   const state = { q, type, page: 1, items: [], totalPages: 1, totalResults: 0, hasMore: false, loading: false };
 
   const setTabs = (nextType) => {
@@ -99,6 +118,16 @@ export async function mount(params, view, { signal }) {
       tab.classList.toggle('is-active', active);
       tab.setAttribute('aria-selected', String(active));
     });
+  };
+
+  const updateLoadMore = () => {
+    const visible = state.hasMore && Boolean(state.q.trim()) && state.items.length > 0;
+    moreWrap.hidden = !visible;
+    moreBtn.disabled = state.loading;
+    moreBtn.textContent = state.loading ? 'جارٍ التحميل…' : 'عرض المزيد';
+    moreMeta.textContent = visible
+      ? `تم تحميل ${state.items.length} من ${state.totalResults || state.items.length} نتيجة (صفحة ${state.page}${state.totalPages > 1 ? ` من ${state.totalPages}` : ''})`
+      : '';
   };
 
   const renderResults = (list, append = false, newItems = []) => {
@@ -110,34 +139,29 @@ export async function mount(params, view, { signal }) {
       }
       const countEl = results.querySelector('.results-count');
       if (countEl) {
-        countEl.innerHTML = `تم العثور على <strong>${state.items.length}</strong> نتيجة من ${state.totalResults}`;
+        countEl.innerHTML = `تم عرض <strong>${state.items.length}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}`;
       }
-      const btn = results.querySelector('#load-more-btn');
-      if (btn) {
-        btn.hidden = !state.hasMore;
-        btn.disabled = false;
-        btn.textContent = 'عرض المزيد';
-      }
+      updateLoadMore();
       return;
     }
 
-    // Full render (first page or new query)
+    // Full render (first page or new query) — the button is outside this box.
     if (!list.items.length) {
       const scope = state.type ? (state.type === 'tv' ? ' في المسلسلات' : ' في الأفلام') : '';
       results.innerHTML = ui.emptyState(`لا توجد نتائج تطابق «${state.q}»${scope}.`, {
         title: 'لا نتائج',
         hint: 'جرّب كلمة أقصر أو أزِل تصفية النوع.'
       });
+      updateLoadMore();
       return;
     }
 
-    const shown = list.items.slice(0, LIMITS.search.max);
     results.innerHTML = `
-      <p class="results-count">تم العثور على <strong>${shown.length}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}</p>
-      ${ui.movieGrid(shown)}
-      ${list.hasMore ? `<button class="btn btn-primary load-more-btn" id="load-more-btn" type="button">عرض المزيد</button>` : ''}
+      <p class="results-count">تم عرض <strong>${list.items.length}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}</p>
+      ${ui.movieGrid(list.items)}
     `;
     ui.hydrate(results);
+    updateLoadMore();
   };
 
   const run = async (nextPage = 1, append = false) => {
@@ -153,44 +177,34 @@ export async function mount(params, view, { signal }) {
 
     if (!query) {
       results.innerHTML = emptyPrompt();
+      state.hasMore = false;
+      updateLoadMore();
       return;
     }
 
+    state.loading = true;
+
     if (!append) {
       results.innerHTML = ui.loadingBlock('جارٍ البحث…');
-    } else {
-      const btn = results.querySelector('#load-more-btn');
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'جارٍ التحميل…';
-      }
     }
-
-    state.loading = true;
+    updateLoadMore();
 
     try {
       const list = await api.search({ q: query, type: state.type, page: nextPage, signal: localSignal });
       if (localSignal.aborted) return;
 
-      // Update state
+      state.page = list.page;
+      state.totalPages = list.totalPages;
+      state.totalResults = list.totalResults;
+      state.hasMore = list.hasMore;
+
       if (append) {
-        const existingKeys = new Set(state.items.map(item => `${item.mediaType}:${item.id}`));
-        const newItems = list.items.filter(item => !existingKeys.has(`${item.mediaType}:${item.id}`));
+        const existingKeys = new Set(state.items.map((item) => `${item.mediaType}:${item.id}`));
+        const newItems = list.items.filter((item) => !existingKeys.has(`${item.mediaType}:${item.id}`));
         state.items.push(...newItems);
-
-        state.page = list.page;
-        state.totalPages = list.totalPages;
-        state.totalResults = list.totalResults;
-        state.hasMore = list.hasMore;
-
         renderResults(list, true, newItems);
       } else {
         state.items = list.items;
-        state.page = list.page;
-        state.totalPages = list.totalPages;
-        state.totalResults = list.totalResults;
-        state.hasMore = list.hasMore;
-
         renderResults(list, false);
       }
     } catch (err) {
@@ -199,15 +213,12 @@ export async function mount(params, view, { signal }) {
         results.innerHTML = ui.errorState(err && err.message, { onRetry: true, retryId: 'search-retry' });
         const retry = results.querySelector('#search-retry');
         if (retry) retry.addEventListener('click', () => run(1, false));
-      } else {
-        const btn = results.querySelector('#load-more-btn');
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = 'عرض المزيد';
-        }
+        state.hasMore = false;
       }
+      // On append failure keep hasMore so the user can retry the same page.
     } finally {
       state.loading = false;
+      updateLoadMore();
       if (pageSignal) pageSignal.removeEventListener('abort', onOuterAbort);
     }
   };
@@ -252,12 +263,9 @@ export async function mount(params, view, { signal }) {
     tab.addEventListener('click', () => applyType(tab.dataset.type || ''));
   });
 
-  // Load more button - does NOT change URL
-  results.addEventListener('click', (e) => {
-    const btn = e.target.closest('#load-more-btn');
-    if (btn && state.hasMore && !state.loading) {
-      run(state.page + 1, true);
-    }
+  // Load more: fetch the next page, append, keep the URL unchanged.
+  moreBtn.addEventListener('click', () => {
+    if (state.hasMore && !state.loading) run(state.page + 1, true);
   });
 
   // Called by app.js when the route changes but the page stays on `search`.
@@ -276,7 +284,10 @@ export async function mount(params, view, { signal }) {
   };
 
   if (q) run(1, false);
-  else results.innerHTML = emptyPrompt();
+  else {
+    results.innerHTML = emptyPrompt();
+    updateLoadMore();
+  }
 }
 
 export function onRoute(next) {

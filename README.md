@@ -109,7 +109,7 @@ public/
   - الأفلام: `https://vidcore.io/movie/{tmdb_id}`
   - المسلسلات: `https://vidcore.io/tv/{tmdb_id}/{season}/{episode}`
 - لا يحتاج المشغّل إلى بروكسي وسيط، و`frame-src` في الـ CSP مضبوط حصرياً للسماح بـ `https://vidcore.io`.
-- الإطار محمي بخاصية `sandbox` لمنع الإعلانات المنبثقة، وتوجيه الصفحة الرئيسية، والروابط الخارجية (`sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"`).
+- لا يُستخدم `sandbox` على الإطار: ملاحظ أن `sandbox` يكسر تشغيل VidCore، لذا الإطار بدونه والحماية تأتي من `frame-src` في الـ CSP (يسمح فقط بـ `https://vidcore.io`).
 
 ## سلوك الـ API (موثّق ومختبر، مكتوب بالكامل في ترويسة `api.js`)
 

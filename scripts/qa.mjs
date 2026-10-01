@@ -369,32 +369,45 @@ for (const [name, hash, target] of [['site', '#/site', 40], ['upcoming', '#/upco
     `cards=${after.cards} (${beforeCards}) dupes=${after.dupes} meta=${JSON.stringify(after.meta)}`);
 }
 
-/* ---------- 8b. search load-more appends page 2 without duplicates -------- */
+/* ---------- 8b. search load-more appends page 2/3 without duplicates ------- */
 
 await settle('#/search?q=batman');
 await page.waitForTimeout(1500);
 const searchBefore = await page.evaluate(() => ({
   cards: document.querySelectorAll('#search-results .card').length,
-  hasBtn: Boolean(document.querySelector('#load-more-btn'))
+  hasBtn: Boolean(document.querySelector('#search-more-btn')),
+  visible: Boolean(document.querySelector('#search-more-wrap:not([hidden])'))
 }));
-ok('search: initial results with load-more button', searchBefore.cards > 0 && searchBefore.hasBtn,
-  `cards=${searchBefore.cards} btn=${searchBefore.hasBtn}`);
-if (searchBefore.hasBtn) {
-  await page.click('#load-more-btn');
+ok('search: initial results with persistent load-more button',
+  searchBefore.cards > 0 && searchBefore.hasBtn && searchBefore.visible,
+  `cards=${searchBefore.cards} btn=${searchBefore.hasBtn} visible=${searchBefore.visible}`);
+
+const hashBeforeMore = await page.evaluate(() => location.hash);
+let searchCards = searchBefore.cards;
+for (const pageNo of [2, 3]) {
+  const visible = await page.evaluate(() => Boolean(document.querySelector('#search-more-wrap:not([hidden])')));
+  if (!visible) break;
+  await page.click('#search-more-btn');
   await page.waitForFunction(
     (n) => document.querySelectorAll('#search-results .card').length > n,
-    searchBefore.cards,
+    searchCards,
     { timeout: 30000 }
   ).catch(() => {});
   await page.waitForTimeout(800);
-  const searchAfter = await page.evaluate(() => {
+  const snap = await page.evaluate(() => {
     const cards = [...document.querySelectorAll('#search-results .card')];
     const keys = cards.map((c) => c.querySelector('a')?.getAttribute('href') || '');
-    return { cards: cards.length, dupes: keys.length - new Set(keys).size };
+    return {
+      cards: cards.length,
+      dupes: keys.length - new Set(keys).size,
+      hash: location.hash,
+      meta: document.getElementById('search-more-meta')?.textContent || ''
+    };
   });
-  ok('search: load-more appends page 2 without duplicates',
-    searchAfter.cards > searchBefore.cards && searchAfter.dupes === 0,
-    `before=${searchBefore.cards} after=${searchAfter.cards} dupes=${searchAfter.dupes}`);
+  ok(`search: page ${pageNo} appends new cards, no dupes, URL unchanged`,
+    snap.cards > searchCards && snap.dupes === 0 && snap.hash === hashBeforeMore,
+    `cards=${snap.cards} (was ${searchCards}) dupes=${snap.dupes} hash=${snap.hash} meta=${JSON.stringify(snap.meta)}`);
+  searchCards = snap.cards;
 }
 
 /* ---------- 9. header search is debounced ------------------------------ */
@@ -525,9 +538,9 @@ if (hasWatchBtn > 0) {
     const title = await page.evaluate(() => document.title);
     ok('watch: embeds vidcore.io player with TMDB ID',
       /^https:\/\/vidcore\.io\/movie\/278/.test(frameSrc || ''), frameSrc || 'no src');
-    ok('watch: iframe has sandbox for extra protection',
-      sandbox === 'allow-scripts allow-same-origin allow-forms allow-presentation',
-      sandbox ? `unexpected sandbox: ${sandbox}` : 'missing sandbox');
+    ok('watch: iframe has NO sandbox (VidCore playback requires it removed)',
+      sandbox === null,
+      sandbox ? `unexpected sandbox: ${sandbox}` : 'correctly absent');
     ok('watch: external player button is removed', extBtnCount === 0, `btnCount=${extBtnCount}`);
     ok('watch: server switcher bar is removed', serverBarCount === 0, `barCount=${serverBarCount}`);
     ok('watch: document title carries the title', title.includes('— مشاهدة — hwto.kurd'), title);
