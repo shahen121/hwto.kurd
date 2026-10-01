@@ -369,6 +369,34 @@ for (const [name, hash, target] of [['site', '#/site', 40], ['upcoming', '#/upco
     `cards=${after.cards} (${beforeCards}) dupes=${after.dupes} meta=${JSON.stringify(after.meta)}`);
 }
 
+/* ---------- 8b. search load-more appends page 2 without duplicates -------- */
+
+await settle('#/search?q=batman');
+await page.waitForTimeout(1500);
+const searchBefore = await page.evaluate(() => ({
+  cards: document.querySelectorAll('#search-results .card').length,
+  hasBtn: Boolean(document.querySelector('#load-more-btn'))
+}));
+ok('search: initial results with load-more button', searchBefore.cards > 0 && searchBefore.hasBtn,
+  `cards=${searchBefore.cards} btn=${searchBefore.hasBtn}`);
+if (searchBefore.hasBtn) {
+  await page.click('#load-more-btn');
+  await page.waitForFunction(
+    (n) => document.querySelectorAll('#search-results .card').length > n,
+    searchBefore.cards,
+    { timeout: 30000 }
+  ).catch(() => {});
+  await page.waitForTimeout(800);
+  const searchAfter = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('#search-results .card')];
+    const keys = cards.map((c) => c.querySelector('a')?.getAttribute('href') || '');
+    return { cards: cards.length, dupes: keys.length - new Set(keys).size };
+  });
+  ok('search: load-more appends page 2 without duplicates',
+    searchAfter.cards > searchBefore.cards && searchAfter.dupes === 0,
+    `before=${searchBefore.cards} after=${searchAfter.cards} dupes=${searchAfter.dupes}`);
+}
+
 /* ---------- 9. header search is debounced ------------------------------ */
 
 await settle('#/');

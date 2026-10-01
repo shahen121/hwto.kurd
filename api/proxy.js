@@ -187,6 +187,7 @@ async function toprated(q) {
 async function search(q) {
   const query = String(first(q.q) || '').trim();
   if (!query) return list([], { page: 1, total_pages: 1, total_results: 0, has_more: false });
+  if (query.length > 100) return { error: 'Query too long (max 100 characters)' };
   const type = toType(q.type);
   const page = toPage(q.page);
   const data = await tmdb(type ? `/search/${type}` : '/search/multi', {

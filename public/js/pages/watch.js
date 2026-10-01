@@ -59,7 +59,6 @@ export async function mount(params, view, { signal }) {
           src="${attr(url)}"
           title="مشغّل ${attr(title || 'الفيديو')}"
           allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope; clipboard-write; web-share"
-          allowfullscreen
           referrerpolicy="origin-when-cross-origin"
           sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"></iframe>
       </div>
