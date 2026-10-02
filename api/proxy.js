@@ -201,10 +201,10 @@ async function findMovieIdByTitle(title) {
   while ((m = re.exec(r.text))) {
     const chunk = r.text.slice(m.index, m.index + 1500);
     const t = chunk.match(/class="card__title">([^<]+)</);
-    if (t && target && norm(t[1]).includes(target)) return m[1];
+    if (t && target && norm(t[1]) === target) return m[1];
   }
-  const fallback = /details\.aspx\?movieid=(\d+)/.exec(r.text);
-  return fallback ? fallback[1] : null;
+  // Never guess a wrong movie — return null so the pills strip stays hidden.
+  return null;
 }
 
 async function scrapeKurdishServers(movieid) {
