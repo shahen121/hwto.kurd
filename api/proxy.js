@@ -190,7 +190,12 @@ function extractIframeSrc(html) {
   return m ? m[1] : null;
 }
 
-async function findMovieIdByTitle(title) {
+async function findMovieIdByTitle(title, tmdbid) {
+  if (!title.trim() && !tmdbid) return null;
+  if (tmdbid) {
+    const located = await findMovieIdByTmdbId(String(tmdbid), title);
+    if (located) return located;
+  }
   if (!title.trim()) return null;
   const r = await fetchPageText(`https://kurdcinama.com/Search.aspx?q=${encodeURIComponent(title.trim())}`);
   if (!r || !r.ok || !r.text) return null;
@@ -204,6 +209,37 @@ async function findMovieIdByTitle(title) {
     if (t && target && norm(t[1]) === target) return m[1];
   }
   // Never guess a wrong movie — return null so the pills strip stays hidden.
+  return null;
+}
+
+async function findMovieIdByTmdbId(tmdbId, searchTitle) {
+  if (!tmdbId) return null;
+  if (!searchTitle.trim()) searchTitle = '';
+  const searchUrl = searchTitle.trim()
+    ? `https://kurdcinama.com/Search.aspx?q=${encodeURIComponent(searchTitle.trim())}`
+    : `https://kurdcinama.com/Search.aspx`;
+  const r = await fetchPageText(searchUrl);
+  if (!r || !r.ok || !r.text) return null;
+  const ids = [];
+  let m;
+  const re = /"movieid[^\d]*(\d+)"/g;
+  while ((m = re.exec(r.text))) {
+    if (!ids.includes(m[1])) ids.push(m[1]);
+  }
+  if (!ids.length) {
+    const re2 = /moves-details\.aspx\?movieid=(\d+)|details\.aspx\?movieid=(\d+)/g;
+    while ((m = re2.exec(r.text))) {
+      const id = m[1] || m[2];
+      if (!ids.includes(id)) ids.push(id);
+    }
+  }
+  // Fetch each candidate details page and compare its embedded tmdbId.
+  for (const cand of ids.slice(0, 12)) {
+    const detail = await fetchPageText(`https://kurdcinama.com/moves-details.aspx?movieid=${cand}`);
+    if (!detail || !detail.ok || !detail.text) continue;
+    const hidden = detail.text.match(/<input[^>]*type=["']hidden["'][^>]*id=["']tmdbId["'][^>]*value=["'](\d+)["']/i);
+    if (hidden && hidden[1] === String(tmdbId)) return cand;
+  }
   return null;
 }
 
@@ -437,12 +473,18 @@ export default async function handler(req, res) {
         const movieid = String(first(q.movieid) || '').trim();
         if (movieid) { payload = await scrapeKurdishServers(movieid); break; }
         const title = String(first(q.title) || '').trim();
-        if (title) {
-          const foundId = await findMovieIdByTitle(title);
+        const tmdbId = String(first(q.tmdbid) || '').trim();
+        if (tmdbId) {
+          const foundId = await findMovieIdByTitle(title, tmdbId);
           payload = await scrapeKurdishServers(foundId || '');
           break;
         }
-        payload = { error: 'movieid or title is required for action=servers' };
+        if (title) {
+          const foundId = await findMovieIdByTitle(title, '');
+          payload = await scrapeKurdishServers(foundId || '');
+          break;
+        }
+        payload = { error: 'movieid, title or tmdbid is required for action=servers' };
         break;
       }
       default:

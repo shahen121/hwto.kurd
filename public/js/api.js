@@ -459,12 +459,13 @@ export async function getDetail(mediaType, id, { signal } = {}) {
  *
  * params: { movieid } OR { title }
  * returns: { movieid?, servers: [{ id, name, url }], cached } */
-export async function getServers({ movieid, title, signal } = {}) {
-  const key = movieid ? { movieid: String(movieid) } : { title: String(title || '') };
-  const json = await request(
-    { action: 'servers', ...key },
-    { ttl: 10 * 60 * 1000, signal }
-  );
+export async function getServers({ movieid, title, tmdbid, signal } = {}) {
+  const paramsObj = { action: 'servers' };
+  if (movieid) paramsObj.movieid = String(movieid);
+  if (title) paramsObj.title = String(title);
+  if (tmdbid) paramsObj.tmdbid = String(tmdbid);
+
+  const json = await request(paramsObj, { ttl: 10 * 60 * 1000, signal });
   return json;
 }
 
