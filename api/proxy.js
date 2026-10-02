@@ -146,6 +146,99 @@ const genreIds = (genres) =>
   Array.isArray(genres) ? genres.map((g) => g.id).filter(Number.isFinite).join(',') : '';
 
 
+/* ---------- Kurdish embed servers scraping (mirror of server.js) ---------- */
+
+async function fetchPageText(url, options) {
+  try {
+    const res = await fetch(url, {
+      redirect: 'follow',
+      ...options,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; hwto.kurd/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        ...(options && options.headers)
+      }
+    });
+    const text = await res.text();
+    return { ok: res.ok, status: res.status, text };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function extractHiddenInputs(html) {
+  const out = {};
+  for (const m of html.matchAll(/<input[^>]*type=["']hidden["'][^>]*>/gi)) {
+    const tag = m[0];
+    const name = (/name=["']([^"']+)["']/.exec(tag) || [])[1];
+    const value = (/value=["']([^"']*)["']/.exec(tag) || [])[1];
+    if (name) out[name] = value || '';
+  }
+  return out;
+}
+
+function extractServerOptions(html) {
+  const options = [];
+  for (const m of html.matchAll(/<option[^>]*value=["'](\d+)["'][^>]*>([^<]+)<\/option>/gi)) {
+    options.push({ value: m[1], label: m[2].trim() });
+  }
+  return options;
+}
+
+function extractIframeSrc(html) {
+  const m = /<iframe[^>]*src=["']([^"']+)["']/i.exec(html);
+  return m ? m[1] : null;
+}
+
+async function findMovieIdByTitle(title) {
+  if (!title.trim()) return null;
+  const r = await fetchPageText(`https://kurdcinama.com/Search.aspx?q=${encodeURIComponent(title.trim())}`);
+  if (!r || !r.ok || !r.text) return null;
+  const norm = (s) => String(s || '').toLowerCase().replace(/\(\d{4}\)/g, '').replace(/\s+/g, ' ').trim();
+  const target = norm(title).slice(0, 40);
+  const re = /details\.aspx\?movieid=(\d+)/g;
+  let m;
+  while ((m = re.exec(r.text))) {
+    const chunk = r.text.slice(m.index, m.index + 1500);
+    const t = chunk.match(/class="card__title">([^<]+)</);
+    if (t && target && norm(t[1]).includes(target)) return m[1];
+  }
+  const fallback = /details\.aspx\?movieid=(\d+)/.exec(r.text);
+  return fallback ? fallback[1] : null;
+}
+
+async function scrapeKurdishServers(movieid) {
+  const pageUrl = `https://kurdcinama.com/online.aspx?movieid=${encodeURIComponent(movieid)}`;
+  const index = await fetchPageText(pageUrl);
+  if (!index || !index.ok || !index.text) return { error: 'تعذّر جلب صفحة المشغل' };
+
+  const options = extractServerOptions(index.text);
+  if (!options.length) return { error: 'لم يُعثر على سيرفرات في الصفحة' };
+
+  const servers = [];
+  for (const opt of options) {
+    const refreshed = await fetchPageText(pageUrl);
+    const hidden = refreshed && refreshed.text ? extractHiddenInputs(refreshed.text) : extractHiddenInputs(index.text);
+    const body = new URLSearchParams();
+    for (const [k, v] of Object.entries(hidden)) body.set(k, v);
+    body.set('__EVENTTARGET', 'ctl00$MainContent$DropDownList1');
+    body.set('__EVENTARGUMENT', '');
+    body.set('__LASTFOCUS', '');
+    body.set('ctl00$MainContent$DropDownList1', opt.value);
+    body.set('ctl00$MainContent$hiddenVideoUrl', hidden['ctl00$MainContent$hiddenVideoUrl'] || '');
+
+    const post = await fetchPageText(pageUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': pageUrl },
+      body: body.toString()
+    });
+    const src = post && post.ok ? extractIframeSrc(post.text) : null;
+    if (src) servers.push({ key: opt.label.replace(/^\d+[-.)\s]*/, '').trim(), label: opt.label, url: src });
+  }
+  return { movieid, servers };
+}
+
+
 /* ---------- actions ---------- */
 
 
@@ -340,6 +433,18 @@ export default async function handler(req, res) {
       case 'stats': payload = await stats(); break;
       case 'movie': payload = await details(q, 'movie'); break;
       case 'tv': payload = await details(q, 'tv'); break;
+      case 'servers': {
+        const movieid = String(first(q.movieid) || '').trim();
+        if (movieid) { payload = await scrapeKurdishServers(movieid); break; }
+        const title = String(first(q.title) || '').trim();
+        if (title) {
+          const foundId = await findMovieIdByTitle(title);
+          payload = await scrapeKurdishServers(foundId || '');
+          break;
+        }
+        payload = { error: 'movieid or title is required for action=servers' };
+        break;
+      }
       default:
         res.setHeader('Cache-Control', 'no-store');
         res.status(400).json({ error: 'Unknown action' });

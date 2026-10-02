@@ -68,8 +68,8 @@ const CSP = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: https://image.tmdb.org https://kurdcinama.com",
   "font-src 'self' https://fonts.gstatic.com",
-  // The watch page embeds the primary vidcore.io player using the TMDB id directly.
-  "frame-src 'self' https://vidcore.io https://*.vidcore.io https://*.vidcore.net",
+  // The site can embed alternate Kurdish servers, so allow any HTTPS iframe.
+  "frame-src 'self' https:",
   "connect-src 'self'",
   "media-src 'self'",
   "manifest-src 'self'"
@@ -166,18 +166,111 @@ function checkRateLimit(ip) {
   return true;
 }
 
+/* Kurdish servers embed scraper ------------------------------------------- */
+
+async function fetchPageText(url, options) {
+  try {
+    const res = await fetch(url, {
+      redirect: 'follow',
+      ...options,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; hwto.kurd/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        ...(options && options.headers)
+      }
+    });
+    const text = await res.text();
+    return { ok: res.ok, status: res.status, text };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function extractHiddenInputs(html) {
+  const out = {};
+  for (const m of html.matchAll(/<input[^>]*type=["']hidden["'][^>]*>/gi)) {
+    const tag = m[0];
+    const name = (/name=["']([^"']+)["']/.exec(tag) || [])[1];
+    const value = (/value=["']([^"']*)["']/.exec(tag) || [])[1];
+    if (name) out[name] = value || '';
+  }
+  return out;
+}
+
+function extractServersListFromHtml(html) {
+  // The server <select> is class="quality-select" — options are numeric ids.
+  const options = [];
+  for (const m of html.matchAll(/<option[^>]*value=["'](\d+)["'][^>]*>([^<]+)<\/option>/gi)) {
+    options.push({ value: m[1], label: m[2].trim() });
+  }
+  return options;
+}
+
+function extractIframeSrc(html) {
+  const m = /<iframe[^>]*src=["']([^"']+)["']/i.exec(html);
+  return m ? m[1] : null;
+}
+
+async function findMovieIdByTitle(title) {
+  if (!title.trim()) return null;
+  const r = await fetchPageText(`https://${UPSTREAM_HOST}/Search.aspx?q=${encodeURIComponent(title.trim())}`);
+  if (!r || !r.ok || !r.text) return null;
+  const norm = (s) => String(s || '').toLowerCase().replace(/\(\d{4}\)/g, '').replace(/\s+/g, ' ').trim();
+  const target = norm(title).slice(0, 40);
+  const re = /details\.aspx\?movieid=(\d+)/g;
+  let m;
+  while ((m = re.exec(r.text))) {
+    const chunk = r.text.slice(m.index, m.index + 1500);
+    const t = chunk.match(/class="card__title">([^<]+)</);
+    if (t && target && norm(t[1]).includes(target)) return m[1];
+  }
+  const fallback = /details\.aspx\?movieid=(\d+)/.exec(r.text);
+  return fallback ? fallback[1] : null;
+}
+
+async function scrapeKurdishServersForMovie(movieid) {
+  const pageUrl = `https://${UPSTREAM_HOST}/online.aspx?movieid=${encodeURIComponent(movieid)}`;
+  const index = await fetchPageText(pageUrl);
+  if (!index || !index.ok || !index.text) return { error: 'تعذّر جلب صفحة المشغل' };
+
+  const options = extractServersListFromHtml(index.text);
+  if (options.length === 0) return { error: 'لم يُعثر على سيرفرات في الصفحة' };
+
+  const servers = [];
+  for (const opt of options) {
+    const refreshed = await fetchPageText(pageUrl);
+    const hidden = refreshed ? extractHiddenInputs(refreshed.text) : extractHiddenInputs(index.text);
+    const body = new URLSearchParams();
+    for (const [k, v] of Object.entries(hidden)) body.set(k, v);
+    body.set('__EVENTTARGET', 'ctl00$MainContent$DropDownList1');
+    body.set('__EVENTARGUMENT', '');
+    body.set('__LASTFOCUS', '');
+    body.set('ctl00$MainContent$DropDownList1', opt.value);
+    body.set('ctl00$MainContent$hiddenVideoUrl', hidden['ctl00$MainContent$hiddenVideoUrl'] || '');
+
+    const post = await fetchPageText(pageUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': pageUrl },
+      body: body.toString()
+    });
+    const src = post && post.ok ? extractIframeSrc(post.text) : null;
+    if (src) servers.push({ key: opt.label.replace(/^\d+[-.)\s]*/, '').trim(), label: opt.label, url: src });
+  }
+  return { movieid, servers };
+}
+
 function isAllowedApiPath(pathname, search) {
   if (pathname !== '/api/TMDBCache.aspx') return false;
   const params = new URLSearchParams(search);
   const action = params.get('action');
   const allowedActions = new Set([
     'trending', 'upcoming', 'toprated', 'search',
-    'mycontent', 'stats', 'movie', 'tv'
+    'mycontent', 'stats', 'movie', 'tv', 'popular', 'servers'
   ]);
   return allowedActions.has(action);
 }
 
-function proxyApi(req, res, reqUrl, isHead = false) {
+async function proxyApi(req, res, reqUrl, isHead = false) {
   // Rate limiting
   const ip = getRealIp(req);
   if (!checkRateLimit(ip)) {
@@ -195,6 +288,30 @@ function proxyApi(req, res, reqUrl, isHead = false) {
   const target = reqUrl.pathname + reqUrl.search;
   if (target.length > MAX_CACHE_KEY_LEN) {
     sendJson(req, res, 400, { error: 'Query too long' }, { 'Cache-Control': 'no-store' });
+    return;
+  }
+
+  // Server list for Kurdish servers — scraped from kurdcinama.com, not cached upstream.
+  // shape: /api/TMDBCache.aspx?action=servers&movieid=12345
+  if (new URLSearchParams(reqUrl.search).get('action') === 'servers') {
+    const search = new URLSearchParams(reqUrl.search);
+    let movieid = (search.get('movieid') || '').trim();
+    if (!movieid) {
+      const title = (search.get('title') || '').trim();
+      if (title) movieid = await findMovieIdByTitle(title);
+    }
+    if (!movieid) {
+      sendJson(req, res, 400, { error: 'movieid or title is required for action=servers' }, { 'Cache-Control': 'no-store' });
+      return;
+    }
+    try {
+      const result = await scrapeKurdishServersForMovie(movieid);
+      const servers = { ...result, cached: result && result.servers ? true : false };
+      const headers = { 'Cache-Control': 'public, max-age=1800, stale-while-revalidate=60', 'X-Cache': 'MISS' };
+      sendJson(req, res, result && result.error ? 502 : 200, servers, headers, isHead);
+    } catch (err) {
+      sendJson(req, res, 502, { error: err.message || 'servers scrape failed' }, { 'Cache-Control': 'no-store' });
+    }
     return;
   }
 
@@ -325,8 +442,10 @@ const server = http.createServer((req, res) => {
   const isHead = req.method === 'HEAD';
 
   if (reqUrl.pathname.startsWith(API_PREFIX)) {
-    proxyApi(req, res, reqUrl, isHead);
-    return;
+    proxyApi(req, res, reqUrl, isHead).catch((err) => {
+      console.error('[servers proxy]', err);
+      sendJson(req, res, 502, { error: 'تعذّر جلب معلومات الموقع' }, { 'Cache-Control': 'no-store' });
+    });
   }
 
   let decoded;

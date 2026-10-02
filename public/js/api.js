@@ -452,6 +452,22 @@ export async function getDetail(mediaType, id, { signal } = {}) {
   return normaliseDetail(json, type);
 }
 
+/* Kurdish / embed-alternative server list scraped server-side from
+ * kurdcinama.com via our same-origin proxy. Local server or self-hosted
+ * deployment is required for a non-empty response — on Vercel the scrape is
+ * skipped and VidCore remains the only available embed.
+ *
+ * params: { movieid } OR { title }
+ * returns: { movieid?, servers: [{ id, name, url }], cached } */
+export async function getServers({ movieid, title, signal } = {}) {
+  const key = movieid ? { movieid: String(movieid) } : { title: String(title || '') };
+  const json = await request(
+    { action: 'servers', ...key },
+    { ttl: 10 * 60 * 1000, signal }
+  );
+  return json;
+}
+
 export const api = {
   getTrending,
   getUpcoming,
@@ -459,5 +475,6 @@ export const api = {
   search,
   getMyContent,
   getStats,
-  getDetail
+  getDetail,
+  getServers
 };

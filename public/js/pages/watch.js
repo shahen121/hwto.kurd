@@ -8,6 +8,7 @@ import * as ui from '../ui.js';
 import { navigate, previousHash, buildHash } from '../router.js';
 import { escapeHtml, attr, mediaLabel, mediaPlural } from '../utils.js';
 import { getTvSeriesStructure, PLAYER_SERVERS } from '../config.js';
+import { api } from '../api.js';
 
 let ctx = null;
 
@@ -73,6 +74,11 @@ export async function mount(params, view, { signal }) {
         ${media === 'tv' ? renderEpisodeNav(params.id, currentSeason, currentEpisode) : ''}
       </div>
 
+      <div class="server-strip" id="server-strip" hidden>
+        <span class="server-strip-label">سيرفر التشغيل:</span>
+        <div class="server-list" id="server-list" role="group" aria-label="سيرفرات التشغيل البديلة"></div>
+      </div>
+
       <div class="download-box" id="download-box" hidden>
         <div class="download-box-inner">
           <div class="download-box-head">
@@ -109,8 +115,47 @@ export async function mount(params, view, { signal }) {
   wireBack(view);
   wireDownloadAndCopy(view, url);
   if (media === 'tv') wireTvControls(view, params);
+  wireAlternateServers(view, params, media);
 
   updateDocTitle(title, media, currentSeason, currentEpisode);
+}
+
+async function wireAlternateServers(root, params, media) {
+  const strip = root.querySelector('#server-strip');
+  const list = root.querySelector('#server-list');
+  if (!strip || !list) return;
+  if (media !== 'movie') {
+    strip.hidden = true;
+    return;
+  }
+
+  try {
+    const data = await api.getServers({ title: params.title || '', tmdbid: params.id });
+    const servers = (data && data.servers) || [];
+    if (!servers.length) return;
+
+    strip.hidden = false;
+    list.innerHTML = servers
+      .map(
+        (srv) =>
+          `<button type="button" class="server-pill" data-url="${attr(srv.url)}">${escapeHtml(srv.label)}</button>`
+      )
+      .join('');
+
+    list.addEventListener('click', (e) => {
+      const pill = e.target.closest('.server-pill');
+      if (!pill) return;
+      const url = pill.getAttribute('data-url');
+      if (!url) return;
+      list.querySelectorAll('.server-pill').forEach((p) => p.classList.toggle('is-active', p === pill));
+      const iframe = root.querySelector('.watch-frame iframe');
+      if (iframe) iframe.src = url;
+      const streamInput = root.querySelector('#stream-url-input');
+      if (streamInput) streamInput.value = url;
+    });
+  } catch {
+    // Servers are optional — the primary VidCore player stays active.
+  }
 }
 
 function wireDownloadAndCopy(root, initialUrl) {
