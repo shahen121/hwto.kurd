@@ -1,0 +1,6982 @@
+{
+  "456": {
+    "tmdb_id": "456",
+    "title": "The Simpsons",
+    "db_id": 63,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/456/{season}/{episode}"
+  },
+  "799": {
+    "tmdb_id": "799",
+    "title": "Sherlock Holmes",
+    "db_id": 21,
+    "seasons": 4,
+    "episodes": [
+      3,
+      3,
+      3,
+      3
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/799/{season}/{episode}"
+  },
+  "816": {
+    "tmdb_id": "816",
+    "title": "Shooting Stars",
+    "db_id": 404,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/816/{season}/{episode}"
+  },
+  "1044": {
+    "tmdb_id": "1044",
+    "title": "Planet Earth",
+    "db_id": 27,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/1044/{season}/{episode}"
+  },
+  "1087": {
+    "tmdb_id": "1087",
+    "title": "Serial Experiments Lain",
+    "db_id": 301,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/1087/{season}/{episode}"
+  },
+  "1396": {
+    "tmdb_id": "1396",
+    "title": "Breaking Bad",
+    "db_id": 3,
+    "seasons": 5,
+    "episodes": [
+      7,
+      13,
+      13,
+      13,
+      16
+    ],
+    "total_episodes": 62,
+    "player_url_template": "https://vidcore.io/tv/1396/{season}/{episode}"
+  },
+  "1398": {
+    "tmdb_id": "1398",
+    "title": "The Sopranos",
+    "db_id": 228,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/1398/{season}/{episode}"
+  },
+  "1399": {
+    "tmdb_id": "1399",
+    "title": "Game of Thrones",
+    "db_id": 1,
+    "seasons": 8,
+    "episodes": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      10,
+      7,
+      6
+    ],
+    "total_episodes": 73,
+    "player_url_template": "https://vidcore.io/tv/1399/{season}/{episode}"
+  },
+  "1402": {
+    "tmdb_id": "1402",
+    "title": "The Walking Dead",
+    "db_id": 2,
+    "seasons": 11,
+    "episodes": [
+      6,
+      13,
+      16,
+      16,
+      16,
+      16,
+      16,
+      16,
+      16,
+      22,
+      24
+    ],
+    "total_episodes": 177,
+    "player_url_template": "https://vidcore.io/tv/1402/{season}/{episode}"
+  },
+  "1426": {
+    "tmdb_id": "1426",
+    "title": "Luther",
+    "db_id": 198,
+    "seasons": 5,
+    "episodes": [
+      6,
+      4,
+      4,
+      2,
+      4
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/1426/{season}/{episode}"
+  },
+  "1429": {
+    "tmdb_id": "1429",
+    "title": "Attack on Titan",
+    "db_id": 41,
+    "seasons": 4,
+    "episodes": [
+      25,
+      12,
+      22,
+      30
+    ],
+    "total_episodes": 89,
+    "player_url_template": "https://vidcore.io/tv/1429/{season}/{episode}"
+  },
+  "1668": {
+    "tmdb_id": "1668",
+    "title": "Friends",
+    "db_id": 180,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/1668/{season}/{episode}"
+  },
+  "1705": {
+    "tmdb_id": "1705",
+    "title": "Fringe",
+    "db_id": 24,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/1705/{season}/{episode}"
+  },
+  "1994": {
+    "tmdb_id": "1994",
+    "title": "Eve",
+    "db_id": 414,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/1994/{season}/{episode}"
+  },
+  "2288": {
+    "tmdb_id": "2288",
+    "title": "Prison Break",
+    "db_id": 5,
+    "seasons": 5,
+    "episodes": [
+      22,
+      22,
+      13,
+      22,
+      9
+    ],
+    "total_episodes": 88,
+    "player_url_template": "https://vidcore.io/tv/2288/{season}/{episode}"
+  },
+  "2317": {
+    "tmdb_id": "2317",
+    "title": "My Name Is Earl",
+    "db_id": 458,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/2317/{season}/{episode}"
+  },
+  "2723": {
+    "tmdb_id": "2723",
+    "title": "Samurai Jack",
+    "db_id": 18,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/2723/{season}/{episode}"
+  },
+  "3322": {
+    "tmdb_id": "3322",
+    "title": "Oz",
+    "db_id": 544,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/3322/{season}/{episode}"
+  },
+  "4159": {
+    "tmdb_id": "4159",
+    "title": "Tomorrow",
+    "db_id": 392,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/4159/{season}/{episode}"
+  },
+  "4327": {
+    "tmdb_id": "4327",
+    "title": "Mr. Bean",
+    "db_id": 98,
+    "seasons": 1,
+    "episodes": [
+      15
+    ],
+    "total_episodes": 15,
+    "player_url_template": "https://vidcore.io/tv/4327/{season}/{episode}"
+  },
+  "4607": {
+    "tmdb_id": "4607",
+    "title": "Lost",
+    "db_id": 6,
+    "seasons": 6,
+    "episodes": [
+      25,
+      23,
+      23,
+      14,
+      17,
+      16
+    ],
+    "total_episodes": 118,
+    "player_url_template": "https://vidcore.io/tv/4607/{season}/{episode}"
+  },
+  "4613": {
+    "tmdb_id": "4613",
+    "title": "Band of Brothers",
+    "db_id": 31,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/4613/{season}/{episode}"
+  },
+  "4743": {
+    "tmdb_id": "4743",
+    "title": "The Boarding School",
+    "db_id": 235,
+    "seasons": 7,
+    "episodes": [
+      6,
+      8,
+      9,
+      11,
+      9,
+      13,
+      15
+    ],
+    "total_episodes": 71,
+    "player_url_template": "https://vidcore.io/tv/4743/{season}/{episode}"
+  },
+  "5178": {
+    "tmdb_id": "5178",
+    "title": "Stairway to Heaven",
+    "db_id": 7,
+    "seasons": 1,
+    "episodes": [
+      20
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/5178/{season}/{episode}"
+  },
+  "6484": {
+    "tmdb_id": "6484",
+    "title": "1 Litre of Tears",
+    "db_id": 356,
+    "seasons": 1,
+    "episodes": [
+      11
+    ],
+    "total_episodes": 11,
+    "player_url_template": "https://vidcore.io/tv/6484/{season}/{episode}"
+  },
+  "7704": {
+    "tmdb_id": "7704",
+    "title": "Legend of the Seeker",
+    "db_id": 29,
+    "seasons": 1,
+    "episodes": [
+      21
+    ],
+    "total_episodes": 21,
+    "player_url_template": "https://vidcore.io/tv/7704/{season}/{episode}"
+  },
+  "12971": {
+    "tmdb_id": "12971",
+    "title": "Dragon Ball Z",
+    "db_id": 93,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/12971/{season}/{episode}"
+  },
+  "13171": {
+    "tmdb_id": "13171",
+    "title": "The Kill Point",
+    "db_id": 126,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/13171/{season}/{episode}"
+  },
+  "13916": {
+    "tmdb_id": "13916",
+    "title": "Death Note",
+    "db_id": 50,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/13916/{season}/{episode}"
+  },
+  "14427": {
+    "tmdb_id": "14427",
+    "title": "Barbarians",
+    "db_id": 378,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/14427/{season}/{episode}"
+  },
+  "19069": {
+    "tmdb_id": "19069",
+    "title": "The Continental",
+    "db_id": 602,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/19069/{season}/{episode}"
+  },
+  "20124": {
+    "tmdb_id": "20124",
+    "title": "Happiness",
+    "db_id": 361,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/20124/{season}/{episode}"
+  },
+  "26867": {
+    "tmdb_id": "26867",
+    "title": "Mushi-Shi",
+    "db_id": 5852,
+    "seasons": 1,
+    "episodes": [
+      26
+    ],
+    "total_episodes": 26,
+    "player_url_template": "https://vidcore.io/tv/26867/{season}/{episode}"
+  },
+  "30981": {
+    "tmdb_id": "30981",
+    "title": "Monster",
+    "db_id": 472,
+    "seasons": 4,
+    "episodes": [
+      10,
+      9,
+      8,
+      5
+    ],
+    "total_episodes": 32,
+    "player_url_template": "https://vidcore.io/tv/30981/{season}/{episode}"
+  },
+  "30984": {
+    "tmdb_id": "30984",
+    "title": "Bleach",
+    "db_id": 5858,
+    "seasons": 4,
+    "episodes": [
+      13,
+      13,
+      14,
+      8
+    ],
+    "total_episodes": 48,
+    "player_url_template": "https://vidcore.io/tv/30984/{season}/{episode}"
+  },
+  "31724": {
+    "tmdb_id": "31724",
+    "title": "Code Geass: Lelouch of the Rebellion",
+    "db_id": 626,
+    "seasons": 2,
+    "episodes": [
+      25,
+      25
+    ],
+    "total_episodes": 50,
+    "player_url_template": "https://vidcore.io/tv/31724/{season}/{episode}"
+  },
+  "31910": {
+    "tmdb_id": "31910",
+    "title": "Naruto Shippūden",
+    "db_id": 46,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/31910/{season}/{episode}"
+  },
+  "33189": {
+    "tmdb_id": "33189",
+    "title": "Apocalypse: The Second World War",
+    "db_id": 108,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/33189/{season}/{episode}"
+  },
+  "33217": {
+    "tmdb_id": "33217",
+    "title": "Young Justice",
+    "db_id": 80,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/33217/{season}/{episode}"
+  },
+  "33880": {
+    "tmdb_id": "33880",
+    "title": "The Legend of Korra",
+    "db_id": 61,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/33880/{season}/{episode}"
+  },
+  "35935": {
+    "tmdb_id": "35935",
+    "title": "Berserk",
+    "db_id": 86,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/35935/{season}/{episode}"
+  },
+  "37606": {
+    "tmdb_id": "37606",
+    "title": "The Amazing World of Gumball",
+    "db_id": 64,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/37606/{season}/{episode}"
+  },
+  "38472": {
+    "tmdb_id": "38472",
+    "title": "Marvel's Jessica Jones",
+    "db_id": 5834,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/38472/{season}/{episode}"
+  },
+  "38849": {
+    "tmdb_id": "38849",
+    "title": "Loving You a Thousand Times",
+    "db_id": 123,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/38849/{season}/{episode}"
+  },
+  "40008": {
+    "tmdb_id": "40008",
+    "title": "Hannibal",
+    "db_id": 296,
+    "seasons": 3,
+    "episodes": [
+      13,
+      13,
+      13
+    ],
+    "total_episodes": 39,
+    "player_url_template": "https://vidcore.io/tv/40008/{season}/{episode}"
+  },
+  "40293": {
+    "tmdb_id": "40293",
+    "title": "Da Vinci's Demons",
+    "db_id": 376,
+    "seasons": 3,
+    "episodes": [
+      8,
+      10,
+      10
+    ],
+    "total_episodes": 28,
+    "player_url_template": "https://vidcore.io/tv/40293/{season}/{episode}"
+  },
+  "42009": {
+    "tmdb_id": "42009",
+    "title": "Black Mirror",
+    "db_id": 25,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/42009/{season}/{episode}"
+  },
+  "42589": {
+    "tmdb_id": "42589",
+    "title": "Another",
+    "db_id": 48,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/42589/{season}/{episode}"
+  },
+  "42699": {
+    "tmdb_id": "42699",
+    "title": "Dekalog",
+    "db_id": 210,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/42699/{season}/{episode}"
+  },
+  "42951": {
+    "tmdb_id": "42951",
+    "title": "Kaiji",
+    "db_id": 37,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/42951/{season}/{episode}"
+  },
+  "43513": {
+    "tmdb_id": "43513",
+    "title": "The Adventures of Tom Sawyer",
+    "db_id": 58,
+    "seasons": 1,
+    "episodes": [
+      25
+    ],
+    "total_episodes": 25,
+    "player_url_template": "https://vidcore.io/tv/43513/{season}/{episode}"
+  },
+  "44217": {
+    "tmdb_id": "44217",
+    "title": "Vikings",
+    "db_id": 8,
+    "seasons": 6,
+    "episodes": [
+      9,
+      10,
+      10,
+      20,
+      20,
+      19
+    ],
+    "total_episodes": 88,
+    "player_url_template": "https://vidcore.io/tv/44217/{season}/{episode}"
+  },
+  "45211": {
+    "tmdb_id": "45211",
+    "title": "Tari Tari",
+    "db_id": 262,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/45211/{season}/{episode}"
+  },
+  "45235": {
+    "tmdb_id": "45235",
+    "title": "We, Without Wings - Under the innocent sky",
+    "db_id": 304,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/45235/{season}/{episode}"
+  },
+  "45356": {
+    "tmdb_id": "45356",
+    "title": "The Gutsy Frog",
+    "db_id": 267,
+    "seasons": 1,
+    "episodes": [
+      15
+    ],
+    "total_episodes": 15,
+    "player_url_template": "https://vidcore.io/tv/45356/{season}/{episode}"
+  },
+  "46298": {
+    "tmdb_id": "46298",
+    "title": "Hunter x Hunter",
+    "db_id": 565,
+    "seasons": 1,
+    "episodes": [
+      148
+    ],
+    "total_episodes": 148,
+    "player_url_template": "https://vidcore.io/tv/46298/{season}/{episode}"
+  },
+  "46331": {
+    "tmdb_id": "46331",
+    "title": "Under the Dome",
+    "db_id": 343,
+    "seasons": 3,
+    "episodes": [
+      13,
+      13,
+      13
+    ],
+    "total_episodes": 39,
+    "player_url_template": "https://vidcore.io/tv/46331/{season}/{episode}"
+  },
+  "46648": {
+    "tmdb_id": "46648",
+    "title": "True Detective",
+    "db_id": 125,
+    "seasons": 4,
+    "episodes": [
+      8,
+      8,
+      8,
+      6
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/46648/{season}/{episode}"
+  },
+  "46922": {
+    "tmdb_id": "46922",
+    "title": "Ben 10: Omniverse",
+    "db_id": 88,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/46922/{season}/{episode}"
+  },
+  "46952": {
+    "tmdb_id": "46952",
+    "title": "The Blacklist",
+    "db_id": 495,
+    "seasons": 10,
+    "episodes": [
+      22,
+      22,
+      22,
+      22,
+      22,
+      22,
+      19,
+      22,
+      22,
+      22
+    ],
+    "total_episodes": 217,
+    "player_url_template": "https://vidcore.io/tv/46952/{season}/{episode}"
+  },
+  "47990": {
+    "tmdb_id": "47990",
+    "title": "Grand Hotel",
+    "db_id": 370,
+    "seasons": 3,
+    "episodes": [
+      14,
+      28,
+      24
+    ],
+    "total_episodes": 66,
+    "player_url_template": "https://vidcore.io/tv/47990/{season}/{episode}"
+  },
+  "48866": {
+    "tmdb_id": "48866",
+    "title": "The 100",
+    "db_id": 174,
+    "seasons": 7,
+    "episodes": [
+      13,
+      16,
+      16,
+      13,
+      13,
+      13,
+      16
+    ],
+    "total_episodes": 100,
+    "player_url_template": "https://vidcore.io/tv/48866/{season}/{episode}"
+  },
+  "50712": {
+    "tmdb_id": "50712",
+    "title": "Black Butler",
+    "db_id": 38,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/50712/{season}/{episode}"
+  },
+  "52814": {
+    "tmdb_id": "52814",
+    "title": "Halo",
+    "db_id": 4809,
+    "seasons": 2,
+    "episodes": [
+      9,
+      8
+    ],
+    "total_episodes": 17,
+    "player_url_template": "https://vidcore.io/tv/52814/{season}/{episode}"
+  },
+  "53923": {
+    "tmdb_id": "53923",
+    "title": "Nights of Al Saliheya",
+    "db_id": 83,
+    "seasons": 1,
+    "episodes": [
+      44
+    ],
+    "total_episodes": 44,
+    "player_url_template": "https://vidcore.io/tv/53923/{season}/{episode}"
+  },
+  "54155": {
+    "tmdb_id": "54155",
+    "title": "Hanna",
+    "db_id": 131,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      6
+    ],
+    "total_episodes": 22,
+    "player_url_template": "https://vidcore.io/tv/54155/{season}/{episode}"
+  },
+  "54344": {
+    "tmdb_id": "54344",
+    "title": "The Leftovers",
+    "db_id": 316,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/54344/{season}/{episode}"
+  },
+  "55011": {
+    "tmdb_id": "55011",
+    "title": "Gargantia on the Verdurous Planet",
+    "db_id": 586,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/55011/{season}/{episode}"
+  },
+  "56559": {
+    "tmdb_id": "56559",
+    "title": "Theatre of Darkness: Yamishibai",
+    "db_id": 112,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/56559/{season}/{episode}"
+  },
+  "57243": {
+    "tmdb_id": "57243",
+    "title": "Doctor Who",
+    "db_id": 415,
+    "seasons": 3,
+    "episodes": [
+      13,
+      13,
+      13
+    ],
+    "total_episodes": 39,
+    "player_url_template": "https://vidcore.io/tv/57243/{season}/{episode}"
+  },
+  "58887": {
+    "tmdb_id": "58887",
+    "title": "Omar",
+    "db_id": 391,
+    "seasons": 1,
+    "episodes": [
+      31
+    ],
+    "total_episodes": 31,
+    "player_url_template": "https://vidcore.io/tv/58887/{season}/{episode}"
+  },
+  "60059": {
+    "tmdb_id": "60059",
+    "title": "Better Call Saul",
+    "db_id": 33,
+    "seasons": 6,
+    "episodes": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      13
+    ],
+    "total_episodes": 63,
+    "player_url_template": "https://vidcore.io/tv/60059/{season}/{episode}"
+  },
+  "60574": {
+    "tmdb_id": "60574",
+    "title": "Peaky Blinders",
+    "db_id": 9,
+    "seasons": 6,
+    "episodes": [
+      6,
+      6,
+      6,
+      6,
+      6,
+      6
+    ],
+    "total_episodes": 36,
+    "player_url_template": "https://vidcore.io/tv/60574/{season}/{episode}"
+  },
+  "60625": {
+    "tmdb_id": "60625",
+    "title": "Rick and Morty",
+    "db_id": 60,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/60625/{season}/{episode}"
+  },
+  "60735": {
+    "tmdb_id": "60735",
+    "title": "The Flash",
+    "db_id": 4,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/60735/{season}/{episode}"
+  },
+  "60827": {
+    "tmdb_id": "60827",
+    "title": "One Week Friends",
+    "db_id": 271,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/60827/{season}/{episode}"
+  },
+  "60863": {
+    "tmdb_id": "60863",
+    "title": "Haikyu!!",
+    "db_id": 323,
+    "seasons": 4,
+    "episodes": [
+      25,
+      25,
+      10,
+      25
+    ],
+    "total_episodes": 85,
+    "player_url_template": "https://vidcore.io/tv/60863/{season}/{episode}"
+  },
+  "60940": {
+    "tmdb_id": "60940",
+    "title": "Boundless",
+    "db_id": 444,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/60940/{season}/{episode}"
+  },
+  "60948": {
+    "tmdb_id": "60948",
+    "title": "12 Monkeys",
+    "db_id": 502,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/60948/{season}/{episode}"
+  },
+  "61132": {
+    "tmdb_id": "61132",
+    "title": "The World Wars",
+    "db_id": 203,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/61132/{season}/{episode}"
+  },
+  "61223": {
+    "tmdb_id": "61223",
+    "title": "Akame ga Kill!",
+    "db_id": 94,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/61223/{season}/{episode}"
+  },
+  "61374": {
+    "tmdb_id": "61374",
+    "title": "Tokyo Ghoul",
+    "db_id": 56,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/61374/{season}/{episode}"
+  },
+  "61459": {
+    "tmdb_id": "61459",
+    "title": "Parasyte -the maxim-",
+    "db_id": 713,
+    "seasons": 1,
+    "episodes": [
+      24
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/61459/{season}/{episode}"
+  },
+  "61512": {
+    "tmdb_id": "61512",
+    "title": "Diabolik Lovers",
+    "db_id": 79,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/61512/{season}/{episode}"
+  },
+  "61596": {
+    "tmdb_id": "61596",
+    "title": "Drifters",
+    "db_id": 92,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/61596/{season}/{episode}"
+  },
+  "61617": {
+    "tmdb_id": "61617",
+    "title": "Over the Garden Wall",
+    "db_id": 65,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/61617/{season}/{episode}"
+  },
+  "61628": {
+    "tmdb_id": "61628",
+    "title": "World Trigger",
+    "db_id": 4799,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/61628/{season}/{episode}"
+  },
+  "61752": {
+    "tmdb_id": "61752",
+    "title": "Hellsing Ultimate",
+    "db_id": 54,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/61752/{season}/{episode}"
+  },
+  "61889": {
+    "tmdb_id": "61889",
+    "title": "Marvel's Daredevil",
+    "db_id": 4824,
+    "seasons": 2,
+    "episodes": [
+      13,
+      13
+    ],
+    "total_episodes": 26,
+    "player_url_template": "https://vidcore.io/tv/61889/{season}/{episode}"
+  },
+  "62017": {
+    "tmdb_id": "62017",
+    "title": "The Man in the High Castle",
+    "db_id": 176,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/62017/{season}/{episode}"
+  },
+  "62110": {
+    "tmdb_id": "62110",
+    "title": "Assassination Classroom",
+    "db_id": 281,
+    "seasons": 1,
+    "episodes": [
+      11
+    ],
+    "total_episodes": 11,
+    "player_url_template": "https://vidcore.io/tv/62110/{season}/{episode}"
+  },
+  "62141": {
+    "tmdb_id": "62141",
+    "title": "The Last of Us Development Series",
+    "db_id": 232,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/62141/{season}/{episode}"
+  },
+  "62264": {
+    "tmdb_id": "62264",
+    "title": "Ash vs Evil Dead",
+    "db_id": 32,
+    "seasons": 2,
+    "episodes": [
+      10,
+      10
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/62264/{season}/{episode}"
+  },
+  "62286": {
+    "tmdb_id": "62286",
+    "title": "Fear the Walking Dead",
+    "db_id": 23,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/62286/{season}/{episode}"
+  },
+  "62299": {
+    "tmdb_id": "62299",
+    "title": "Shine or Go Crazy",
+    "db_id": 358,
+    "seasons": 1,
+    "episodes": [
+      24
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/62299/{season}/{episode}"
+  },
+  "62455": {
+    "tmdb_id": "62455",
+    "title": "Locked Up",
+    "db_id": 161,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/62455/{season}/{episode}"
+  },
+  "62560": {
+    "tmdb_id": "62560",
+    "title": "Mr. Robot",
+    "db_id": 91,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/62560/{season}/{episode}"
+  },
+  "62602": {
+    "tmdb_id": "62602",
+    "title": "Blue Spring Ride",
+    "db_id": 625,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/62602/{season}/{episode}"
+  },
+  "62688": {
+    "tmdb_id": "62688",
+    "title": "Supergirl",
+    "db_id": 19,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/62688/{season}/{episode}"
+  },
+  "63085": {
+    "tmdb_id": "63085",
+    "title": "Ushio and Tora",
+    "db_id": 464,
+    "seasons": 2,
+    "episodes": [
+      26,
+      13
+    ],
+    "total_episodes": 39,
+    "player_url_template": "https://vidcore.io/tv/63085/{season}/{episode}"
+  },
+  "63136": {
+    "tmdb_id": "63136",
+    "title": "Newtopia",
+    "db_id": 2763,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/63136/{season}/{episode}"
+  },
+  "63201": {
+    "tmdb_id": "63201",
+    "title": "Glitch",
+    "db_id": 636,
+    "seasons": 3,
+    "episodes": [
+      6,
+      6,
+      6
+    ],
+    "total_episodes": 18,
+    "player_url_template": "https://vidcore.io/tv/63201/{season}/{episode}"
+  },
+  "63247": {
+    "tmdb_id": "63247",
+    "title": "Westworld",
+    "db_id": 28,
+    "seasons": 4,
+    "episodes": [
+      10,
+      10,
+      8,
+      8
+    ],
+    "total_episodes": 36,
+    "player_url_template": "https://vidcore.io/tv/63247/{season}/{episode}"
+  },
+  "63351": {
+    "tmdb_id": "63351",
+    "title": "Narcos",
+    "db_id": 34,
+    "seasons": 3,
+    "episodes": [
+      10,
+      10,
+      10
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/63351/{season}/{episode}"
+  },
+  "63926": {
+    "tmdb_id": "63926",
+    "title": "One-Punch Man",
+    "db_id": 55,
+    "seasons": 3,
+    "episodes": [
+      12,
+      12,
+      12
+    ],
+    "total_episodes": 36,
+    "player_url_template": "https://vidcore.io/tv/63926/{season}/{episode}"
+  },
+  "64196": {
+    "tmdb_id": "64196",
+    "title": "Overlord",
+    "db_id": 74,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/64196/{season}/{episode}"
+  },
+  "64464": {
+    "tmdb_id": "64464",
+    "title": "11.22.63",
+    "db_id": 26,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/64464/{season}/{episode}"
+  },
+  "64684": {
+    "tmdb_id": "64684",
+    "title": "And Then There Were None",
+    "db_id": 168,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/64684/{season}/{episode}"
+  },
+  "65355": {
+    "tmdb_id": "65355",
+    "title": "Splash Splash Love",
+    "db_id": 284,
+    "seasons": 1,
+    "episodes": [
+      2
+    ],
+    "total_episodes": 2,
+    "player_url_template": "https://vidcore.io/tv/65355/{season}/{episode}"
+  },
+  "65679": {
+    "tmdb_id": "65679",
+    "title": "Shahrzad",
+    "db_id": 20,
+    "seasons": 3,
+    "episodes": [
+      28,
+      15,
+      16
+    ],
+    "total_episodes": 59,
+    "player_url_template": "https://vidcore.io/tv/65679/{season}/{episode}"
+  },
+  "65708": {
+    "tmdb_id": "65708",
+    "title": "Taboo",
+    "db_id": 213,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/65708/{season}/{episode}"
+  },
+  "65820": {
+    "tmdb_id": "65820",
+    "title": "Van Helsing",
+    "db_id": 30,
+    "seasons": 2,
+    "episodes": [
+      13,
+      13
+    ],
+    "total_episodes": 26,
+    "player_url_template": "https://vidcore.io/tv/65820/{season}/{episode}"
+  },
+  "65930": {
+    "tmdb_id": "65930",
+    "title": "My Hero Academia",
+    "db_id": 44,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/65930/{season}/{episode}"
+  },
+  "65942": {
+    "tmdb_id": "65942",
+    "title": "Re:ZERO -Starting Life in Another World-",
+    "db_id": 53,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/65942/{season}/{episode}"
+  },
+  "65956": {
+    "tmdb_id": "65956",
+    "title": "The Morose Mononokean",
+    "db_id": 4785,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/65956/{season}/{episode}"
+  },
+  "66185": {
+    "tmdb_id": "66185",
+    "title": "The Story of God with Morgan Freeman",
+    "db_id": 11,
+    "seasons": 2,
+    "episodes": [
+      6,
+      3
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/66185/{season}/{episode}"
+  },
+  "66330": {
+    "tmdb_id": "66330",
+    "title": "W: Two Worlds",
+    "db_id": 315,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/66330/{season}/{episode}"
+  },
+  "66676": {
+    "tmdb_id": "66676",
+    "title": "Queen of the South",
+    "db_id": 15,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/66676/{season}/{episode}"
+  },
+  "66732": {
+    "tmdb_id": "66732",
+    "title": "Stranger Things",
+    "db_id": 12,
+    "seasons": 5,
+    "episodes": [
+      8,
+      9,
+      8,
+      9,
+      8
+    ],
+    "total_episodes": 42,
+    "player_url_template": "https://vidcore.io/tv/66732/{season}/{episode}"
+  },
+  "66788": {
+    "tmdb_id": "66788",
+    "title": "13 Reasons Why",
+    "db_id": 22,
+    "seasons": 4,
+    "episodes": [
+      13,
+      5,
+      13,
+      10
+    ],
+    "total_episodes": 41,
+    "player_url_template": "https://vidcore.io/tv/66788/{season}/{episode}"
+  },
+  "66871": {
+    "tmdb_id": "66871",
+    "title": "SIX",
+    "db_id": 244,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/66871/{season}/{episode}"
+  },
+  "66987": {
+    "tmdb_id": "66987",
+    "title": "Brotherhood: Final Fantasy XV",
+    "db_id": 111,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/66987/{season}/{episode}"
+  },
+  "67018": {
+    "tmdb_id": "67018",
+    "title": "The Legend of the Blue Sea",
+    "db_id": 236,
+    "seasons": 1,
+    "episodes": [
+      20
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/67018/{season}/{episode}"
+  },
+  "67075": {
+    "tmdb_id": "67075",
+    "title": "Mob Psycho 100",
+    "db_id": 71,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/67075/{season}/{episode}"
+  },
+  "67135": {
+    "tmdb_id": "67135",
+    "title": "The Exorcist",
+    "db_id": 14,
+    "seasons": 2,
+    "episodes": [
+      10,
+      10
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/67135/{season}/{episode}"
+  },
+  "67391": {
+    "tmdb_id": "67391",
+    "title": "The K2",
+    "db_id": 303,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/67391/{season}/{episode}"
+  },
+  "67534": {
+    "tmdb_id": "67534",
+    "title": "She and Her Cat: Everything Flows",
+    "db_id": 276,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/67534/{season}/{episode}"
+  },
+  "68256": {
+    "tmdb_id": "68256",
+    "title": "Comet Lucifer",
+    "db_id": 153,
+    "seasons": 6,
+    "episodes": [
+      13,
+      18,
+      26,
+      10,
+      16,
+      10
+    ],
+    "total_episodes": 93,
+    "player_url_template": "https://vidcore.io/tv/68256/{season}/{episode}"
+  },
+  "68595": {
+    "tmdb_id": "68595",
+    "title": "Planet Earth II",
+    "db_id": 619,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/68595/{season}/{episode}"
+  },
+  "68672": {
+    "tmdb_id": "68672",
+    "title": "The Fabric of the Cosmos",
+    "db_id": 133,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/68672/{season}/{episode}"
+  },
+  "68892": {
+    "tmdb_id": "68892",
+    "title": "The Rebel",
+    "db_id": 101,
+    "seasons": 1,
+    "episodes": [
+      29
+    ],
+    "total_episodes": 29,
+    "player_url_template": "https://vidcore.io/tv/68892/{season}/{episode}"
+  },
+  "69050": {
+    "tmdb_id": "69050",
+    "title": "Riverdale",
+    "db_id": 10,
+    "seasons": 6,
+    "episodes": [
+      13,
+      22,
+      22,
+      19,
+      19,
+      7
+    ],
+    "total_episodes": 102,
+    "player_url_template": "https://vidcore.io/tv/69050/{season}/{episode}"
+  },
+  "69740": {
+    "tmdb_id": "69740",
+    "title": "Ozark",
+    "db_id": 127,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/69740/{season}/{episode}"
+  },
+  "69975": {
+    "tmdb_id": "69975",
+    "title": "The Emperor: Owner of the Mask",
+    "db_id": 16,
+    "seasons": 1,
+    "episodes": [
+      40
+    ],
+    "total_episodes": 40,
+    "player_url_template": "https://vidcore.io/tv/69975/{season}/{episode}"
+  },
+  "70523": {
+    "tmdb_id": "70523",
+    "title": "Dark",
+    "db_id": 96,
+    "seasons": 3,
+    "episodes": [
+      10,
+      8,
+      8
+    ],
+    "total_episodes": 26,
+    "player_url_template": "https://vidcore.io/tv/70523/{season}/{episode}"
+  },
+  "70593": {
+    "tmdb_id": "70593",
+    "title": "Kingdom",
+    "db_id": 132,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/70593/{season}/{episode}"
+  },
+  "70669": {
+    "tmdb_id": "70669",
+    "title": "Queen of the Ring",
+    "db_id": 157,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/70669/{season}/{episode}"
+  },
+  "70881": {
+    "tmdb_id": "70881",
+    "title": "Boruto: Naruto Next Generations",
+    "db_id": 52,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/70881/{season}/{episode}"
+  },
+  "71015": {
+    "tmdb_id": "71015",
+    "title": "The World Yamizukan",
+    "db_id": 45,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/71015/{season}/{episode}"
+  },
+  "71024": {
+    "tmdb_id": "71024",
+    "title": "Castlevania",
+    "db_id": 42,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/71024/{season}/{episode}"
+  },
+  "71116": {
+    "tmdb_id": "71116",
+    "title": "Castle Rock",
+    "db_id": 4823,
+    "seasons": 2,
+    "episodes": [
+      10,
+      10
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/71116/{season}/{episode}"
+  },
+  "71126": {
+    "tmdb_id": "71126",
+    "title": "Romance",
+    "db_id": 89,
+    "seasons": 2,
+    "episodes": [
+      17,
+      22
+    ],
+    "total_episodes": 39,
+    "player_url_template": "https://vidcore.io/tv/71126/{season}/{episode}"
+  },
+  "71194": {
+    "tmdb_id": "71194",
+    "title": "The King's Avatar",
+    "db_id": 59,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/71194/{season}/{episode}"
+  },
+  "71225": {
+    "tmdb_id": "71225",
+    "title": "Cable Girls",
+    "db_id": 499,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/71225/{season}/{episode}"
+  },
+  "71446": {
+    "tmdb_id": "71446",
+    "title": "Money Heist",
+    "db_id": 75,
+    "seasons": 5,
+    "episodes": [
+      13,
+      9,
+      8,
+      8,
+      10
+    ],
+    "total_episodes": 48,
+    "player_url_template": "https://vidcore.io/tv/71446/{season}/{episode}"
+  },
+  "71578": {
+    "tmdb_id": "71578",
+    "title": "Atypical",
+    "db_id": 113,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/71578/{season}/{episode}"
+  },
+  "71712": {
+    "tmdb_id": "71712",
+    "title": "The Good Doctor",
+    "db_id": 90,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/71712/{season}/{episode}"
+  },
+  "71732": {
+    "tmdb_id": "71732",
+    "title": "Year Million",
+    "db_id": 164,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/71732/{season}/{episode}"
+  },
+  "71739": {
+    "tmdb_id": "71739",
+    "title": "Ghosted",
+    "db_id": 78,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/71739/{season}/{episode}"
+  },
+  "71886": {
+    "tmdb_id": "71886",
+    "title": "Siren",
+    "db_id": 102,
+    "seasons": 3,
+    "episodes": [
+      10,
+      16,
+      10
+    ],
+    "total_episodes": 36,
+    "player_url_template": "https://vidcore.io/tv/71886/{season}/{episode}"
+  },
+  "71912": {
+    "tmdb_id": "71912",
+    "title": "The Witcher",
+    "db_id": 182,
+    "seasons": 4,
+    "episodes": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 32,
+    "player_url_template": "https://vidcore.io/tv/71912/{season}/{episode}"
+  },
+  "71914": {
+    "tmdb_id": "71914",
+    "title": "The Wheel of Time",
+    "db_id": 364,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/71914/{season}/{episode}"
+  },
+  "72305": {
+    "tmdb_id": "72305",
+    "title": "Kakegurui",
+    "db_id": 280,
+    "seasons": 2,
+    "episodes": [
+      12,
+      12
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/72305/{season}/{episode}"
+  },
+  "72340": {
+    "tmdb_id": "72340",
+    "title": "Little Women",
+    "db_id": 467,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/72340/{season}/{episode}"
+  },
+  "72507": {
+    "tmdb_id": "72507",
+    "title": "Clean Freak! Aoyama-kun",
+    "db_id": 84,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/72507/{season}/{episode}"
+  },
+  "72613": {
+    "tmdb_id": "72613",
+    "title": "Cathedral of the Sea",
+    "db_id": 673,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/72613/{season}/{episode}"
+  },
+  "72844": {
+    "tmdb_id": "72844",
+    "title": "The Haunting of Hill House",
+    "db_id": 160,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/72844/{season}/{episode}"
+  },
+  "73107": {
+    "tmdb_id": "73107",
+    "title": "Barry",
+    "db_id": 81,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/73107/{season}/{episode}"
+  },
+  "73223": {
+    "tmdb_id": "73223",
+    "title": "Black Clover",
+    "db_id": 40,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/73223/{season}/{episode}"
+  },
+  "73292": {
+    "tmdb_id": "73292",
+    "title": "My Dear Loser",
+    "db_id": 443,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/73292/{season}/{episode}"
+  },
+  "73362": {
+    "tmdb_id": "73362",
+    "title": "The Ladies' Paradise",
+    "db_id": 394,
+    "seasons": 1,
+    "episodes": [
+      40
+    ],
+    "total_episodes": 40,
+    "player_url_template": "https://vidcore.io/tv/73362/{season}/{episode}"
+  },
+  "73467": {
+    "tmdb_id": "73467",
+    "title": "Godless",
+    "db_id": 69,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/73467/{season}/{episode}"
+  },
+  "73550": {
+    "tmdb_id": "73550",
+    "title": "Gunpowder",
+    "db_id": 13,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/73550/{season}/{episode}"
+  },
+  "73564": {
+    "tmdb_id": "73564",
+    "title": "Luxury Trap",
+    "db_id": 324,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/73564/{season}/{episode}"
+  },
+  "73605": {
+    "tmdb_id": "73605",
+    "title": "The Lost Honour of Christopher Jefferies",
+    "db_id": 579,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/73605/{season}/{episode}"
+  },
+  "73946": {
+    "tmdb_id": "73946",
+    "title": "INUYASHIKI LAST HERO",
+    "db_id": 67,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/73946/{season}/{episode}"
+  },
+  "74089": {
+    "tmdb_id": "74089",
+    "title": "GARO -VANISHING LINE-",
+    "db_id": 39,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/74089/{season}/{episode}"
+  },
+  "74204": {
+    "tmdb_id": "74204",
+    "title": "Big Mouth",
+    "db_id": 447,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/74204/{season}/{episode}"
+  },
+  "74313": {
+    "tmdb_id": "74313",
+    "title": "Blue Planet II",
+    "db_id": 208,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/74313/{season}/{episode}"
+  },
+  "74440": {
+    "tmdb_id": "74440",
+    "title": "Harley Quinn",
+    "db_id": 206,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/74440/{season}/{episode}"
+  },
+  "74577": {
+    "tmdb_id": "74577",
+    "title": "The End of the F***ing World",
+    "db_id": 85,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/74577/{season}/{episode}"
+  },
+  "74823": {
+    "tmdb_id": "74823",
+    "title": "The Pit",
+    "db_id": 269,
+    "seasons": 4,
+    "episodes": [
+      33,
+      34,
+      25,
+      39
+    ],
+    "total_episodes": 131,
+    "player_url_template": "https://vidcore.io/tv/74823/{season}/{episode}"
+  },
+  "75006": {
+    "tmdb_id": "75006",
+    "title": "The Umbrella Academy",
+    "db_id": 151,
+    "seasons": 2,
+    "episodes": [
+      10,
+      10
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/75006/{season}/{episode}"
+  },
+  "75066": {
+    "tmdb_id": "75066",
+    "title": "Black Knight",
+    "db_id": 555,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/75066/{season}/{episode}"
+  },
+  "75208": {
+    "tmdb_id": "75208",
+    "title": "Devilman Crybaby",
+    "db_id": 100,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/75208/{season}/{episode}"
+  },
+  "75214": {
+    "tmdb_id": "75214",
+    "title": "Violet Evergarden",
+    "db_id": 297,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/75214/{season}/{episode}"
+  },
+  "75351": {
+    "tmdb_id": "75351",
+    "title": "Riot",
+    "db_id": 201,
+    "seasons": 1,
+    "episodes": [
+      5
+    ],
+    "total_episodes": 5,
+    "player_url_template": "https://vidcore.io/tv/75351/{season}/{episode}"
+  },
+  "75450": {
+    "tmdb_id": "75450",
+    "title": "Titans",
+    "db_id": 119,
+    "seasons": 4,
+    "episodes": [
+      11,
+      13,
+      13,
+      3
+    ],
+    "total_episodes": 40,
+    "player_url_template": "https://vidcore.io/tv/75450/{season}/{episode}"
+  },
+  "75486": {
+    "tmdb_id": "75486",
+    "title": "Freedom Fighters: The Ray",
+    "db_id": 156,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/75486/{season}/{episode}"
+  },
+  "76479": {
+    "tmdb_id": "76479",
+    "title": "The Boys",
+    "db_id": 154,
+    "seasons": 5,
+    "episodes": [
+      8,
+      8,
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 40,
+    "player_url_template": "https://vidcore.io/tv/76479/{season}/{episode}"
+  },
+  "76662": {
+    "tmdb_id": "76662",
+    "title": "My Mister",
+    "db_id": 264,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/76662/{season}/{episode}"
+  },
+  "76669": {
+    "tmdb_id": "76669",
+    "title": "Elite",
+    "db_id": 118,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/76669/{season}/{episode}"
+  },
+  "76692": {
+    "tmdb_id": "76692",
+    "title": "Catherine the Great",
+    "db_id": 177,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/76692/{season}/{episode}"
+  },
+  "76719": {
+    "tmdb_id": "76719",
+    "title": "The Rain",
+    "db_id": 95,
+    "seasons": 3,
+    "episodes": [
+      8,
+      6,
+      6
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/76719/{season}/{episode}"
+  },
+  "77169": {
+    "tmdb_id": "77169",
+    "title": "Cobra Kai",
+    "db_id": 116,
+    "seasons": 6,
+    "episodes": [
+      10,
+      10,
+      10,
+      10,
+      10,
+      15
+    ],
+    "total_episodes": 65,
+    "player_url_template": "https://vidcore.io/tv/77169/{season}/{episode}"
+  },
+  "77236": {
+    "tmdb_id": "77236",
+    "title": "A Discovery of Witches",
+    "db_id": 135,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/77236/{season}/{episode}"
+  },
+  "77240": {
+    "tmdb_id": "77240",
+    "title": "Captain Tsubasa",
+    "db_id": 105,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/77240/{season}/{episode}"
+  },
+  "77385": {
+    "tmdb_id": "77385",
+    "title": "Freud",
+    "db_id": 204,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/77385/{season}/{episode}"
+  },
+  "77459": {
+    "tmdb_id": "77459",
+    "title": "The Passage",
+    "db_id": 149,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/77459/{season}/{episode}"
+  },
+  "78191": {
+    "tmdb_id": "78191",
+    "title": "You",
+    "db_id": 184,
+    "seasons": 5,
+    "episodes": [
+      10,
+      10,
+      10,
+      10,
+      10
+    ],
+    "total_episodes": 50,
+    "player_url_template": "https://vidcore.io/tv/78191/{season}/{episode}"
+  },
+  "79026": {
+    "tmdb_id": "79026",
+    "title": "The Protector",
+    "db_id": 124,
+    "seasons": 4,
+    "episodes": [
+      10,
+      8,
+      7,
+      7
+    ],
+    "total_episodes": 32,
+    "player_url_template": "https://vidcore.io/tv/79026/{season}/{episode}"
+  },
+  "79240": {
+    "tmdb_id": "79240",
+    "title": "Swamp Thing",
+    "db_id": 147,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/79240/{season}/{episode}"
+  },
+  "79283": {
+    "tmdb_id": "79283",
+    "title": "You Drive Me Crazy",
+    "db_id": 609,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/79283/{season}/{episode}"
+  },
+  "79347": {
+    "tmdb_id": "79347",
+    "title": "Miss Sherlock",
+    "db_id": 246,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/79347/{season}/{episode}"
+  },
+  "79352": {
+    "tmdb_id": "79352",
+    "title": "Sacred Games",
+    "db_id": 110,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/79352/{season}/{episode}"
+  },
+  "79410": {
+    "tmdb_id": "79410",
+    "title": "After Life",
+    "db_id": 234,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/79410/{season}/{episode}"
+  },
+  "79696": {
+    "tmdb_id": "79696",
+    "title": "Manifest",
+    "db_id": 407,
+    "seasons": 4,
+    "episodes": [
+      16,
+      13,
+      13,
+      20
+    ],
+    "total_episodes": 62,
+    "player_url_template": "https://vidcore.io/tv/79696/{season}/{episode}"
+  },
+  "79788": {
+    "tmdb_id": "79788",
+    "title": "Watchmen",
+    "db_id": 166,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/79788/{season}/{episode}"
+  },
+  "80307": {
+    "tmdb_id": "80307",
+    "title": "Bodyguard",
+    "db_id": 129,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/80307/{season}/{episode}"
+  },
+  "80623": {
+    "tmdb_id": "80623",
+    "title": "BAKI",
+    "db_id": 503,
+    "seasons": 4,
+    "episodes": [
+      26,
+      13,
+      12,
+      27
+    ],
+    "total_episodes": 78,
+    "player_url_template": "https://vidcore.io/tv/80623/{season}/{episode}"
+  },
+  "80707": {
+    "tmdb_id": "80707",
+    "title": "GHOUL",
+    "db_id": 115,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/80707/{season}/{episode}"
+  },
+  "80730": {
+    "tmdb_id": "80730",
+    "title": "Who Is America?",
+    "db_id": 114,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/80730/{season}/{episode}"
+  },
+  "80737": {
+    "tmdb_id": "80737",
+    "title": "My ID is Gangnam Beauty",
+    "db_id": 412,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/80737/{season}/{episode}"
+  },
+  "80752": {
+    "tmdb_id": "80752",
+    "title": "See",
+    "db_id": 170,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/80752/{season}/{episode}"
+  },
+  "80986": {
+    "tmdb_id": "80986",
+    "title": "DC's Stargirl",
+    "db_id": 216,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/80986/{season}/{episode}"
+  },
+  "81292": {
+    "tmdb_id": "81292",
+    "title": "Messiah",
+    "db_id": 185,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/81292/{season}/{episode}"
+  },
+  "81349": {
+    "tmdb_id": "81349",
+    "title": "Devs",
+    "db_id": 205,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/81349/{season}/{episode}"
+  },
+  "81355": {
+    "tmdb_id": "81355",
+    "title": "When They See Us",
+    "db_id": 172,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/81355/{season}/{episode}"
+  },
+  "81356": {
+    "tmdb_id": "81356",
+    "title": "Sex Education",
+    "db_id": 130,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/81356/{season}/{episode}"
+  },
+  "81559": {
+    "tmdb_id": "81559",
+    "title": "V Wars",
+    "db_id": 181,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/81559/{season}/{episode}"
+  },
+  "82452": {
+    "tmdb_id": "82452",
+    "title": "Avatar the Last Airbender",
+    "db_id": 654,
+    "seasons": 2,
+    "episodes": [
+      8,
+      7
+    ],
+    "total_episodes": 15,
+    "player_url_template": "https://vidcore.io/tv/82452/{season}/{episode}"
+  },
+  "82591": {
+    "tmdb_id": "82591",
+    "title": "Goblin Slayer",
+    "db_id": 117,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/82591/{season}/{episode}"
+  },
+  "82768": {
+    "tmdb_id": "82768",
+    "title": "The Dictator's Playbook",
+    "db_id": 217,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/82768/{season}/{episode}"
+  },
+  "82856": {
+    "tmdb_id": "82856",
+    "title": "The Mandalorian",
+    "db_id": 178,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      4
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/82856/{season}/{episode}"
+  },
+  "83097": {
+    "tmdb_id": "83097",
+    "title": "The Promised Neverland",
+    "db_id": 194,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/83097/{season}/{episode}"
+  },
+  "83100": {
+    "tmdb_id": "83100",
+    "title": "Dororo",
+    "db_id": 128,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/83100/{season}/{episode}"
+  },
+  "83125": {
+    "tmdb_id": "83125",
+    "title": "Cursed",
+    "db_id": 225,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/83125/{season}/{episode}"
+  },
+  "83247": {
+    "tmdb_id": "83247",
+    "title": "Haunted",
+    "db_id": 245,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/83247/{season}/{episode}"
+  },
+  "83381": {
+    "tmdb_id": "83381",
+    "title": "Tidelands",
+    "db_id": 223,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/83381/{season}/{episode}"
+  },
+  "83634": {
+    "tmdb_id": "83634",
+    "title": "Memories of the Alhambra",
+    "db_id": 351,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/83634/{season}/{episode}"
+  },
+  "84299": {
+    "tmdb_id": "84299",
+    "title": "Al Hayba",
+    "db_id": 248,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/84299/{season}/{episode}"
+  },
+  "84464": {
+    "tmdb_id": "84464",
+    "title": "My Strange Hero",
+    "db_id": 287,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/84464/{season}/{episode}"
+  },
+  "84773": {
+    "tmdb_id": "84773",
+    "title": "The Lord of the Rings: The Rings of Power",
+    "db_id": 461,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/84773/{season}/{episode}"
+  },
+  "84958": {
+    "tmdb_id": "84958",
+    "title": "Loki",
+    "db_id": 312,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/84958/{season}/{episode}"
+  },
+  "85220": {
+    "tmdb_id": "85220",
+    "title": "Romance Is a Bonus Book",
+    "db_id": 377,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/85220/{season}/{episode}"
+  },
+  "85271": {
+    "tmdb_id": "85271",
+    "title": "WandaVision",
+    "db_id": 273,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/85271/{season}/{episode}"
+  },
+  "85552": {
+    "tmdb_id": "85552",
+    "title": "Euphoria",
+    "db_id": 226,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/85552/{season}/{episode}"
+  },
+  "85720": {
+    "tmdb_id": "85720",
+    "title": "Shadow and Bone",
+    "db_id": 333,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/85720/{season}/{episode}"
+  },
+  "85723": {
+    "tmdb_id": "85723",
+    "title": "Raised by Wolves",
+    "db_id": 237,
+    "seasons": 2,
+    "episodes": [
+      10,
+      8
+    ],
+    "total_episodes": 18,
+    "player_url_template": "https://vidcore.io/tv/85723/{season}/{episode}"
+  },
+  "85937": {
+    "tmdb_id": "85937",
+    "title": "Demon Slayer: Kimetsu no Yaiba",
+    "db_id": 268,
+    "seasons": 5,
+    "episodes": [
+      26,
+      7,
+      11,
+      11,
+      8
+    ],
+    "total_episodes": 63,
+    "player_url_template": "https://vidcore.io/tv/85937/{season}/{episode}"
+  },
+  "86290": {
+    "tmdb_id": "86290",
+    "title": "Blue Whale",
+    "db_id": 1740,
+    "seasons": 1,
+    "episodes": [
+      30
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/86290/{season}/{episode}"
+  },
+  "86830": {
+    "tmdb_id": "86830",
+    "title": "The Fiery Priest",
+    "db_id": 504,
+    "seasons": 2,
+    "episodes": [
+      20,
+      12
+    ],
+    "total_episodes": 32,
+    "player_url_template": "https://vidcore.io/tv/86830/{season}/{episode}"
+  },
+  "86831": {
+    "tmdb_id": "86831",
+    "title": "Love, Death & Robots",
+    "db_id": 145,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/86831/{season}/{episode}"
+  },
+  "86836": {
+    "tmdb_id": "86836",
+    "title": "Why the Hell Are You Here, Teacher!?",
+    "db_id": 423,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/86836/{season}/{episode}"
+  },
+  "86850": {
+    "tmdb_id": "86850",
+    "title": "Dracula",
+    "db_id": 192,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/86850/{season}/{episode}"
+  },
+  "87108": {
+    "tmdb_id": "87108",
+    "title": "Chernobyl",
+    "db_id": 144,
+    "seasons": 1,
+    "episodes": [
+      5
+    ],
+    "total_episodes": 5,
+    "player_url_template": "https://vidcore.io/tv/87108/{season}/{episode}"
+  },
+  "87739": {
+    "tmdb_id": "87739",
+    "title": "The Queen's Gambit",
+    "db_id": 251,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/87739/{season}/{episode}"
+  },
+  "88046": {
+    "tmdb_id": "88046",
+    "title": "Fire Force",
+    "db_id": 665,
+    "seasons": 3,
+    "episodes": [
+      24,
+      24,
+      25
+    ],
+    "total_episodes": 73,
+    "player_url_template": "https://vidcore.io/tv/88046/{season}/{episode}"
+  },
+  "88052": {
+    "tmdb_id": "88052",
+    "title": "Black Summer",
+    "db_id": 148,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/88052/{season}/{episode}"
+  },
+  "88329": {
+    "tmdb_id": "88329",
+    "title": "Hawkeye",
+    "db_id": 365,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/88329/{season}/{episode}"
+  },
+  "88396": {
+    "tmdb_id": "88396",
+    "title": "The Falcon and the Winter Soldier",
+    "db_id": 290,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/88396/{season}/{episode}"
+  },
+  "88463": {
+    "tmdb_id": "88463",
+    "title": "Arthdal Chronicles",
+    "db_id": 591,
+    "seasons": 1,
+    "episodes": [
+      18
+    ],
+    "total_episodes": 18,
+    "player_url_template": "https://vidcore.io/tv/88463/{season}/{episode}"
+  },
+  "88516": {
+    "tmdb_id": "88516",
+    "title": "AlRawabi School for Girls",
+    "db_id": 350,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/88516/{season}/{episode}"
+  },
+  "88589": {
+    "tmdb_id": "88589",
+    "title": "Jinn",
+    "db_id": 162,
+    "seasons": 1,
+    "episodes": [
+      5
+    ],
+    "total_episodes": 5,
+    "player_url_template": "https://vidcore.io/tv/88589/{season}/{episode}"
+  },
+  "89247": {
+    "tmdb_id": "89247",
+    "title": "Batwoman",
+    "db_id": 171,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/89247/{season}/{episode}"
+  },
+  "89641": {
+    "tmdb_id": "89641",
+    "title": "Love Alarm",
+    "db_id": 259,
+    "seasons": 2,
+    "episodes": [
+      8,
+      6
+    ],
+    "total_episodes": 14,
+    "player_url_template": "https://vidcore.io/tv/89641/{season}/{episode}"
+  },
+  "89905": {
+    "tmdb_id": "89905",
+    "title": "Normal People",
+    "db_id": 543,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/89905/{season}/{episode}"
+  },
+  "90027": {
+    "tmdb_id": "90027",
+    "title": "Carnival Row",
+    "db_id": 432,
+    "seasons": 2,
+    "episodes": [
+      8,
+      10
+    ],
+    "total_episodes": 18,
+    "player_url_template": "https://vidcore.io/tv/90027/{season}/{episode}"
+  },
+  "90228": {
+    "tmdb_id": "90228",
+    "title": "Dune: Prophecy",
+    "db_id": 1742,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/90228/{season}/{episode}"
+  },
+  "90260": {
+    "tmdb_id": "90260",
+    "title": "I Am Not Okay with This",
+    "db_id": 196,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/90260/{season}/{episode}"
+  },
+  "90290": {
+    "tmdb_id": "90290",
+    "title": "The Chosen One",
+    "db_id": 152,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/90290/{season}/{episode}"
+  },
+  "90462": {
+    "tmdb_id": "90462",
+    "title": "Chucky",
+    "db_id": 353,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/90462/{season}/{episode}"
+  },
+  "90669": {
+    "tmdb_id": "90669",
+    "title": "1899",
+    "db_id": 484,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/90669/{season}/{episode}"
+  },
+  "90802": {
+    "tmdb_id": "90802",
+    "title": "The Sandman",
+    "db_id": 449,
+    "seasons": 2,
+    "episodes": [
+      11,
+      12
+    ],
+    "total_episodes": 23,
+    "player_url_template": "https://vidcore.io/tv/90802/{season}/{episode}"
+  },
+  "90846": {
+    "tmdb_id": "90846",
+    "title": "Serengeti",
+    "db_id": 150,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/90846/{season}/{episode}"
+  },
+  "91239": {
+    "tmdb_id": "91239",
+    "title": "Bridgerton",
+    "db_id": 314,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/91239/{season}/{episode}"
+  },
+  "91363": {
+    "tmdb_id": "91363",
+    "title": "What If...?",
+    "db_id": 336,
+    "seasons": 3,
+    "episodes": [
+      9,
+      9,
+      8
+    ],
+    "total_episodes": 26,
+    "player_url_template": "https://vidcore.io/tv/91363/{season}/{episode}"
+  },
+  "91557": {
+    "tmdb_id": "91557",
+    "title": "Ragnarok",
+    "db_id": 214,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/91557/{season}/{episode}"
+  },
+  "91725": {
+    "tmdb_id": "91725",
+    "title": "The Spy",
+    "db_id": 158,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/91725/{season}/{episode}"
+  },
+  "92090": {
+    "tmdb_id": "92090",
+    "title": "Blade of the Immortal",
+    "db_id": 500,
+    "seasons": 1,
+    "episodes": [
+      24
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/92090/{season}/{episode}"
+  },
+  "92443": {
+    "tmdb_id": "92443",
+    "title": "Apache: The Life of Carlos Tevez",
+    "db_id": 581,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/92443/{season}/{episode}"
+  },
+  "92584": {
+    "tmdb_id": "92584",
+    "title": "Eden",
+    "db_id": 342,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/92584/{season}/{episode}"
+  },
+  "92586": {
+    "tmdb_id": "92586",
+    "title": "Somali and the Forest Spirit",
+    "db_id": 189,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/92586/{season}/{episode}"
+  },
+  "92625": {
+    "tmdb_id": "92625",
+    "title": "Mannequin",
+    "db_id": 155,
+    "seasons": 1,
+    "episodes": [
+      26
+    ],
+    "total_episodes": 26,
+    "player_url_template": "https://vidcore.io/tv/92625/{season}/{episode}"
+  },
+  "92749": {
+    "tmdb_id": "92749",
+    "title": "Moon Knight",
+    "db_id": 390,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/92749/{season}/{episode}"
+  },
+  "92782": {
+    "tmdb_id": "92782",
+    "title": "Ms. Marvel",
+    "db_id": 418,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/92782/{season}/{episode}"
+  },
+  "92783": {
+    "tmdb_id": "92783",
+    "title": "She-Hulk: Attorney at Law",
+    "db_id": 457,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/92783/{season}/{episode}"
+  },
+  "92891": {
+    "tmdb_id": "92891",
+    "title": "Caliphate",
+    "db_id": 256,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/92891/{season}/{episode}"
+  },
+  "93405": {
+    "tmdb_id": "93405",
+    "title": "Squid Game",
+    "db_id": 347,
+    "seasons": 3,
+    "episodes": [
+      9,
+      7,
+      6
+    ],
+    "total_episodes": 22,
+    "player_url_template": "https://vidcore.io/tv/93405/{season}/{episode}"
+  },
+  "93490": {
+    "tmdb_id": "93490",
+    "title": "My Country: The New Age",
+    "db_id": 263,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/93490/{season}/{episode}"
+  },
+  "93716": {
+    "tmdb_id": "93716",
+    "title": "The Mosquito Coast",
+    "db_id": 352,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/93716/{season}/{episode}"
+  },
+  "93740": {
+    "tmdb_id": "93740",
+    "title": "Foundation",
+    "db_id": 348,
+    "seasons": 3,
+    "episodes": [
+      10,
+      10,
+      10
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/93740/{season}/{episode}"
+  },
+  "93811": {
+    "tmdb_id": "93811",
+    "title": "Into the Night",
+    "db_id": 535,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/93811/{season}/{episode}"
+  },
+  "94028": {
+    "tmdb_id": "94028",
+    "title": "RIPLEY",
+    "db_id": 675,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/94028/{season}/{episode}"
+  },
+  "94167": {
+    "tmdb_id": "94167",
+    "title": "The Legend of El Cid",
+    "db_id": 289,
+    "seasons": 2,
+    "episodes": [
+      5,
+      5
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/94167/{season}/{episode}"
+  },
+  "94251": {
+    "tmdb_id": "94251",
+    "title": "50 States of Fright",
+    "db_id": 247,
+    "seasons": 1,
+    "episodes": [
+      14
+    ],
+    "total_episodes": 14,
+    "player_url_template": "https://vidcore.io/tv/94251/{season}/{episode}"
+  },
+  "94305": {
+    "tmdb_id": "94305",
+    "title": "The Walking Dead: World Beyond",
+    "db_id": 240,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/94305/{season}/{episode}"
+  },
+  "94605": {
+    "tmdb_id": "94605",
+    "title": "Arcane",
+    "db_id": 439,
+    "seasons": 2,
+    "episodes": [
+      9,
+      9
+    ],
+    "total_episodes": 18,
+    "player_url_template": "https://vidcore.io/tv/94605/{season}/{episode}"
+  },
+  "94664": {
+    "tmdb_id": "94664",
+    "title": "Mushoku Tensei: Jobless Reincarnation",
+    "db_id": 493,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/94664/{season}/{episode}"
+  },
+  "94925": {
+    "tmdb_id": "94925",
+    "title": "Spriggan",
+    "db_id": 507,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/94925/{season}/{episode}"
+  },
+  "94997": {
+    "tmdb_id": "94997",
+    "title": "House of the Dragon",
+    "db_id": 400,
+    "seasons": 3,
+    "episodes": [
+      10,
+      8,
+      8
+    ],
+    "total_episodes": 26,
+    "player_url_template": "https://vidcore.io/tv/94997/{season}/{episode}"
+  },
+  "95171": {
+    "tmdb_id": "95171",
+    "title": "Prehistoric Planet",
+    "db_id": 557,
+    "seasons": 2,
+    "episodes": [
+      5,
+      5
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/95171/{season}/{episode}"
+  },
+  "95479": {
+    "tmdb_id": "95479",
+    "title": "JUJUTSU KAISEN",
+    "db_id": 505,
+    "seasons": 3,
+    "episodes": [
+      24,
+      23,
+      12
+    ],
+    "total_episodes": 59,
+    "player_url_template": "https://vidcore.io/tv/95479/{season}/{episode}"
+  },
+  "95480": {
+    "tmdb_id": "95480",
+    "title": "Slow Horses",
+    "db_id": 5847,
+    "seasons": 5,
+    "episodes": [
+      6,
+      6,
+      6,
+      6,
+      6
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/95480/{season}/{episode}"
+  },
+  "95557": {
+    "tmdb_id": "95557",
+    "title": "INVINCIBLE",
+    "db_id": 5838,
+    "seasons": 4,
+    "episodes": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 32,
+    "player_url_template": "https://vidcore.io/tv/95557/{season}/{episode}"
+  },
+  "95594": {
+    "tmdb_id": "95594",
+    "title": "Fast & Furious Spy Racers",
+    "db_id": 183,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/95594/{season}/{episode}"
+  },
+  "96102": {
+    "tmdb_id": "96102",
+    "title": "Hospital Playlist",
+    "db_id": 306,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/96102/{season}/{episode}"
+  },
+  "96129": {
+    "tmdb_id": "96129",
+    "title": "Don't F**k with Cats: Hunting an Internet Killer",
+    "db_id": 197,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/96129/{season}/{episode}"
+  },
+  "96198": {
+    "tmdb_id": "96198",
+    "title": "The Dead Lands",
+    "db_id": 300,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/96198/{season}/{episode}"
+  },
+  "96346": {
+    "tmdb_id": "96346",
+    "title": "Luna Nera",
+    "db_id": 454,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/96346/{season}/{episode}"
+  },
+  "96481": {
+    "tmdb_id": "96481",
+    "title": "Rise of Empires: Ottoman",
+    "db_id": 202,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/96481/{season}/{episode}"
+  },
+  "96648": {
+    "tmdb_id": "96648",
+    "title": "Sweet Home",
+    "db_id": 261,
+    "seasons": 3,
+    "episodes": [
+      10,
+      8,
+      8
+    ],
+    "total_episodes": 26,
+    "player_url_template": "https://vidcore.io/tv/96648/{season}/{episode}"
+  },
+  "96677": {
+    "tmdb_id": "96677",
+    "title": "Lupin",
+    "db_id": 282,
+    "seasons": 3,
+    "episodes": [
+      5,
+      5,
+      7
+    ],
+    "total_episodes": 17,
+    "player_url_template": "https://vidcore.io/tv/96677/{season}/{episode}"
+  },
+  "96777": {
+    "tmdb_id": "96777",
+    "title": "The Silent Sea",
+    "db_id": 371,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/96777/{season}/{episode}"
+  },
+  "96853": {
+    "tmdb_id": "96853",
+    "title": "The Forgotten Army",
+    "db_id": 207,
+    "seasons": 1,
+    "episodes": [
+      5
+    ],
+    "total_episodes": 5,
+    "player_url_template": "https://vidcore.io/tv/96853/{season}/{episode}"
+  },
+  "97180": {
+    "tmdb_id": "97180",
+    "title": "Selena: The Series",
+    "db_id": 688,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/97180/{season}/{episode}"
+  },
+  "97219": {
+    "tmdb_id": "97219",
+    "title": "Hi Bye, Mama!",
+    "db_id": 640,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/97219/{season}/{episode}"
+  },
+  "97513": {
+    "tmdb_id": "97513",
+    "title": "The Boarding School: Las Cumbres",
+    "db_id": 285,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      6
+    ],
+    "total_episodes": 22,
+    "player_url_template": "https://vidcore.io/tv/97513/{season}/{episode}"
+  },
+  "97546": {
+    "tmdb_id": "97546",
+    "title": "Ted Lasso",
+    "db_id": 603,
+    "seasons": 4,
+    "episodes": [
+      10,
+      12,
+      12,
+      8
+    ],
+    "total_episodes": 42,
+    "player_url_template": "https://vidcore.io/tv/97546/{season}/{episode}"
+  },
+  "97617": {
+    "tmdb_id": "97617",
+    "title": "The Misfit of Demon King Academy",
+    "db_id": 515,
+    "seasons": 2,
+    "episodes": [
+      13,
+      12
+    ],
+    "total_episodes": 25,
+    "player_url_template": "https://vidcore.io/tv/97617/{season}/{episode}"
+  },
+  "97860": {
+    "tmdb_id": "97860",
+    "title": "Tower of God",
+    "db_id": 523,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/97860/{season}/{episode}"
+  },
+  "97861": {
+    "tmdb_id": "97861",
+    "title": "Night on Earth",
+    "db_id": 538,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/97861/{season}/{episode}"
+  },
+  "98123": {
+    "tmdb_id": "98123",
+    "title": "The Daily Life of the Immortal King",
+    "db_id": 501,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/98123/{season}/{episode}"
+  },
+  "98161": {
+    "tmdb_id": "98161",
+    "title": "Home Before Dark",
+    "db_id": 325,
+    "seasons": 2,
+    "episodes": [
+      10,
+      10
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/98161/{season}/{episode}"
+  },
+  "99478": {
+    "tmdb_id": "99478",
+    "title": "Memorist",
+    "db_id": 239,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/99478/{season}/{episode}"
+  },
+  "99489": {
+    "tmdb_id": "99489",
+    "title": "The Penthouse",
+    "db_id": 335,
+    "seasons": 3,
+    "episodes": [
+      21,
+      13,
+      14
+    ],
+    "total_episodes": 48,
+    "player_url_template": "https://vidcore.io/tv/99489/{season}/{episode}"
+  },
+  "99581": {
+    "tmdb_id": "99581",
+    "title": "Unorthodox",
+    "db_id": 218,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/99581/{season}/{episode}"
+  },
+  "99778": {
+    "tmdb_id": "99778",
+    "title": "The God of High School",
+    "db_id": 295,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/99778/{season}/{episode}"
+  },
+  "99966": {
+    "tmdb_id": "99966",
+    "title": "All of Us Are Dead",
+    "db_id": 382,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/99966/{season}/{episode}"
+  },
+  "100052": {
+    "tmdb_id": "100052",
+    "title": "The English Game",
+    "db_id": 212,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/100052/{season}/{episode}"
+  },
+  "100088": {
+    "tmdb_id": "100088",
+    "title": "The Last of Us",
+    "db_id": 510,
+    "seasons": 2,
+    "episodes": [
+      9,
+      7
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/100088/{season}/{episode}"
+  },
+  "100436": {
+    "tmdb_id": "100436",
+    "title": "Akudama Drive",
+    "db_id": 529,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/100436/{season}/{episode}"
+  },
+  "100565": {
+    "tmdb_id": "100565",
+    "title": "86 EIGHTY-SIX",
+    "db_id": 4786,
+    "seasons": 1,
+    "episodes": [
+      23
+    ],
+    "total_episodes": 23,
+    "player_url_template": "https://vidcore.io/tv/100565/{season}/{episode}"
+  },
+  "100605": {
+    "tmdb_id": "100605",
+    "title": "Shaun the Sheep: Adventures from Mossy Bottom",
+    "db_id": 405,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/100605/{season}/{episode}"
+  },
+  "100757": {
+    "tmdb_id": "100757",
+    "title": "Outer Banks",
+    "db_id": 293,
+    "seasons": 5,
+    "episodes": [
+      10,
+      10,
+      10,
+      10,
+      2
+    ],
+    "total_episodes": 42,
+    "player_url_template": "https://vidcore.io/tv/100757/{season}/{episode}"
+  },
+  "100897": {
+    "tmdb_id": "100897",
+    "title": "Love 101",
+    "db_id": 233,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/100897/{season}/{episode}"
+  },
+  "103913": {
+    "tmdb_id": "103913",
+    "title": "Tehran",
+    "db_id": 4794,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/103913/{season}/{episode}"
+  },
+  "104555": {
+    "tmdb_id": "104555",
+    "title": "The Great Heist",
+    "db_id": 448,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/104555/{season}/{episode}"
+  },
+  "104706": {
+    "tmdb_id": "104706",
+    "title": "Snowdrop",
+    "db_id": 368,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/104706/{season}/{episode}"
+  },
+  "105248": {
+    "tmdb_id": "105248",
+    "title": "Cyberpunk: Edgerunners",
+    "db_id": 512,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/105248/{season}/{episode}"
+  },
+  "105374": {
+    "tmdb_id": "105374",
+    "title": "Blue Blood",
+    "db_id": 224,
+    "seasons": 1,
+    "episodes": [
+      28
+    ],
+    "total_episodes": 28,
+    "player_url_template": "https://vidcore.io/tv/105374/{season}/{episode}"
+  },
+  "106379": {
+    "tmdb_id": "106379",
+    "title": "Fallout",
+    "db_id": 674,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/106379/{season}/{episode}"
+  },
+  "106600": {
+    "tmdb_id": "106600",
+    "title": "BTS In the SOOP",
+    "db_id": 305,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/106600/{season}/{episode}"
+  },
+  "106651": {
+    "tmdb_id": "106651",
+    "title": "Hellbound",
+    "db_id": 363,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/106651/{season}/{episode}"
+  },
+  "107445": {
+    "tmdb_id": "107445",
+    "title": "Pfusch am Bau",
+    "db_id": 386,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/107445/{season}/{episode}"
+  },
+  "108296": {
+    "tmdb_id": "108296",
+    "title": "Resident Evil",
+    "db_id": 436,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/108296/{season}/{episode}"
+  },
+  "108545": {
+    "tmdb_id": "108545",
+    "title": "3 Body Problem",
+    "db_id": 670,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/108545/{season}/{episode}"
+  },
+  "108664": {
+    "tmdb_id": "108664",
+    "title": "Five Days at Memorial",
+    "db_id": 453,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/108664/{season}/{episode}"
+  },
+  "110222": {
+    "tmdb_id": "110222",
+    "title": "No Man's Land",
+    "db_id": 265,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/110222/{season}/{episode}"
+  },
+  "110316": {
+    "tmdb_id": "110316",
+    "title": "Alice in Borderland",
+    "db_id": 2781,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      6
+    ],
+    "total_episodes": 22,
+    "player_url_template": "https://vidcore.io/tv/110316/{season}/{episode}"
+  },
+  "110382": {
+    "tmdb_id": "110382",
+    "title": "Pachinko",
+    "db_id": 389,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/110382/{season}/{episode}"
+  },
+  "110492": {
+    "tmdb_id": "110492",
+    "title": "Peacemaker",
+    "db_id": 4802,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/110492/{season}/{episode}"
+  },
+  "110642": {
+    "tmdb_id": "110642",
+    "title": "RESIDENT EVIL: Infinite Darkness",
+    "db_id": 320,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/110642/{season}/{episode}"
+  },
+  "110758": {
+    "tmdb_id": "110758",
+    "title": "Honour",
+    "db_id": 313,
+    "seasons": 1,
+    "episodes": [
+      2
+    ],
+    "total_episodes": 2,
+    "player_url_template": "https://vidcore.io/tv/110758/{season}/{episode}"
+  },
+  "111110": {
+    "tmdb_id": "111110",
+    "title": "ONE PIECE",
+    "db_id": 590,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/111110/{season}/{episode}"
+  },
+  "111111": {
+    "tmdb_id": "111111",
+    "title": "Blood of Zeus",
+    "db_id": 253,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/111111/{season}/{episode}"
+  },
+  "111800": {
+    "tmdb_id": "111800",
+    "title": "The Old Man",
+    "db_id": 473,
+    "seasons": 2,
+    "episodes": [
+      7,
+      8
+    ],
+    "total_episodes": 15,
+    "player_url_template": "https://vidcore.io/tv/111800/{season}/{episode}"
+  },
+  "111837": {
+    "tmdb_id": "111837",
+    "title": "Willow",
+    "db_id": 490,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/111837/{season}/{episode}"
+  },
+  "112836": {
+    "tmdb_id": "112836",
+    "title": "Money Heist: Korea - Joint Economic Area",
+    "db_id": 429,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/112836/{season}/{episode}"
+  },
+  "112837": {
+    "tmdb_id": "112837",
+    "title": "Somebody",
+    "db_id": 486,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/112837/{season}/{episode}"
+  },
+  "113808": {
+    "tmdb_id": "113808",
+    "title": "Seirei Gensouki: Spirit Chronicles",
+    "db_id": 420,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/113808/{season}/{episode}"
+  },
+  "113962": {
+    "tmdb_id": "113962",
+    "title": "Lioness",
+    "db_id": 576,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/113962/{season}/{episode}"
+  },
+  "114410": {
+    "tmdb_id": "114410",
+    "title": "Chainsaw Man",
+    "db_id": 478,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/114410/{season}/{episode}"
+  },
+  "114463": {
+    "tmdb_id": "114463",
+    "title": "Zootopia+",
+    "db_id": 480,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/114463/{season}/{episode}"
+  },
+  "114466": {
+    "tmdb_id": "114466",
+    "title": "Baymax!",
+    "db_id": 442,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/114466/{season}/{episode}"
+  },
+  "114471": {
+    "tmdb_id": "114471",
+    "title": "Ironheart",
+    "db_id": 5841,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/114471/{season}/{episode}"
+  },
+  "114472": {
+    "tmdb_id": "114472",
+    "title": "Secret Invasion",
+    "db_id": 566,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/114472/{season}/{episode}"
+  },
+  "114502": {
+    "tmdb_id": "114502",
+    "title": "Cars on the Road",
+    "db_id": 469,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/114502/{season}/{episode}"
+  },
+  "114709": {
+    "tmdb_id": "114709",
+    "title": "Insider",
+    "db_id": 286,
+    "seasons": 1,
+    "episodes": [
+      39
+    ],
+    "total_episodes": 39,
+    "player_url_template": "https://vidcore.io/tv/114709/{season}/{episode}"
+  },
+  "114868": {
+    "tmdb_id": "114868",
+    "title": "Record of Ragnarok",
+    "db_id": 321,
+    "seasons": 3,
+    "episodes": [
+      12,
+      15,
+      15
+    ],
+    "total_episodes": 42,
+    "player_url_template": "https://vidcore.io/tv/114868/{season}/{episode}"
+  },
+  "114922": {
+    "tmdb_id": "114922",
+    "title": "Citadel",
+    "db_id": 682,
+    "seasons": 2,
+    "episodes": [
+      6,
+      7
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/114922/{season}/{episode}"
+  },
+  "114937": {
+    "tmdb_id": "114937",
+    "title": "Taisho Otome Fairy Tale",
+    "db_id": 679,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/114937/{season}/{episode}"
+  },
+  "115036": {
+    "tmdb_id": "115036",
+    "title": "The Book of Boba Fett",
+    "db_id": 373,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/115036/{season}/{episode}"
+  },
+  "115176": {
+    "tmdb_id": "115176",
+    "title": "Hellsing: The Dawn",
+    "db_id": 43,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/115176/{season}/{episode}"
+  },
+  "116135": {
+    "tmdb_id": "116135",
+    "title": "Vikings: Valhalla",
+    "db_id": 385,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/116135/{season}/{episode}"
+  },
+  "116521": {
+    "tmdb_id": "116521",
+    "title": "Runaways",
+    "db_id": 99,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/116521/{season}/{episode}"
+  },
+  "116605": {
+    "tmdb_id": "116605",
+    "title": "River Where the Moon Rises",
+    "db_id": 408,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/116605/{season}/{episode}"
+  },
+  "116708": {
+    "tmdb_id": "116708",
+    "title": "Imitation",
+    "db_id": 520,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/116708/{season}/{episode}"
+  },
+  "117678": {
+    "tmdb_id": "117678",
+    "title": "Skull Island",
+    "db_id": 573,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/117678/{season}/{episode}"
+  },
+  "117830": {
+    "tmdb_id": "117830",
+    "title": "Tomb Raider: The Legend of Lara Croft",
+    "db_id": 1748,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/117830/{season}/{episode}"
+  },
+  "118821": {
+    "tmdb_id": "118821",
+    "title": "The World's Finest Assassin Gets Reincarnated in Another World as an Aristocrat",
+    "db_id": 433,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/118821/{season}/{episode}"
+  },
+  "118956": {
+    "tmdb_id": "118956",
+    "title": "DOTA: Dragon's Blood",
+    "db_id": 299,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/118956/{season}/{episode}"
+  },
+  "119051": {
+    "tmdb_id": "119051",
+    "title": "Wednesday",
+    "db_id": 489,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/119051/{season}/{episode}"
+  },
+  "119495": {
+    "tmdb_id": "119495",
+    "title": "The Eminence in Shadow",
+    "db_id": 498,
+    "seasons": 2,
+    "episodes": [
+      20,
+      12
+    ],
+    "total_episodes": 32,
+    "player_url_template": "https://vidcore.io/tv/119495/{season}/{episode}"
+  },
+  "119772": {
+    "tmdb_id": "119772",
+    "title": "The Devil Judge",
+    "db_id": 317,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/119772/{season}/{episode}"
+  },
+  "119955": {
+    "tmdb_id": "119955",
+    "title": "Dr. Brain",
+    "db_id": 359,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/119955/{season}/{episode}"
+  },
+  "120089": {
+    "tmdb_id": "120089",
+    "title": "SPY x FAMILY",
+    "db_id": 496,
+    "seasons": 3,
+    "episodes": [
+      25,
+      12,
+      13
+    ],
+    "total_episodes": 50,
+    "player_url_template": "https://vidcore.io/tv/120089/{season}/{episode}"
+  },
+  "120668": {
+    "tmdb_id": "120668",
+    "title": "I Want To Be Alive",
+    "db_id": 475,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/120668/{season}/{episode}"
+  },
+  "120911": {
+    "tmdb_id": "120911",
+    "title": "The Terminal List",
+    "db_id": 440,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/120911/{season}/{episode}"
+  },
+  "121078": {
+    "tmdb_id": "121078",
+    "title": "Mieruko-chan",
+    "db_id": 589,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/121078/{season}/{episode}"
+  },
+  "121558": {
+    "tmdb_id": "121558",
+    "title": "The Sweet Blood",
+    "db_id": 310,
+    "seasons": 1,
+    "episodes": [
+      15
+    ],
+    "total_episodes": 15,
+    "player_url_template": "https://vidcore.io/tv/121558/{season}/{episode}"
+  },
+  "122226": {
+    "tmdb_id": "122226",
+    "title": "Echo",
+    "db_id": 643,
+    "seasons": 1,
+    "episodes": [
+      5
+    ],
+    "total_episodes": 5,
+    "player_url_template": "https://vidcore.io/tv/122226/{season}/{episode}"
+  },
+  "123138": {
+    "tmdb_id": "123138",
+    "title": "Fatma",
+    "db_id": 375,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/123138/{season}/{episode}"
+  },
+  "123349": {
+    "tmdb_id": "123349",
+    "title": "The Sound of Magic",
+    "db_id": 402,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/123349/{season}/{episode}"
+  },
+  "124364": {
+    "tmdb_id": "124364",
+    "title": "FROM",
+    "db_id": 546,
+    "seasons": 4,
+    "episodes": [
+      10,
+      10,
+      10,
+      10
+    ],
+    "total_episodes": 40,
+    "player_url_template": "https://vidcore.io/tv/124364/{season}/{episode}"
+  },
+  "124800": {
+    "tmdb_id": "124800",
+    "title": "Love & Death",
+    "db_id": 548,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/124800/{season}/{episode}"
+  },
+  "125988": {
+    "tmdb_id": "125988",
+    "title": "Silo",
+    "db_id": 553,
+    "seasons": 3,
+    "episodes": [
+      10,
+      10,
+      10
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/125988/{season}/{episode}"
+  },
+  "126118": {
+    "tmdb_id": "126118",
+    "title": "Chapelwaite",
+    "db_id": 346,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/126118/{season}/{episode}"
+  },
+  "126308": {
+    "tmdb_id": "126308",
+    "title": "Shōgun",
+    "db_id": 661,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/126308/{season}/{episode}"
+  },
+  "126485": {
+    "tmdb_id": "126485",
+    "title": "Moving",
+    "db_id": 582,
+    "seasons": 1,
+    "episodes": [
+      20
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/126485/{season}/{episode}"
+  },
+  "126525": {
+    "tmdb_id": "126525",
+    "title": "Elite Short Stories: Carla Samuel",
+    "db_id": 332,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/126525/{season}/{episode}"
+  },
+  "126526": {
+    "tmdb_id": "126526",
+    "title": "Elite Short Stories: Nadia Guzmán",
+    "db_id": 328,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/126526/{season}/{episode}"
+  },
+  "126528": {
+    "tmdb_id": "126528",
+    "title": "Elite Short Stories: Omar Ander Alexis",
+    "db_id": 331,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/126528/{season}/{episode}"
+  },
+  "126531": {
+    "tmdb_id": "126531",
+    "title": "Elite Short Stories: Guzmán Caye Rebe",
+    "db_id": 326,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/126531/{season}/{episode}"
+  },
+  "126552": {
+    "tmdb_id": "126552",
+    "title": "Mortal Wound",
+    "db_id": 466,
+    "seasons": 4,
+    "episodes": [
+      15,
+      13,
+      14,
+      9
+    ],
+    "total_episodes": 51,
+    "player_url_template": "https://vidcore.io/tv/126552/{season}/{episode}"
+  },
+  "126698": {
+    "tmdb_id": "126698",
+    "title": "You Are My Spring",
+    "db_id": 329,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/126698/{season}/{episode}"
+  },
+  "127425": {
+    "tmdb_id": "127425",
+    "title": "Jaguar",
+    "db_id": 357,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/127425/{season}/{episode}"
+  },
+  "127532": {
+    "tmdb_id": "127532",
+    "title": "Solo Leveling",
+    "db_id": 641,
+    "seasons": 2,
+    "episodes": [
+      12,
+      13
+    ],
+    "total_episodes": 25,
+    "player_url_template": "https://vidcore.io/tv/127532/{season}/{episode}"
+  },
+  "128095": {
+    "tmdb_id": "128095",
+    "title": "Under the Banner of Heaven",
+    "db_id": 403,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/128095/{season}/{episode}"
+  },
+  "128583": {
+    "tmdb_id": "128583",
+    "title": "Crime & Punishment",
+    "db_id": 200,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/128583/{season}/{episode}"
+  },
+  "128839": {
+    "tmdb_id": "128839",
+    "title": "La Brea",
+    "db_id": 360,
+    "seasons": 3,
+    "episodes": [
+      10,
+      14,
+      6
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/128839/{season}/{episode}"
+  },
+  "129478": {
+    "tmdb_id": "129478",
+    "title": "The King's Affection",
+    "db_id": 355,
+    "seasons": 1,
+    "episodes": [
+      20
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/129478/{season}/{episode}"
+  },
+  "129495": {
+    "tmdb_id": "129495",
+    "title": "Clickbait",
+    "db_id": 349,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/129495/{season}/{episode}"
+  },
+  "129540": {
+    "tmdb_id": "129540",
+    "title": "Once Upon a Time in Iran",
+    "db_id": 462,
+    "seasons": 1,
+    "episodes": [
+      23
+    ],
+    "total_episodes": 23,
+    "player_url_template": "https://vidcore.io/tv/129540/{season}/{episode}"
+  },
+  "129552": {
+    "tmdb_id": "129552",
+    "title": "The Night Agent",
+    "db_id": 567,
+    "seasons": 3,
+    "episodes": [
+      10,
+      10,
+      10
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/129552/{season}/{episode}"
+  },
+  "129959": {
+    "tmdb_id": "129959",
+    "title": "Kung Fu Panda: The Dragon Knight",
+    "db_id": 437,
+    "seasons": 2,
+    "episodes": [
+      11,
+      12
+    ],
+    "total_episodes": 23,
+    "player_url_template": "https://vidcore.io/tv/129959/{season}/{episode}"
+  },
+  "130765": {
+    "tmdb_id": "130765",
+    "title": "Love All Play",
+    "db_id": 409,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/130765/{season}/{episode}"
+  },
+  "131041": {
+    "tmdb_id": "131041",
+    "title": "BLUE LOCK",
+    "db_id": 2774,
+    "seasons": 1,
+    "episodes": [
+      24
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/131041/{season}/{episode}"
+  },
+  "131305": {
+    "tmdb_id": "131305",
+    "title": "Celebrity",
+    "db_id": 570,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/131305/{season}/{episode}"
+  },
+  "131366": {
+    "tmdb_id": "131366",
+    "title": "Ningen Fushin: Adventurers Who Don't Believe in Humanity Will Save the World",
+    "db_id": 558,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/131366/{season}/{episode}"
+  },
+  "132141": {
+    "tmdb_id": "132141",
+    "title": "Maya and the Three",
+    "db_id": 574,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/132141/{season}/{episode}"
+  },
+  "132603": {
+    "tmdb_id": "132603",
+    "title": "Bad Memory Eraser",
+    "db_id": 699,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/132603/{season}/{episode}"
+  },
+  "133154": {
+    "tmdb_id": "133154",
+    "title": "Sword of the Demon Hunter",
+    "db_id": 2772,
+    "seasons": 1,
+    "episodes": [
+      24
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/133154/{season}/{episode}"
+  },
+  "135154": {
+    "tmdb_id": "135154",
+    "title": "If You Wish Upon Me",
+    "db_id": 452,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/135154/{season}/{episode}"
+  },
+  "135157": {
+    "tmdb_id": "135157",
+    "title": "Alchemy of Souls",
+    "db_id": 428,
+    "seasons": 2,
+    "episodes": [
+      20,
+      10
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/135157/{season}/{episode}"
+  },
+  "135238": {
+    "tmdb_id": "135238",
+    "title": "Gyeongseong Creature",
+    "db_id": 634,
+    "seasons": 2,
+    "episodes": [
+      10,
+      7
+    ],
+    "total_episodes": 17,
+    "player_url_template": "https://vidcore.io/tv/135238/{season}/{episode}"
+  },
+  "135652": {
+    "tmdb_id": "135652",
+    "title": "Military Prosecutor Doberman",
+    "db_id": 463,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/135652/{season}/{episode}"
+  },
+  "135840": {
+    "tmdb_id": "135840",
+    "title": "Our Blues",
+    "db_id": 398,
+    "seasons": 1,
+    "episodes": [
+      20
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/135840/{season}/{episode}"
+  },
+  "136248": {
+    "tmdb_id": "136248",
+    "title": "Tales of the Walking Dead",
+    "db_id": 456,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/136248/{season}/{episode}"
+  },
+  "136283": {
+    "tmdb_id": "136283",
+    "title": "The Glory",
+    "db_id": 509,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/136283/{season}/{episode}"
+  },
+  "137043": {
+    "tmdb_id": "137043",
+    "title": "Connect",
+    "db_id": 492,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/137043/{season}/{episode}"
+  },
+  "137520": {
+    "tmdb_id": "137520",
+    "title": "Bulgasal: Immortal Souls",
+    "db_id": 369,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/137520/{season}/{episode}"
+  },
+  "137713": {
+    "tmdb_id": "137713",
+    "title": "The Bad Penny",
+    "db_id": 362,
+    "seasons": 1,
+    "episodes": [
+      28
+    ],
+    "total_episodes": 28,
+    "player_url_template": "https://vidcore.io/tv/137713/{season}/{episode}"
+  },
+  "137718": {
+    "tmdb_id": "137718",
+    "title": "Tomodachi Game",
+    "db_id": 482,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/137718/{season}/{episode}"
+  },
+  "138501": {
+    "tmdb_id": "138501",
+    "title": "Agatha All Along",
+    "db_id": 718,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/138501/{season}/{episode}"
+  },
+  "138503": {
+    "tmdb_id": "138503",
+    "title": "Your Friendly Neighborhood Spider-Man",
+    "db_id": 5833,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/138503/{season}/{episode}"
+  },
+  "138505": {
+    "tmdb_id": "138505",
+    "title": "Marvel Zombies",
+    "db_id": 4812,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/138505/{season}/{episode}"
+  },
+  "139182": {
+    "tmdb_id": "139182",
+    "title": "X&Y",
+    "db_id": 696,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/139182/{season}/{episode}"
+  },
+  "139407": {
+    "tmdb_id": "139407",
+    "title": "The Day of the Riot",
+    "db_id": 547,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/139407/{season}/{episode}"
+  },
+  "146102": {
+    "tmdb_id": "146102",
+    "title": "Through the Darkness",
+    "db_id": 383,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/146102/{season}/{episode}"
+  },
+  "146176": {
+    "tmdb_id": "146176",
+    "title": "Berlin",
+    "db_id": 637,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/146176/{season}/{episode}"
+  },
+  "152471": {
+    "tmdb_id": "152471",
+    "title": "Ghost Doctor",
+    "db_id": 380,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/152471/{season}/{episode}"
+  },
+  "152483": {
+    "tmdb_id": "152483",
+    "title": "The Boys Presents: Diabolical",
+    "db_id": 5827,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/152483/{season}/{episode}"
+  },
+  "153312": {
+    "tmdb_id": "153312",
+    "title": "Tulsa King",
+    "db_id": 497,
+    "seasons": 3,
+    "episodes": [
+      9,
+      10,
+      10
+    ],
+    "total_episodes": 29,
+    "player_url_template": "https://vidcore.io/tv/153312/{season}/{episode}"
+  },
+  "153496": {
+    "tmdb_id": "153496",
+    "title": "Reborn Rich",
+    "db_id": 488,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/153496/{season}/{episode}"
+  },
+  "154063": {
+    "tmdb_id": "154063",
+    "title": "Player",
+    "db_id": 2751,
+    "seasons": 2,
+    "episodes": [
+      14,
+      12
+    ],
+    "total_episodes": 26,
+    "player_url_template": "https://vidcore.io/tv/154063/{season}/{episode}"
+  },
+  "154824": {
+    "tmdb_id": "154824",
+    "title": "See You in My 19th Life",
+    "db_id": 561,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/154824/{season}/{episode}"
+  },
+  "154825": {
+    "tmdb_id": "154825",
+    "title": "Business Proposal",
+    "db_id": 387,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/154825/{season}/{episode}"
+  },
+  "154887": {
+    "tmdb_id": "154887",
+    "title": "My Liberation Notes",
+    "db_id": 427,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/154887/{season}/{episode}"
+  },
+  "154889": {
+    "tmdb_id": "154889",
+    "title": "Our Blooming Youth",
+    "db_id": 521,
+    "seasons": 1,
+    "episodes": [
+      20
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/154889/{season}/{episode}"
+  },
+  "155231": {
+    "tmdb_id": "155231",
+    "title": "Link: Eat, Love, Kill",
+    "db_id": 421,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/155231/{season}/{episode}"
+  },
+  "155421": {
+    "tmdb_id": "155421",
+    "title": "All the Light We Cannot See",
+    "db_id": 632,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/155421/{season}/{episode}"
+  },
+  "155613": {
+    "tmdb_id": "155613",
+    "title": "Jeyran",
+    "db_id": 384,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/155613/{season}/{episode}"
+  },
+  "156248": {
+    "tmdb_id": "156248",
+    "title": "The Law Cafe",
+    "db_id": 468,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/156248/{season}/{episode}"
+  },
+  "156484": {
+    "tmdb_id": "156484",
+    "title": "The 8 Show",
+    "db_id": 701,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/156484/{season}/{episode}"
+  },
+  "156902": {
+    "tmdb_id": "156902",
+    "title": "Kaleidoscope",
+    "db_id": 508,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/156902/{season}/{episode}"
+  },
+  "156933": {
+    "tmdb_id": "156933",
+    "title": "Presumed Innocent",
+    "db_id": 715,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/156933/{season}/{episode}"
+  },
+  "157219": {
+    "tmdb_id": "157219",
+    "title": "Midnight at the Pera Palace",
+    "db_id": 388,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/157219/{season}/{episode}"
+  },
+  "157847": {
+    "tmdb_id": "157847",
+    "title": "Cold Blooded Intern",
+    "db_id": 616,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/157847/{season}/{episode}"
+  },
+  "158258": {
+    "tmdb_id": "158258",
+    "title": "Duty After School",
+    "db_id": 539,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/158258/{season}/{episode}"
+  },
+  "158293": {
+    "tmdb_id": "158293",
+    "title": "Shinobi no Ittoki",
+    "db_id": 474,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/158293/{season}/{episode}"
+  },
+  "158336": {
+    "tmdb_id": "158336",
+    "title": "Amsterdam",
+    "db_id": 552,
+    "seasons": 1,
+    "episodes": [
+      11
+    ],
+    "total_episodes": 11,
+    "player_url_template": "https://vidcore.io/tv/158336/{season}/{episode}"
+  },
+  "194583": {
+    "tmdb_id": "194583",
+    "title": "The Walking Dead: Dead City",
+    "db_id": 564,
+    "seasons": 3,
+    "episodes": [
+      6,
+      8,
+      5
+    ],
+    "total_episodes": 19,
+    "player_url_template": "https://vidcore.io/tv/194583/{season}/{episode}"
+  },
+  "194665": {
+    "tmdb_id": "194665",
+    "title": "HIGH CARD",
+    "db_id": 511,
+    "seasons": 2,
+    "episodes": [
+      12,
+      12
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/194665/{season}/{episode}"
+  },
+  "194764": {
+    "tmdb_id": "194764",
+    "title": "The Penguin",
+    "db_id": 717,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/194764/{season}/{episode}"
+  },
+  "194986": {
+    "tmdb_id": "194986",
+    "title": "Spy Classroom",
+    "db_id": 513,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/194986/{season}/{episode}"
+  },
+  "195822": {
+    "tmdb_id": "195822",
+    "title": "Keep Breathing",
+    "db_id": 677,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/195822/{season}/{episode}"
+  },
+  "196136": {
+    "tmdb_id": "196136",
+    "title": "ADOLF HITLER: THE ITINERARY",
+    "db_id": 258,
+    "seasons": 1,
+    "episodes": [
+      2
+    ],
+    "total_episodes": 2,
+    "player_url_template": "https://vidcore.io/tv/196136/{season}/{episode}"
+  },
+  "196890": {
+    "tmdb_id": "196890",
+    "title": "Chief of War",
+    "db_id": 4800,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/196890/{season}/{episode}"
+  },
+  "196906": {
+    "tmdb_id": "196906",
+    "title": "Doctor Lawyer",
+    "db_id": 481,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/196906/{season}/{episode}"
+  },
+  "197588": {
+    "tmdb_id": "197588",
+    "title": "Man vs Bee",
+    "db_id": 430,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/197588/{season}/{episode}"
+  },
+  "198004": {
+    "tmdb_id": "198004",
+    "title": "King the Land",
+    "db_id": 569,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/198004/{season}/{episode}"
+  },
+  "198102": {
+    "tmdb_id": "198102",
+    "title": "Hijack",
+    "db_id": 571,
+    "seasons": 2,
+    "episodes": [
+      7,
+      8
+    ],
+    "total_episodes": 15,
+    "player_url_template": "https://vidcore.io/tv/198102/{season}/{episode}"
+  },
+  "198178": {
+    "tmdb_id": "198178",
+    "title": "Wonder Man",
+    "db_id": 5845,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/198178/{season}/{episode}"
+  },
+  "200709": {
+    "tmdb_id": "200709",
+    "title": "Weak Hero",
+    "db_id": 491,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/200709/{season}/{episode}"
+  },
+  "200875": {
+    "tmdb_id": "200875",
+    "title": "IT: Welcome to Derry",
+    "db_id": 4822,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/200875/{season}/{episode}"
+  },
+  "201331": {
+    "tmdb_id": "201331",
+    "title": "The Longest Night",
+    "db_id": 434,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/201331/{season}/{episode}"
+  },
+  "202010": {
+    "tmdb_id": "202010",
+    "title": "As the Crow Flies",
+    "db_id": 416,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/202010/{season}/{episode}"
+  },
+  "202353": {
+    "tmdb_id": "202353",
+    "title": "The Rebel",
+    "db_id": 417,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/202353/{season}/{episode}"
+  },
+  "202411": {
+    "tmdb_id": "202411",
+    "title": "Monarch: Legacy of Monsters",
+    "db_id": 620,
+    "seasons": 2,
+    "episodes": [
+      10,
+      10
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/202411/{season}/{episode}"
+  },
+  "202555": {
+    "tmdb_id": "202555",
+    "title": "Daredevil: Born Again",
+    "db_id": 2775,
+    "seasons": 2,
+    "episodes": [
+      9,
+      8
+    ],
+    "total_episodes": 17,
+    "player_url_template": "https://vidcore.io/tv/202555/{season}/{episode}"
+  },
+  "202625": {
+    "tmdb_id": "202625",
+    "title": "The Heavenly Idol",
+    "db_id": 526,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/202625/{season}/{episode}"
+  },
+  "202783": {
+    "tmdb_id": "202783",
+    "title": "A Killer Paradox",
+    "db_id": 650,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/202783/{season}/{episode}"
+  },
+  "204266": {
+    "tmdb_id": "204266",
+    "title": "TRIGUN STAMPEDE",
+    "db_id": 516,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/204266/{season}/{episode}"
+  },
+  "204541": {
+    "tmdb_id": "204541",
+    "title": "Three-Body",
+    "db_id": 4820,
+    "seasons": 1,
+    "episodes": [
+      30
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/204541/{season}/{episode}"
+  },
+  "204591": {
+    "tmdb_id": "204591",
+    "title": "In the SOOP: Friendcation",
+    "db_id": 441,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/204591/{season}/{episode}"
+  },
+  "204832": {
+    "tmdb_id": "204832",
+    "title": "MASHLE: MAGIC AND MUSCLES",
+    "db_id": 540,
+    "seasons": 2,
+    "episodes": [
+      12,
+      12
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/204832/{season}/{episode}"
+  },
+  "205050": {
+    "tmdb_id": "205050",
+    "title": "Shangri-La Frontier",
+    "db_id": 712,
+    "seasons": 2,
+    "episodes": [
+      25,
+      25
+    ],
+    "total_episodes": 50,
+    "player_url_template": "https://vidcore.io/tv/205050/{season}/{episode}"
+  },
+  "205319": {
+    "tmdb_id": "205319",
+    "title": "Daily Dose of Sunshine",
+    "db_id": 618,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/205319/{season}/{episode}"
+  },
+  "205588": {
+    "tmdb_id": "205588",
+    "title": "Hear Me",
+    "db_id": 568,
+    "seasons": 1,
+    "episodes": [
+      18
+    ],
+    "total_episodes": 18,
+    "player_url_template": "https://vidcore.io/tv/205588/{season}/{episode}"
+  },
+  "205715": {
+    "tmdb_id": "205715",
+    "title": "Gen V",
+    "db_id": 607,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/205715/{season}/{episode}"
+  },
+  "206352": {
+    "tmdb_id": "206352",
+    "title": "Anna & Friends",
+    "db_id": 431,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/206352/{season}/{episode}"
+  },
+  "206586": {
+    "tmdb_id": "206586",
+    "title": "The Walking Dead: The Ones Who Live",
+    "db_id": 655,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/206586/{season}/{episode}"
+  },
+  "206686": {
+    "tmdb_id": "206686",
+    "title": "Chicken Nugget",
+    "db_id": 1751,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/206686/{season}/{episode}"
+  },
+  "207332": {
+    "tmdb_id": "207332",
+    "title": "SAKAMOTO DAYS",
+    "db_id": 2757,
+    "seasons": 1,
+    "episodes": [
+      22
+    ],
+    "total_episodes": 22,
+    "player_url_template": "https://vidcore.io/tv/207332/{season}/{episode}"
+  },
+  "207333": {
+    "tmdb_id": "207333",
+    "title": "One Hundred Years of Solitude",
+    "db_id": 2756,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/207333/{season}/{episode}"
+  },
+  "208230": {
+    "tmdb_id": "208230",
+    "title": "Wild Isles",
+    "db_id": 532,
+    "seasons": 1,
+    "episodes": [
+      5
+    ],
+    "total_episodes": 5,
+    "player_url_template": "https://vidcore.io/tv/208230/{season}/{episode}"
+  },
+  "208493": {
+    "tmdb_id": "208493",
+    "title": "I Got a Cheat Skill in Another World and Became Unrivaled in the Real World, Too",
+    "db_id": 550,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/208493/{season}/{episode}"
+  },
+  "208825": {
+    "tmdb_id": "208825",
+    "title": "Parasyte: The Grey",
+    "db_id": 671,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/208825/{season}/{episode}"
+  },
+  "208891": {
+    "tmdb_id": "208891",
+    "title": "Tengoku Daimakyo",
+    "db_id": 541,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/208891/{season}/{episode}"
+  },
+  "209110": {
+    "tmdb_id": "209110",
+    "title": "The Price of Confession",
+    "db_id": 5831,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/209110/{season}/{episode}"
+  },
+  "209275": {
+    "tmdb_id": "209275",
+    "title": "May I Help You?",
+    "db_id": 487,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/209275/{season}/{episode}"
+  },
+  "209867": {
+    "tmdb_id": "209867",
+    "title": "Frieren: Beyond Journey's End",
+    "db_id": 5839,
+    "seasons": 2,
+    "episodes": [
+      28,
+      10
+    ],
+    "total_episodes": 38,
+    "player_url_template": "https://vidcore.io/tv/209867/{season}/{episode}"
+  },
+  "210704": {
+    "tmdb_id": "210704",
+    "title": "The Worst of Evil",
+    "db_id": 601,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/210704/{season}/{episode}"
+  },
+  "210781": {
+    "tmdb_id": "210781",
+    "title": "My Lovely Liar",
+    "db_id": 598,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/210781/{season}/{episode}"
+  },
+  "210798": {
+    "tmdb_id": "210798",
+    "title": "The Lion Skin",
+    "db_id": 471,
+    "seasons": 3,
+    "episodes": [
+      8,
+      8,
+      8
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/210798/{season}/{episode}"
+  },
+  "211297": {
+    "tmdb_id": "211297",
+    "title": "Revenger",
+    "db_id": 517,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/211297/{season}/{episode}"
+  },
+  "211684": {
+    "tmdb_id": "211684",
+    "title": "The Walking Dead: Daryl Dixon",
+    "db_id": 596,
+    "seasons": 3,
+    "episodes": [
+      6,
+      6,
+      7
+    ],
+    "total_episodes": 19,
+    "player_url_template": "https://vidcore.io/tv/211684/{season}/{episode}"
+  },
+  "211747": {
+    "tmdb_id": "211747",
+    "title": "Island",
+    "db_id": 506,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/211747/{season}/{episode}"
+  },
+  "211796": {
+    "tmdb_id": "211796",
+    "title": "Stealer: The Treasure Keeper",
+    "db_id": 542,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/211796/{season}/{episode}"
+  },
+  "212333": {
+    "tmdb_id": "212333",
+    "title": "Mussolini: Son of the Century",
+    "db_id": 5851,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/212333/{season}/{episode}"
+  },
+  "212963": {
+    "tmdb_id": "212963",
+    "title": "Buddy Daddies",
+    "db_id": 533,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/212963/{season}/{episode}"
+  },
+  "214529": {
+    "tmdb_id": "214529",
+    "title": "Family: The Unbreakable Bond",
+    "db_id": 560,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/214529/{season}/{episode}"
+  },
+  "215072": {
+    "tmdb_id": "215072",
+    "title": "A Shop for Killers",
+    "db_id": 645,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/215072/{season}/{episode}"
+  },
+  "215249": {
+    "tmdb_id": "215249",
+    "title": "Themis's Law School Classroom",
+    "db_id": 652,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/215249/{season}/{episode}"
+  },
+  "215333": {
+    "tmdb_id": "215333",
+    "title": "The Snow Girl",
+    "db_id": 524,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/215333/{season}/{episode}"
+  },
+  "215471": {
+    "tmdb_id": "215471",
+    "title": "Call It Love",
+    "db_id": 545,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/215471/{season}/{episode}"
+  },
+  "215720": {
+    "tmdb_id": "215720",
+    "title": "Queen of Tears",
+    "db_id": 662,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/215720/{season}/{episode}"
+  },
+  "215799": {
+    "tmdb_id": "215799",
+    "title": "Go! Go! Loser Ranger!",
+    "db_id": 2753,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/215799/{season}/{episode}"
+  },
+  "215866": {
+    "tmdb_id": "215866",
+    "title": "American Primeval",
+    "db_id": 2768,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/215866/{season}/{episode}"
+  },
+  "216667": {
+    "tmdb_id": "216667",
+    "title": "FC Barcelona: A New Era",
+    "db_id": 537,
+    "seasons": 2,
+    "episodes": [
+      5,
+      4
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/216667/{season}/{episode}"
+  },
+  "218230": {
+    "tmdb_id": "218230",
+    "title": "Death's Game",
+    "db_id": 672,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/218230/{season}/{episode}"
+  },
+  "218347": {
+    "tmdb_id": "218347",
+    "title": "Sweetpea",
+    "db_id": 722,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/218347/{season}/{episode}"
+  },
+  "218539": {
+    "tmdb_id": "218539",
+    "title": "My Demon",
+    "db_id": 624,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/218539/{season}/{episode}"
+  },
+  "218843": {
+    "tmdb_id": "218843",
+    "title": "The Seven Deadly Sins: Four Knights of the Apocalypse",
+    "db_id": 274,
+    "seasons": 5,
+    "episodes": [
+      24,
+      4,
+      24,
+      24,
+      24
+    ],
+    "total_episodes": 100,
+    "player_url_template": "https://vidcore.io/tv/218843/{season}/{episode}"
+  },
+  "219246": {
+    "tmdb_id": "219246",
+    "title": "When Life Gives You Tangerines",
+    "db_id": 2770,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/219246/{season}/{episode}"
+  },
+  "219543": {
+    "tmdb_id": "219543",
+    "title": "Creature Commandos",
+    "db_id": 4815,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/219543/{season}/{episode}"
+  },
+  "219760": {
+    "tmdb_id": "219760",
+    "title": "The Terminal List: Dark Wolf",
+    "db_id": 4807,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/219760/{season}/{episode}"
+  },
+  "221300": {
+    "tmdb_id": "221300",
+    "title": "FUBAR",
+    "db_id": 559,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/221300/{season}/{episode}"
+  },
+  "221490": {
+    "tmdb_id": "221490",
+    "title": "Real Madrid: Until the End",
+    "db_id": 531,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/221490/{season}/{episode}"
+  },
+  "221851": {
+    "tmdb_id": "221851",
+    "title": "Marry My Husband",
+    "db_id": 642,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/221851/{season}/{episode}"
+  },
+  "222233": {
+    "tmdb_id": "222233",
+    "title": "Doctor Slump",
+    "db_id": 646,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/222233/{season}/{episode}"
+  },
+  "222766": {
+    "tmdb_id": "222766",
+    "title": "The Day of the Jackal",
+    "db_id": 1746,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/222766/{season}/{episode}"
+  },
+  "222785": {
+    "tmdb_id": "222785",
+    "title": "Undead Murder Farce",
+    "db_id": 720,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/222785/{season}/{episode}"
+  },
+  "223300": {
+    "tmdb_id": "223300",
+    "title": "The Abandons",
+    "db_id": 2764,
+    "seasons": 1,
+    "episodes": [
+      17
+    ],
+    "total_episodes": 17,
+    "player_url_template": "https://vidcore.io/tv/223300/{season}/{episode}"
+  },
+  "223780": {
+    "tmdb_id": "223780",
+    "title": "Firefighter Daigo: Rescuer in Orange",
+    "db_id": 2758,
+    "seasons": 1,
+    "episodes": [
+      23
+    ],
+    "total_episodes": 23,
+    "player_url_template": "https://vidcore.io/tv/223780/{season}/{episode}"
+  },
+  "224372": {
+    "tmdb_id": "224372",
+    "title": "A Knight of the Seven Kingdoms",
+    "db_id": 5842,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/224372/{season}/{episode}"
+  },
+  "224819": {
+    "tmdb_id": "224819",
+    "title": "Dear Hongrang",
+    "db_id": 2780,
+    "seasons": 1,
+    "episodes": [
+      11
+    ],
+    "total_episodes": 11,
+    "player_url_template": "https://vidcore.io/tv/224819/{season}/{episode}"
+  },
+  "225171": {
+    "tmdb_id": "225171",
+    "title": "Pluribus",
+    "db_id": 4827,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/225171/{season}/{episode}"
+  },
+  "225180": {
+    "tmdb_id": "225180",
+    "title": "BLUE EYE SAMURAI",
+    "db_id": 639,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/225180/{season}/{episode}"
+  },
+  "226496": {
+    "tmdb_id": "226496",
+    "title": "Turkish Coffee",
+    "db_id": 556,
+    "seasons": 1,
+    "episodes": [
+      18
+    ],
+    "total_episodes": 18,
+    "player_url_template": "https://vidcore.io/tv/226496/{season}/{episode}"
+  },
+  "226527": {
+    "tmdb_id": "226527",
+    "title": "Hierarchy",
+    "db_id": 680,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/226527/{season}/{episode}"
+  },
+  "227189": {
+    "tmdb_id": "227189",
+    "title": "Red Swan",
+    "db_id": 692,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/227189/{season}/{episode}"
+  },
+  "228096": {
+    "tmdb_id": "228096",
+    "title": "Messi Meets America",
+    "db_id": 623,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/228096/{season}/{episode}"
+  },
+  "229221": {
+    "tmdb_id": "229221",
+    "title": "Dear Child",
+    "db_id": 4821,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/229221/{season}/{episode}"
+  },
+  "229778": {
+    "tmdb_id": "229778",
+    "title": "Enigma",
+    "db_id": 580,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/229778/{season}/{episode}"
+  },
+  "229891": {
+    "tmdb_id": "229891",
+    "title": "Can This Love Be Translated?",
+    "db_id": 5843,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/229891/{season}/{episode}"
+  },
+  "229915": {
+    "tmdb_id": "229915",
+    "title": "Night Has Come",
+    "db_id": 628,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/229915/{season}/{episode}"
+  },
+  "230448": {
+    "tmdb_id": "230448",
+    "title": "Mr. Plankton",
+    "db_id": 1741,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/230448/{season}/{episode}"
+  },
+  "230923": {
+    "tmdb_id": "230923",
+    "title": "Lovely Runner",
+    "db_id": 693,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/230923/{season}/{episode}"
+  },
+  "231281": {
+    "tmdb_id": "231281",
+    "title": "What Comes After Love",
+    "db_id": 721,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/231281/{season}/{episode}"
+  },
+  "231727": {
+    "tmdb_id": "231727",
+    "title": "Wolf King",
+    "db_id": 4825,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/231727/{season}/{episode}"
+  },
+  "231749": {
+    "tmdb_id": "231749",
+    "title": "Miss Night and Day",
+    "db_id": 698,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/231749/{season}/{episode}"
+  },
+  "231843": {
+    "tmdb_id": "231843",
+    "title": "Actors on the Road",
+    "db_id": 522,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/231843/{season}/{episode}"
+  },
+  "232125": {
+    "tmdb_id": "232125",
+    "title": "I Am Groot",
+    "db_id": 450,
+    "seasons": 2,
+    "episodes": [
+      5,
+      5
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/232125/{season}/{episode}"
+  },
+  "232402": {
+    "tmdb_id": "232402",
+    "title": "S Line",
+    "db_id": 4796,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/232402/{season}/{episode}"
+  },
+  "232616": {
+    "tmdb_id": "232616",
+    "title": "The Atypical Family",
+    "db_id": 678,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/232616/{season}/{episode}"
+  },
+  "232645": {
+    "tmdb_id": "232645",
+    "title": "Paranormal",
+    "db_id": 372,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/232645/{season}/{episode}"
+  },
+  "232766": {
+    "tmdb_id": "232766",
+    "title": "Mercy for None",
+    "db_id": 4793,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/232766/{season}/{episode}"
+  },
+  "233100": {
+    "tmdb_id": "233100",
+    "title": "Love Scout",
+    "db_id": 2761,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/233100/{season}/{episode}"
+  },
+  "233347": {
+    "tmdb_id": "233347",
+    "title": "Study Group",
+    "db_id": 2762,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/233347/{season}/{episode}"
+  },
+  "233681": {
+    "tmdb_id": "233681",
+    "title": "The Heirs",
+    "db_id": 292,
+    "seasons": 1,
+    "episodes": [
+      20
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/233681/{season}/{episode}"
+  },
+  "233833": {
+    "tmdb_id": "233833",
+    "title": "In Your Radiant Season ",
+    "db_id": 5848,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/233833/{season}/{episode}"
+  },
+  "234061": {
+    "tmdb_id": "234061",
+    "title": "Dreaming of a Freaking Fairy Tale",
+    "db_id": 686,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/234061/{season}/{episode}"
+  },
+  "234800": {
+    "tmdb_id": "234800",
+    "title": "Curses!",
+    "db_id": 725,
+    "seasons": 2,
+    "episodes": [
+      10,
+      10
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/234800/{season}/{episode}"
+  },
+  "235930": {
+    "tmdb_id": "235930",
+    "title": "Devil May Cry",
+    "db_id": 221,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/235930/{season}/{episode}"
+  },
+  "236536": {
+    "tmdb_id": "236536",
+    "title": "Apartment 404",
+    "db_id": 656,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/236536/{season}/{episode}"
+  },
+  "237508": {
+    "tmdb_id": "237508",
+    "title": "The Midnight Romance in Hagwon",
+    "db_id": 676,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/237508/{season}/{episode}"
+  },
+  "237565": {
+    "tmdb_id": "237565",
+    "title": "Family by Choice",
+    "db_id": 726,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/237565/{season}/{episode}"
+  },
+  "237853": {
+    "tmdb_id": "237853",
+    "title": "WondLa",
+    "db_id": 711,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/237853/{season}/{episode}"
+  },
+  "238673": {
+    "tmdb_id": "238673",
+    "title": "The Defects",
+    "db_id": 4797,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/238673/{season}/{episode}"
+  },
+  "238843": {
+    "tmdb_id": "238843",
+    "title": "The Fable",
+    "db_id": 4816,
+    "seasons": 1,
+    "episodes": [
+      25
+    ],
+    "total_episodes": 25,
+    "player_url_template": "https://vidcore.io/tv/238843/{season}/{episode}"
+  },
+  "241388": {
+    "tmdb_id": "241388",
+    "title": "Eyes of Wakanda",
+    "db_id": 4808,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/241388/{season}/{episode}"
+  },
+  "241454": {
+    "tmdb_id": "241454",
+    "title": "Love Next Door",
+    "db_id": 702,
+    "seasons": 1,
+    "episodes": [
+      16
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/241454/{season}/{episode}"
+  },
+  "243964": {
+    "tmdb_id": "243964",
+    "title": "Melo Movie",
+    "db_id": 2767,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/243964/{season}/{episode}"
+  },
+  "245079": {
+    "tmdb_id": "245079",
+    "title": "Hyper Knife",
+    "db_id": 2771,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/245079/{season}/{episode}"
+  },
+  "245219": {
+    "tmdb_id": "245219",
+    "title": "Death by Lightning",
+    "db_id": 5828,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/245219/{season}/{episode}"
+  },
+  "245703": {
+    "tmdb_id": "245703",
+    "title": "Dept. Q",
+    "db_id": 4781,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/245703/{season}/{episode}"
+  },
+  "245927": {
+    "tmdb_id": "245927",
+    "title": "Paradise",
+    "db_id": 5854,
+    "seasons": 2,
+    "episodes": [
+      8,
+      8
+    ],
+    "total_episodes": 16,
+    "player_url_template": "https://vidcore.io/tv/245927/{season}/{episode}"
+  },
+  "246170": {
+    "tmdb_id": "246170",
+    "title": "Persona: Sulli",
+    "db_id": 658,
+    "seasons": 1,
+    "episodes": [
+      2
+    ],
+    "total_episodes": 2,
+    "player_url_template": "https://vidcore.io/tv/246170/{season}/{episode}"
+  },
+  "246473": {
+    "tmdb_id": "246473",
+    "title": "Made in Korea",
+    "db_id": 5835,
+    "seasons": 2,
+    "episodes": [
+      6,
+      6
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/246473/{season}/{episode}"
+  },
+  "246500": {
+    "tmdb_id": "246500",
+    "title": "Viper of Tehran",
+    "db_id": 663,
+    "seasons": 1,
+    "episodes": [
+      14
+    ],
+    "total_episodes": 14,
+    "player_url_template": "https://vidcore.io/tv/246500/{season}/{episode}"
+  },
+  "246748": {
+    "tmdb_id": "246748",
+    "title": "The Tyrant",
+    "db_id": 700,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/246748/{season}/{episode}"
+  },
+  "247043": {
+    "tmdb_id": "247043",
+    "title": "The Ba***ds of Bollywood",
+    "db_id": 4811,
+    "seasons": 1,
+    "episodes": [
+      7
+    ],
+    "total_episodes": 7,
+    "player_url_template": "https://vidcore.io/tv/247043/{season}/{episode}"
+  },
+  "247718": {
+    "tmdb_id": "247718",
+    "title": "MobLand",
+    "db_id": 5832,
+    "seasons": 2,
+    "episodes": [
+      10,
+      2
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/247718/{season}/{episode}"
+  },
+  "247721": {
+    "tmdb_id": "247721",
+    "title": "Teacup",
+    "db_id": 723,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/247721/{season}/{episode}"
+  },
+  "248303": {
+    "tmdb_id": "248303",
+    "title": "The Asphalt Jungle",
+    "db_id": 667,
+    "seasons": 1,
+    "episodes": [
+      14
+    ],
+    "total_episodes": 14,
+    "player_url_template": "https://vidcore.io/tv/248303/{season}/{episode}"
+  },
+  "249042": {
+    "tmdb_id": "249042",
+    "title": "Adolescence",
+    "db_id": 2776,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/249042/{season}/{episode}"
+  },
+  "250307": {
+    "tmdb_id": "250307",
+    "title": "The Pitt",
+    "db_id": 5844,
+    "seasons": 2,
+    "episodes": [
+      15,
+      15
+    ],
+    "total_episodes": 30,
+    "player_url_template": "https://vidcore.io/tv/250307/{season}/{episode}"
+  },
+  "250988": {
+    "tmdb_id": "250988",
+    "title": "House of Guinness",
+    "db_id": 4814,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/250988/{season}/{episode}"
+  },
+  "252193": {
+    "tmdb_id": "252193",
+    "title": "Last Samurai Standing",
+    "db_id": 5829,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/252193/{season}/{episode}"
+  },
+  "253029": {
+    "tmdb_id": "253029",
+    "title": "Brewing Love",
+    "db_id": 1732,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/253029/{season}/{episode}"
+  },
+  "253905": {
+    "tmdb_id": "253905",
+    "title": "When the Phone Rings",
+    "db_id": 1747,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/253905/{season}/{episode}"
+  },
+  "254869": {
+    "tmdb_id": "254869",
+    "title": "At The End Of The Night",
+    "db_id": 694,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/254869/{season}/{episode}"
+  },
+  "256226": {
+    "tmdb_id": "256226",
+    "title": "Dear X",
+    "db_id": 4826,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/256226/{season}/{episode}"
+  },
+  "256706": {
+    "tmdb_id": "256706",
+    "title": "Dariush",
+    "db_id": 695,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/256706/{season}/{episode}"
+  },
+  "256721": {
+    "tmdb_id": "256721",
+    "title": "Gachiakuta",
+    "db_id": 4801,
+    "seasons": 1,
+    "episodes": [
+      24
+    ],
+    "total_episodes": 24,
+    "player_url_template": "https://vidcore.io/tv/256721/{season}/{episode}"
+  },
+  "259015": {
+    "tmdb_id": "259015",
+    "title": "My Dearest Nemesis",
+    "db_id": 2766,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/259015/{season}/{episode}"
+  },
+  "259265": {
+    "tmdb_id": "259265",
+    "title": "Something Very Bad Is Going to Happen",
+    "db_id": 5860,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/259265/{season}/{episode}"
+  },
+  "259731": {
+    "tmdb_id": "259731",
+    "title": "His & Hers",
+    "db_id": 5840,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/259731/{season}/{episode}"
+  },
+  "261980": {
+    "tmdb_id": "261980",
+    "title": "Our Unwritten Seoul",
+    "db_id": 3781,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/261980/{season}/{episode}"
+  },
+  "263292": {
+    "tmdb_id": "263292",
+    "title": "Twelve Letters",
+    "db_id": 4803,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/263292/{season}/{episode}"
+  },
+  "272418": {
+    "tmdb_id": "272418",
+    "title": "Robin Hood",
+    "db_id": 5826,
+    "seasons": 1,
+    "episodes": [
+      10
+    ],
+    "total_episodes": 10,
+    "player_url_template": "https://vidcore.io/tv/272418/{season}/{episode}"
+  },
+  "273081": {
+    "tmdb_id": "273081",
+    "title": "Don't Come Home",
+    "db_id": 1745,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/273081/{season}/{episode}"
+  },
+  "273977": {
+    "tmdb_id": "273977",
+    "title": "The Art of Sarah",
+    "db_id": 5846,
+    "seasons": 1,
+    "episodes": [
+      8
+    ],
+    "total_episodes": 8,
+    "player_url_template": "https://vidcore.io/tv/273977/{season}/{episode}"
+  },
+  "278573": {
+    "tmdb_id": "278573",
+    "title": "Perfect Crown",
+    "db_id": 5861,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/278573/{season}/{episode}"
+  },
+  "279601": {
+    "tmdb_id": "279601",
+    "title": "Man vs Baby",
+    "db_id": 5830,
+    "seasons": 1,
+    "episodes": [
+      4
+    ],
+    "total_episodes": 4,
+    "player_url_template": "https://vidcore.io/tv/279601/{season}/{episode}"
+  },
+  "280945": {
+    "tmdb_id": "280945",
+    "title": "Bon Appétit, Your Majesty",
+    "db_id": 4804,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/280945/{season}/{episode}"
+  },
+  "281735": {
+    "tmdb_id": "281735",
+    "title": "Azaazil",
+    "db_id": 2759,
+    "seasons": 1,
+    "episodes": [
+      13
+    ],
+    "total_episodes": 13,
+    "player_url_template": "https://vidcore.io/tv/281735/{season}/{episode}"
+  },
+  "282773": {
+    "tmdb_id": "282773",
+    "title": "The Scream",
+    "db_id": 35,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/282773/{season}/{episode}"
+  },
+  "285045": {
+    "tmdb_id": "285045",
+    "title": "test",
+    "db_id": 730,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/285045/{season}/{episode}"
+  },
+  "285122": {
+    "tmdb_id": "285122",
+    "title": "Al Nakeeb",
+    "db_id": 2769,
+    "seasons": 1,
+    "episodes": [
+      3
+    ],
+    "total_episodes": 3,
+    "player_url_template": "https://vidcore.io/tv/285122/{season}/{episode}"
+  },
+  "285278": {
+    "tmdb_id": "285278",
+    "title": "IDol I",
+    "db_id": 5836,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/285278/{season}/{episode}"
+  },
+  "286432": {
+    "tmdb_id": "286432",
+    "title": "The Savage",
+    "db_id": 2778,
+    "seasons": 2,
+    "episodes": [
+      8,
+      12
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/286432/{season}/{episode}"
+  },
+  "294069": {
+    "tmdb_id": "294069",
+    "title": "The Marshlands",
+    "db_id": 604,
+    "seasons": 1,
+    "episodes": [
+      20
+    ],
+    "total_episodes": 20,
+    "player_url_template": "https://vidcore.io/tv/294069/{season}/{episode}"
+  },
+  "295778": {
+    "tmdb_id": "295778",
+    "title": "Scrubs",
+    "db_id": 5850,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/295778/{season}/{episode}"
+  },
+  "300054": {
+    "tmdb_id": "300054",
+    "title": "Baki-Dou: The Invincible Samurai",
+    "db_id": 5849,
+    "seasons": 1,
+    "episodes": [
+      25
+    ],
+    "total_episodes": 25,
+    "player_url_template": "https://vidcore.io/tv/300054/{season}/{episode}"
+  },
+  "301022": {
+    "tmdb_id": "301022",
+    "title": "Megalo Box (メガロボクス, Megaro Bokusu)",
+    "db_id": 82,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/301022/{season}/{episode}"
+  },
+  "304024": {
+    "tmdb_id": "304024",
+    "title": "Persona",
+    "db_id": 459,
+    "seasons": 1,
+    "episodes": [
+      12
+    ],
+    "total_episodes": 12,
+    "player_url_template": "https://vidcore.io/tv/304024/{season}/{episode}"
+  },
+  "305062": {
+    "tmdb_id": "305062",
+    "title": "Karma",
+    "db_id": 2777,
+    "seasons": 1,
+    "episodes": [
+      6
+    ],
+    "total_episodes": 6,
+    "player_url_template": "https://vidcore.io/tv/305062/{season}/{episode}"
+  },
+  "360876": {
+    "tmdb_id": "360876",
+    "title": "New Title",
+    "db_id": 647,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/360876/{season}/{episode}"
+  },
+  "475946": {
+    "tmdb_id": "475946",
+    "title": "Blade Runner 2022:Blackout",
+    "db_id": 36,
+    "seasons": 1,
+    "episodes": [
+      1
+    ],
+    "total_episodes": 1,
+    "player_url_template": "https://vidcore.io/tv/475946/{season}/{episode}"
+  },
+  "1191045": {
+    "tmdb_id": "1191045",
+    "title": "Hunting Ground (2025)",
+    "db_id": 5837,
+    "seasons": 1,
+    "episodes": [
+      9
+    ],
+    "total_episodes": 9,
+    "player_url_template": "https://vidcore.io/tv/1191045/{season}/{episode}"
+  },
+  "1323030": {
+    "tmdb_id": "1323030",
+    "title": "Forgotten 2025",
+    "db_id": 4798,
+    "seasons": 1,
+    "episodes": [
+      18
+    ],
+    "total_episodes": 18,
+    "player_url_template": "https://vidcore.io/tv/1323030/{season}/{episode}"
+  },
+  "1439583": {
+    "tmdb_id": "1439583",
+    "title": "BadNam (2026)",
+    "db_id": 5857,
+    "seasons": 1,
+    "episodes": [
+      25
+    ],
+    "total_episodes": 25,
+    "player_url_template": "https://vidcore.io/tv/1439583/{season}/{episode}"
+  }
+}
