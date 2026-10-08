@@ -49,6 +49,11 @@
  *        `genre_ids` is a comma-separated STRING of numbers, never names.
  *        Movie details carry NO country field at all.
  *        Unknown id -> HTTP 200 with {"error":"..."} — never an HTTP error.
+ *
+ *   ?action=servers&movieid=N | &title=..[&tmdbid=N]
+ *     -> {movieid?, servers:[{id,name,url}], cached}
+ *        Scraped server-side from kurdcinama.com (not the upstream cache);
+ *        empty servers list on Vercel where the scrape is skipped.
  */
 
 import { CONFIG, LIMITS } from './config.js';

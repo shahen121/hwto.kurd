@@ -484,6 +484,7 @@ const server = http.createServer((req, res) => {
       console.error('[servers proxy]', err);
       sendJson(req, res, 502, { error: 'تعذّر جلب معلومات الموقع' }, { 'Cache-Control': 'no-store' });
     });
+    return;
   }
 
   let decoded;
@@ -504,11 +505,11 @@ const server = http.createServer((req, res) => {
 
   fs.stat(filePath, (err, stat) => {
     if (!err && stat.isFile()) {
-      serveFile(req, res, filePath, isHead);
+      serveFile(req, res, filePath, 200, isHead);
       return;
     }
     if (!path.extname(relative)) {
-      serveFile(req, res, path.join(PUBLIC_DIR, 'index.html'), isHead);
+      serveFile(req, res, path.join(PUBLIC_DIR, 'index.html'), 200, isHead);
       return;
     }
     sendText(req, res, 404, 'Not Found');
