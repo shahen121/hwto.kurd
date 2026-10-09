@@ -8,7 +8,7 @@
  *   #/toprated/tv          -> { name: 'list', section: 'toprated', type: 'tv' }
  *   #/site[/movie|/tv]     -> { name: 'list', section: 'site', type: ''|movie|tv }
  *   #/category/anime       -> { name: 'list', section: 'category', category: 'anime' }
- *                             slugs: anime | series | movies | asian
+ *                             slugs: anime | series | movies | asian | turkish
  *   #/search?q=batman      -> { name: 'search', q: 'batman', type: ''|movie|tv }
  *   #/movie/278            -> { name: 'details', type: 'movie', id: 278 }
  *   #/tv/1396              -> { name: 'details', type: 'tv', id: 1396 }
@@ -28,7 +28,7 @@ const ROUTES = [
   { re: /^\/toprated\/(movie|tv)\/?$/, make: (m) => ({ name: 'list', section: 'toprated', type: m[1] }) },
   { re: /^\/site(?:\/(movie|tv))?\/?$/, make: (m) => ({ name: 'list', section: 'site', type: m[1] || '' }) },
   {
-    re: /^\/category\/(anime|series|movies|asian)\/?$/,
+    re: /^\/category\/(anime|series|movies|asian|turkish)\/?$/,
     make: (m) => ({ name: 'list', section: 'category', category: m[1], type: '' })
   },
   { re: /^\/search\/?$/, make: () => ({ name: 'search', q: '', type: '', page: 1 }) },

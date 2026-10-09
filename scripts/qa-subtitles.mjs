@@ -195,7 +195,7 @@ const settle = async (hash) => {
 await settle('#/watch/movie/1223601?title=Sisu%3A%20Road%20to%20Revenge');
 await page.waitForSelector('#subtitle-bar:not([hidden])', { timeout: 30000 });
 const langs = await page.$$eval('#subtitle-langs .sub-lang', (nodes) => nodes.map((n) => n.textContent.trim()));
-ok('bar lists exactly the title languages', langs.length === 2, JSON.stringify(langs));
+ok('bar lists exactly the title languages (english is gone)', langs.length === 1, JSON.stringify(langs));
 const activeLang = await page.$eval('#subtitle-langs .sub-lang.is-active', (n) => n.dataset.subLang);
 ok('a preferred language is pre-selected', ['ku', 'ar', 'en'].includes(activeLang), activeLang);
 
@@ -225,8 +225,15 @@ const stored = await page.evaluate(() => localStorage.getItem('sub:offset:movie/
 ok('offset advances and is remembered per title', offsetLabel === '+5.0 ث' && stored === '5',
   `label=${JSON.stringify(offsetLabel)} stored=${JSON.stringify(stored)}`);
 
-await page.click('[data-sub-offset="0"]');
-ok('offset resets to zero', (await page.$eval('#subtitle-offset-value', (n) => n.textContent.trim())) === '0.0 ث');
+await page.click('#subtitle-reset');
+const afterReset = await page.evaluate(() => ({
+  label: document.getElementById('subtitle-offset-value').textContent.trim(),
+  stored: localStorage.getItem('sub:offset:movie/1223601'),
+  toast: document.querySelector('#toast-zone .toast')?.textContent || null
+}));
+ok('reset clears the offset, restarts the timeline and confirms it',
+  afterReset.label === '0.0 ث' && afterReset.stored === '0' && /أُعيد ضبط الترجمة/.test(afterReset.toast || ''),
+  JSON.stringify(afterReset));
 
 /* ---- 4. hide/show + language switching --------------------------------- */
 
@@ -238,20 +245,21 @@ const hidden = await page.evaluate(() => ({
 ok('hide button hides the overlay', hidden.pressed === 'false' && hidden.overlayHidden, JSON.stringify(hidden));
 await page.click('#subtitle-toggle');
 
+/* ---- 5. a bilingual title picks Kurdish first, and switches ----------- */
+
+await settle('#/watch/movie/278?title=The%20Shawshank%20Redemption');
+await page.waitForSelector('#subtitle-bar:not([hidden])', { timeout: 30000 });
+const firstLang = await page.$eval('#subtitle-langs .sub-lang.is-active', (n) => n.dataset.subLang);
+ok('Kurdish is preferred when available', firstLang === 'ku', firstLang);
+
 await page.click('#subtitle-langs .sub-lang:not(.is-active)');
 await page.waitForTimeout(800);
 const afterSwitch = await page.evaluate(() => ({
   active: document.querySelector('#subtitle-langs .sub-lang.is-active')?.dataset.subLang,
   state: document.querySelector('#subtitle-bar').getAttribute('data-state')
 }));
-ok('language switch succeeds', afterSwitch.active && afterSwitch.state !== 'error', JSON.stringify(afterSwitch));
-
-/* ---- 5. a 3-language title picks Kurdish first ------------------------- */
-
-await settle('#/watch/movie/278?title=The%20Shawshank%20Redemption');
-await page.waitForSelector('#subtitle-bar:not([hidden])', { timeout: 30000 });
-const firstLang = await page.$eval('#subtitle-langs .sub-lang.is-active', (n) => n.dataset.subLang);
-ok('Kurdish is preferred when available', firstLang === 'ku', firstLang);
+ok('language switch succeeds', afterSwitch.active === 'ar' && afterSwitch.state !== 'error',
+  JSON.stringify(afterSwitch));
 
 /* ---- 6. titles without files never show the bar ------------------------ */
 

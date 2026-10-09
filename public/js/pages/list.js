@@ -14,6 +14,9 @@ import { rememberMany } from '../store.js';
 
 const isAbort = (err) => Boolean(err && err.name === 'AbortError');
 
+/** Cards shown in each highlight row above the «كل العناصر» grid. */
+const ROW_SIZE = 12;
+
 const SECTIONS = {
   trending: {
     title: (type) => (type === 'tv' ? 'المسلسلات الرائجة' : 'الأفلام الرائجة'),
@@ -107,12 +110,23 @@ export async function mount(params, view, { signal }) {
     page: 1,
     totalPages: 1,
     loading: false,
-    sort: 'default'
+    sort: 'default',
+    sections: []
   };
+
+  const isCategory = section === 'category';
+
+  // Category screens open with highlight rows (أحدث الإصدارات / الأعلى تقييماً
+  // / …) and keep the full sortable grid underneath them.
+  const highlightsHtml = isCategory
+    ? `<div id="list-highlights" class="list-highlights">${ui.skeletonRow(6)}</div>
+       ${ui.sectionHeader('كل العناصر')}`
+    : '';
 
   view.innerHTML = `
     <div class="container page">
       ${ui.pageHeader(title, { subtitle, meta: '<span id="list-meta"></span>' })}
+      ${highlightsHtml}
       <div class="list-sort-bar">
         <span class="sort-label">ترتيب حسب:</span>
         <button class="btn-sort is-active" type="button" data-sort="default">الافتراضي</button>
@@ -120,12 +134,32 @@ export async function mount(params, view, { signal }) {
         <button class="btn-sort" type="button" data-sort="date">📅 الأحدث</button>
         <button class="btn-sort" type="button" data-sort="title">🔤 أبجدياً</button>
       </div>
-      <div id="list-body">${ui.skeletonGrid(section === 'site' ? 8 : section === 'category' ? 12 : max)}</div>
+      <div id="list-body">${ui.skeletonGrid(section === 'site' ? 8 : isCategory ? 12 : max)}</div>
     </div>`;
   ui.hydrate(view);
 
   const body = view.querySelector('#list-body');
   const meta = view.querySelector('#list-meta');
+  const highlights = view.querySelector('#list-highlights');
+
+  const paintHighlights = (sections) => {
+    if (!highlights) return;
+    const cat = CATEGORIES[params.category] || CATEGORIES.anime;
+    const rows = (cat.rows || [])
+      .map((row) => {
+        const found = (sections || []).find((s) => s.key === row.key);
+        return { label: row.label, items: ((found && found.items) || []).slice(0, ROW_SIZE) };
+      })
+      .filter((row) => row.items.length >= 3);
+    if (!rows.length) {
+      highlights.hidden = true;
+      highlights.innerHTML = '';
+      return;
+    }
+    highlights.hidden = false;
+    highlights.innerHTML = rows.map((row) => ui.section(row.label, row.items)).join('');
+    ui.hydrate(highlights);
+  };
 
   // Wire sort buttons
   view.querySelectorAll('[data-sort]').forEach((btn) => {
@@ -172,7 +206,7 @@ export async function mount(params, view, { signal }) {
       rememberMany('movie', items.filter((i) => i.mediaType === 'movie'));
       rememberMany('tv', items.filter((i) => i.mediaType === 'tv'));
     }
-    return { items, totalPages: list.totalPages };
+    return { items, totalPages: list.totalPages, sections: list.sections || [] };
   };
 
   const onLoadMore = async () => {
@@ -215,12 +249,14 @@ export async function mount(params, view, { signal }) {
 
   // Initial load
   try {
-    const { items, totalPages } = await fetchPage(1);
+    const { items, totalPages, sections } = await fetchPage(1);
     state.page = 1;
     state.totalPages = totalPages || 1;
     state.all = dedupe(items);
+    state.sections = sections;
   } catch (err) {
     if (isAbort(err)) return;
+    if (highlights) highlights.hidden = true;
     body.innerHTML = ui.errorState(err && err.message, { onRetry: true });
     const retry = body.querySelector('.btn');
     if (retry) retry.addEventListener('click', () => window.dispatchEvent(new CustomEvent('app:reload')));
@@ -229,4 +265,5 @@ export async function mount(params, view, { signal }) {
 
   state.shown = Math.min(state.all.length, initial);
   paint();
+  paintHighlights(state.sections);
 }

@@ -13,6 +13,7 @@
 
 import { api } from './api.js';
 import { escapeHtml } from './utils.js';
+import { showToast } from './ui.js';
 
 /* ------------------------------- parsing ------------------------------- */
 
@@ -83,8 +84,9 @@ export function cueAt(cues, time) {
 
 /* ------------------------------- offsets ------------------------------- */
 
-const LANG_ORDER = ['ku', 'ar', 'en'];
-const LANG_LABELS = { ku: 'كردية', ar: 'العربية', en: 'الإنجليزية' };
+// English files were removed from the corpus — only these two remain.
+const LANG_ORDER = ['ku', 'ar'];
+const LANG_LABELS = { ku: 'كردية', ar: 'العربية' };
 
 const offsetKey = (type, id) => `sub:offset:${type}/${id}`;
 
@@ -222,14 +224,29 @@ export function attachSubtitles(root, { type = 'movie', id, signal } = {}) {
   bar.querySelectorAll('[data-sub-offset]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const delta = Number(btn.getAttribute('data-sub-offset'));
-      if (!Number.isFinite(delta)) return;
-      // delta === 0 means "reset".
-      offset = delta === 0 ? 0 : clampOffset(Math.round((offset + delta) * 10) / 10);
+      if (!Number.isFinite(delta) || delta === 0) return;
+      offset = clampOffset(Math.round((offset + delta) * 10) / 10);
       writeOffset(type, id, offset);
       renderOffset();
       renderCue();
     });
   });
+
+  const resetEl = root.querySelector('#subtitle-reset');
+  if (resetEl) {
+    resetEl.addEventListener('click', () => {
+      // The overlay runs on wall time (the frame is cross-origin, so there is
+      // no playhead to read). Resetting therefore clears the stored offset AND
+      // re-anchors the clock: cues start at 00:00 from this moment on, which
+      // is what fixes "the subtitles are already running before the video is".
+      offset = 0;
+      writeOffset(type, id, 0);
+      origin = performance.now();
+      renderOffset();
+      renderCue();
+      showToast('أُعيد ضبط الترجمة إلى البداية (00:00)');
+    });
+  }
 
   if (toggleEl) {
     toggleEl.addEventListener('click', () => {

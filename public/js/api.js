@@ -447,19 +447,25 @@ export async function getMyContent({ type = '', limit = LIMITS.myContent.initial
 }
 
 /**
- * The four «التصنيفات» screens (#/category/:slug) — the ONLY endpoint here
+ * The five «التصنيفات» screens (#/category/:slug) — the ONLY endpoint here
  * that maps to no `action=`:
  *
- *   anime / asian  → frozen rows from categories_data.js: zero requests, so
- *                    these screens render instantly and survive an upstream
- *                    outage exactly like the offline catalog does.
+ *   anime / asian / turkish → frozen rows from categories_data.js: zero
+ *                    requests, so these screens render instantly and survive
+ *                    an upstream outage exactly like the offline catalog does.
  *   movies / series → merged from mycontent + toprated (+ upcoming / trending),
  *                    deduped and buffered by the list page; `limit` is ignored
  *                    on purpose — the whole slice is handed over at once and
  *                    «عرض المزيد» reveals it from the buffer instead of
  *                    asking for a page the upstream does not really support.
  *
- * returns { items, totalPages } in the shape every list screen consumes.
+ * Returns { items, sections, totalPages }:
+ *   items    — the flat, deduped pool behind «كل العناصر» (what list.js sorts
+ *              and pages).
+ *   sections — highlight rows rendered above it, keyed like CATEGORIES[].rows:
+ *              new/top/tv/movie for the frozen sets (new = newest release),
+ *              library/top/upcoming|trending for the live screens (the
+ *              mycontent order is newest-added first, db_id descending).
  */
 export async function getCategory({ category = '', page = 1, signal } = {}) {
   // The merged screens pull from several lists, so the same title shows up
@@ -479,7 +485,19 @@ export async function getCategory({ category = '', page = 1, signal } = {}) {
   const frozen = CATEGORY_ITEMS[category];
   if (Array.isArray(frozen)) {
     const list = normaliseList({ results: frozen, total: frozen.length, page: 1, total_pages: 1 }, null);
-    return { ...list, items: dedupe(list.items), totalPages: 1 };
+    const items = dedupe(list.items);
+    const byDate = (a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || ''));
+    const byRating = (a, b) => (b.voteAverage || 0) - (a.voteAverage || 0);
+    return {
+      items,
+      sections: [
+        { key: 'new', items: [...items].sort(byDate) },
+        { key: 'top', items: [...items].sort(byRating) },
+        { key: 'tv', items: items.filter((i) => i.mediaType === 'tv').sort(byRating) },
+        { key: 'movie', items: items.filter((i) => i.mediaType === 'movie').sort(byRating) }
+      ],
+      totalPages: 1
+    };
   }
 
   const p = Math.max(1, Math.floor(page));
@@ -489,7 +507,15 @@ export async function getCategory({ category = '', page = 1, signal } = {}) {
       getTopRated({ type: 'movie', page: p, signal }),
       getUpcoming({ limit: LIMITS.upcoming.max, page: p, signal })
     ]);
-    return { items: dedupe([...library.items, ...top.items, ...upcoming.items]), totalPages: 1 };
+    return {
+      items: dedupe([...library.items, ...top.items, ...upcoming.items]),
+      sections: [
+        { key: 'library', items: library.items },
+        { key: 'top', items: top.items },
+        { key: 'upcoming', items: upcoming.items }
+      ],
+      totalPages: 1
+    };
   }
   if (category === 'series') {
     const [library, top, trending] = await Promise.all([
@@ -497,10 +523,18 @@ export async function getCategory({ category = '', page = 1, signal } = {}) {
       getTopRated({ type: 'tv', page: p, signal }),
       getTrending({ type: 'tv', limit: LIMITS.trending.max, page: p, signal })
     ]);
-    return { items: dedupe([...library.items, ...top.items, ...trending.items]), totalPages: 1 };
+    return {
+      items: dedupe([...library.items, ...top.items, ...trending.items]),
+      sections: [
+        { key: 'library', items: library.items },
+        { key: 'top', items: top.items },
+        { key: 'trending', items: trending.items }
+      ],
+      totalPages: 1
+    };
   }
 
-  return { items: [], totalPages: 1 };
+  return { items: [], sections: [], totalPages: 1 };
 }
 
 export async function getStats({ signal } = {}) {
@@ -553,7 +587,7 @@ export async function getServers({ movieid, title, tmdbid, signal } = {}) {
 
 const SUB_INDEX_TTL = 6 * 60 * 60 * 1000; // the index changes rarely
 
-/** { "movie/12500": ["ku","ar","en"], … } — 4601 movies, no TV. */
+/** { "movie/12500": ["ku","ar"], … } — 4074 movies, no TV, english removed. */
 export async function getSubtitleIndex({ signal } = {}) {
   const cached = cacheGet('subtitle-index');
   if (cached !== undefined) return cached;

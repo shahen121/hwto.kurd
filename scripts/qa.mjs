@@ -233,6 +233,7 @@ const ROUTES = [
   ['category/series', '#/category/series', { cards: 5 }],
   ['category/movies', '#/category/movies', { cards: 5 }],
   ['category/asian', '#/category/asian', { cards: 5 }],
+  ['category/turkish', '#/category/turkish', { cards: 5 }],
   ['category/unknown', '#/category/nope', { empty: true }],
   ['search/batman', '#/search?q=batman', { cards: 5 }],
   ['search/empty', '#/search?q=', { empty: true }],
@@ -291,6 +292,21 @@ const dropRoute = await probe();
 ok('dropdown link opens the anime screen', dropRoute.cards >= 5 && !dropRoute.error, `cards=${dropRoute.cards} error=${JSON.stringify(dropRoute.error)}`);
 const dropClosed = await page.evaluate(() => !document.querySelector('.nav-drop')?.classList.contains('is-open'));
 ok('dropdown closes after navigating', dropClosed === true, `open=${!dropClosed}`);
+
+/* ---------- 1c. category screens are organised into rows ---------------- */
+
+for (const [slug, minRows] of [['anime', 3], ['asian', 3], ['turkish', 2], ['movies', 3], ['series', 3]]) {
+  await settle(`#/category/${slug}`);
+  const rows = await page.evaluate(() =>
+    [...document.querySelectorAll('#list-highlights .section')].map((s) => ({
+      title: (s.querySelector('.section-title') || {}).textContent || '',
+      cards: s.querySelectorAll('.card:not(.skeleton)').length
+    }))
+  );
+  const grid = await page.evaluate(() => document.querySelectorAll('#list-body .card:not(.skeleton)').length);
+  const okRows = rows.length >= minRows && rows.every((r) => r.cards >= 3) && grid >= 5;
+  ok(`category/${slug}: highlight rows + full grid`, okRows, `${rows.length} rows ${JSON.stringify(rows)} grid=${grid}`);
+}
 
 /* ---------- 2. injected failure + working retry ------------------------ */
 
@@ -398,7 +414,7 @@ for (const [label, width, height, hashes] of [
         links: panel.querySelectorAll('a').length
       };
     });
-    ok('mobile: «التصنيفات» accordion expands', acc.open === true && acc.visible === true && acc.links === 4, JSON.stringify(acc));
+    ok('mobile: «التصنيفات» accordion expands', acc.open === true && acc.visible === true && acc.links === 5, JSON.stringify(acc));
   }
   await c.close();
 }

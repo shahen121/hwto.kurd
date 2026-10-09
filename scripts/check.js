@@ -196,14 +196,21 @@ if (!fs.existsSync(subIndexPath)) {
   }
 
   if (subIndex && typeof subIndex === 'object') {
+    // English files were removed on purpose — only Kurdish and Arabic stay.
+    const ALLOWED_LANGS = new Set(['ku', 'ar']);
     let indexed = 0;
     let missing = 0;
+    let removedLangs = 0;
     for (const [key, langs] of Object.entries(subIndex)) {
       if (!Array.isArray(langs)) {
         fail(`subtitle entry ${key} is not an array of languages`);
         continue;
       }
       for (const lang of langs) {
+        if (!ALLOWED_LANGS.has(lang)) {
+          removedLangs += 1;
+          if (removedLangs <= 5) fail(`subtitle entry ${key} still lists removed language "${lang}"`);
+        }
         indexed += 1;
         if (!fs.existsSync(path.join(subDir, `${key}/${lang}.vtt`))) {
           missing += 1;
@@ -213,6 +220,7 @@ if (!fs.existsSync(subIndexPath)) {
     }
     if (missing > 5) fail(`…and ${missing - 5} more missing subtitle files`);
     if (!missing) ok(`all ${indexed} indexed subtitle files exist (${Object.keys(subIndex).length} titles)`);
+    if (!removedLangs) ok('subtitle index carries only ku/ar (english removed)');
 
     const sample = path.join(subDir, 'movie/12500/ku.vtt');
     if (fs.existsSync(sample)) {

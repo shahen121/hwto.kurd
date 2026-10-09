@@ -47,7 +47,8 @@ const NAV = [
       { href: '#/category/anime', label: 'أنمي', match: (r) => isCategory(r, 'anime') },
       { href: '#/category/series', label: 'مسلسلات', match: (r) => isCategory(r, 'series') },
       { href: '#/category/movies', label: 'أفلام', match: (r) => isCategory(r, 'movies') },
-      { href: '#/category/asian', label: 'أفلام ومسلسلات آسيوية', match: (r) => isCategory(r, 'asian') }
+      { href: '#/category/asian', label: 'أفلام ومسلسلات آسيوية', match: (r) => isCategory(r, 'asian') },
+      { href: '#/category/turkish', label: 'تركية', match: (r) => isCategory(r, 'turkish') }
     ]
   },
   { href: '#/trending/movie', label: 'الأفلام الرائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'movie' },
@@ -128,6 +129,7 @@ export function renderShell(root) {
           <a href="#/category/series">مسلسلات</a>
           <a href="#/category/movies">أفلام</a>
           <a href="#/category/asian">آسيوية</a>
+          <a href="#/category/turkish">تركية</a>
           <a href="#/trending/movie">أفلام رائجة</a>
           <a href="#/trending/tv">مسلسلات رائجة</a>
           <a href="#/upcoming">أفلام قادمة</a>
