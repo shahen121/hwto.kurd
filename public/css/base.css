@@ -71,7 +71,6 @@ body {
     radial-gradient(1000px 700px at 50% 110%, rgba(46, 230, 168, 0.06), transparent 60%),
     var(--bg);
   background-attachment: fixed;
-  overflow-x: hidden;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   /* `clip` (not `hidden`) — hidden would create a scroll container and break

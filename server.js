@@ -13,11 +13,17 @@ const UPSTREAM_HOST = 'kurdcinama.com';
 const API_PREFIX = '/api/';
 const API_TTL = 180 * 1000;
 const UPSTREAM_TIMEOUT = 20000;
+// Kurdish-servers scraping: a per-page deadline plus a total budget, so a slow
+// upstream can never hold one HTTP request open indefinitely.
+const SCRAPE_TIMEOUT_MS = 8000;
+const SERVERS_BUDGET_MS = 20000;
 const MAX_API_RESPONSE = 2 * 1024 * 1024; // 2 MB
 const MAX_CACHE_ENTRIES = 400;
 const MAX_CACHE_KEY_LEN = 512;
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX = 30; // requests per window per IP
+// 30/min was too tight: one home visit is already ~5 API calls, and a single
+// user behind a NAT shares one counter. 120/min still caps abuse at 2 rps.
+const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX) || 120; // requests per window per IP
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -32,6 +38,7 @@ const MIME = {
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  '.vtt': 'text/vtt; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8'
 };
 
@@ -69,13 +76,15 @@ const CSP = [
   "img-src 'self' data: https://image.tmdb.org https://kurdcinama.com",
   "font-src 'self' https://fonts.gstatic.com",
   // The site can embed alternate Kurdish servers, so allow any HTTPS iframe.
-  "frame-src 'self' https:",
+  // The primary player is named explicitly; `https:` stays for the alternates.
+  "frame-src 'self' https://vidcore.io https:",
   "connect-src 'self'",
   "media-src 'self'",
   "manifest-src 'self'"
 ].join('; ');
 
-const COMPRESSIBLE = new Set(['.html', '.css', '.js', '.mjs', '.json', '.svg', '.txt']);
+// .vtt: subtitle files are the largest text payload we serve (hundreds of KB).
+const COMPRESSIBLE = new Set(['.html', '.css', '.js', '.mjs', '.json', '.svg', '.txt', '.vtt']);
 const MIN_COMPRESS_BYTES = 1024;
 
 function wantsGzip(req) {
@@ -173,6 +182,9 @@ async function fetchPageText(url, options) {
     const res = await fetch(url, {
       redirect: 'follow',
       ...options,
+      // The scraper walks several upstream pages per request; without a
+      // deadline a slow upstream holds the caller's HTTP request open.
+      signal: (options && options.signal) || AbortSignal.timeout(SCRAPE_TIMEOUT_MS),
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; hwto.kurd/1.0)',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -211,14 +223,14 @@ function extractIframeSrc(html) {
   return m ? m[1] : null;
 }
 
-async function findMovieIdByTitle(title, tmdbid) {
+async function findMovieIdByTitle(title, tmdbid, signal) {
   if (!title.trim() && !tmdbid) return null;
   if (tmdbid) {
-    const located = await findMovieIdByTmdbId(String(tmdbid), title);
+    const located = await findMovieIdByTmdbId(String(tmdbid), title, signal);
     if (located) return located;
   }
   if (!title.trim()) return null;
-  const r = await fetchPageText(`https://${UPSTREAM_HOST}/Search.aspx?q=${encodeURIComponent(title.trim())}`);
+  const r = await fetchPageText(`https://${UPSTREAM_HOST}/Search.aspx?q=${encodeURIComponent(title.trim())}`, { signal });
   if (!r || !r.ok || !r.text) return null;
   const norm = (s) => String(s || '').toLowerCase().replace(/\(\d{4}\)/g, '').replace(/\s+/g, ' ').trim();
   const target = norm(title).slice(0, 40);
@@ -233,13 +245,13 @@ async function findMovieIdByTitle(title, tmdbid) {
   return null;
 }
 
-async function findMovieIdByTmdbId(tmdbId, searchTitle) {
+async function findMovieIdByTmdbId(tmdbId, searchTitle, signal) {
   if (!tmdbId) return null;
   if (!searchTitle.trim()) searchTitle = '';
   const searchUrl = searchTitle.trim()
     ? `https://${UPSTREAM_HOST}/Search.aspx?q=${encodeURIComponent(searchTitle.trim())}`
     : `https://${UPSTREAM_HOST}/Search.aspx`;
-  const r = await fetchPageText(searchUrl);
+  const r = await fetchPageText(searchUrl, { signal });
   if (!r || !r.ok || !r.text) return null;
   const ids = [];
   let m;
@@ -256,7 +268,7 @@ async function findMovieIdByTmdbId(tmdbId, searchTitle) {
   }
   // Fetch each candidate details page and compare its embedded tmdbId.
   for (const cand of ids.slice(0, 12)) {
-    const detail = await fetchPageText(`https://${UPSTREAM_HOST}/moves-details.aspx?movieid=${cand}`);
+    const detail = await fetchPageText(`https://${UPSTREAM_HOST}/moves-details.aspx?movieid=${cand}`, { signal });
     if (!detail || !detail.ok || !detail.text) continue;
     const hidden = detail.text.match(/<input[^>]*type=["']hidden["'][^>]*id=["']tmdbId["'][^>]*value=["'](\d+)["']/i);
     if (hidden && hidden[1] === String(tmdbId)) return cand;
@@ -264,9 +276,9 @@ async function findMovieIdByTmdbId(tmdbId, searchTitle) {
   return null;
 }
 
-async function scrapeKurdishServersForMovie(movieid) {
+async function scrapeKurdishServersForMovie(movieid, signal) {
   const pageUrl = `https://${UPSTREAM_HOST}/online.aspx?movieid=${encodeURIComponent(movieid)}`;
-  const index = await fetchPageText(pageUrl);
+  const index = await fetchPageText(pageUrl, { signal });
   if (!index || !index.ok || !index.text) return { error: 'تعذّر جلب صفحة المشغل' };
 
   const options = extractServersListFromHtml(index.text);
@@ -274,7 +286,7 @@ async function scrapeKurdishServersForMovie(movieid) {
 
   const servers = [];
   for (const opt of options) {
-    const refreshed = await fetchPageText(pageUrl);
+    const refreshed = await fetchPageText(pageUrl, { signal });
     const hidden = refreshed ? extractHiddenInputs(refreshed.text) : extractHiddenInputs(index.text);
     const body = new URLSearchParams();
     for (const [k, v] of Object.entries(hidden)) body.set(k, v);
@@ -287,7 +299,8 @@ async function scrapeKurdishServersForMovie(movieid) {
     const post = await fetchPageText(pageUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': pageUrl },
-      body: body.toString()
+      body: body.toString(),
+      signal
     });
     const src = post && post.ok ? extractIframeSrc(post.text) : null;
     if (src) servers.push({ key: opt.label.replace(/^\d+[-.)\s]*/, '').trim(), label: opt.label, url: src });
@@ -334,16 +347,28 @@ async function proxyApi(req, res, reqUrl, isHead = false) {
     let movieid = (search.get('movieid') || '').trim();
     const tmdbId = (search.get('tmdbid') || '').trim();
     const title = (search.get('title') || '').trim();
+    const signal = AbortSignal.timeout(SERVERS_BUDGET_MS);
+    const hasLookup = Boolean(movieid || tmdbId || title);
     if (!movieid) {
-      if (tmdbId) movieid = await findMovieIdByTitle(title, tmdbId);
-      if (!movieid && title) movieid = await findMovieIdByTitle(title, tmdbId);
+      if (tmdbId) movieid = await findMovieIdByTitle(title, tmdbId, signal);
+      if (!movieid && title) movieid = await findMovieIdByTitle(title, tmdbId, signal);
     }
     if (!movieid) {
-      sendJson(req, res, 400, { error: 'movieid or title is required for action=servers' }, { 'Cache-Control': 'no-store' });
+      if (!hasLookup) {
+        // Malformed request: no identifier of any kind.
+        sendJson(req, res, 400, { error: 'movieid or title is required for action=servers' }, { 'Cache-Control': 'no-store' }, isHead);
+        return;
+      }
+      // Well-formed request: the title simply is not on the source site, and
+      // "no alternates" is a valid answer — the VidCore player keeps working.
+      sendJson(req, res, 200, { movieid: null, servers: [] }, {
+        'Cache-Control': 'public, max-age=300, stale-while-revalidate=60',
+        'X-Cache': 'MISS'
+      }, isHead);
       return;
     }
     try {
-      const result = await scrapeKurdishServersForMovie(movieid);
+      const result = await scrapeKurdishServersForMovie(movieid, signal);
       const servers = { ...result, cached: result && result.servers ? true : false };
       const headers = { 'Cache-Control': 'public, max-age=1800, stale-while-revalidate=60', 'X-Cache': 'MISS' };
       sendJson(req, res, result && result.error ? 502 : 200, servers, headers, isHead);
@@ -374,53 +399,63 @@ async function proxyApi(req, res, reqUrl, isHead = false) {
     }
   };
 
-  const upstream = https.request(options, (ures) => {
-    const chunks = [];
-    let totalSize = 0;
-    ures.on('data', (c) => {
-      totalSize += c.length;
-      if (totalSize > MAX_API_RESPONSE) {
-        upstream.destroy(new Error('Response too large'));
+  const forward = (attempt) => {
+    const upstream = https.request(options, (ures) => {
+      const chunks = [];
+      let totalSize = 0;
+      ures.on('data', (c) => {
+        totalSize += c.length;
+        if (totalSize > MAX_API_RESPONSE) {
+          upstream.destroy(new Error('Response too large'));
+          return;
+        }
+        chunks.push(c);
+      });
+      ures.on('end', () => {
+        if (totalSize > MAX_API_RESPONSE) return;
+        const body = Buffer.concat(chunks);
+        const ok = ures.statusCode >= 200 && ures.statusCode < 300;
+        if (ok) {
+          apiCache.set(target, { body, expires: Date.now() + API_TTL });
+          if (apiCache.size > MAX_CACHE_ENTRIES) {
+            const oldest = apiCache.keys().next().value;
+            apiCache.delete(oldest);
+          }
+        }
+        sendBuffer(
+          req,
+          res,
+          ures.statusCode || 502,
+          body,
+          {
+            'Content-Type': ures.headers['content-type'] || 'application/json; charset=utf-8',
+            'Cache-Control': ok ? 'public, max-age=180' : 'no-store',
+            'X-Cache': 'MISS'
+          },
+          { compress: true, noBody: isHead }
+        );
+      });
+    });
+
+    upstream.on('error', (err) => {
+      // Resets and timeouts against the source site are transient: one quick
+      // retry keeps a single blip from reaching the user as a 502.
+      if (attempt < 1 && !res.headersSent && !res.writableEnded && !req.destroyed) {
+        setTimeout(() => forward(attempt + 1), 250);
         return;
       }
-      chunks.push(c);
+      console.error('[proxy]', err.message);
+      sendJson(req, res, 502, { error: 'تعذّر الوصول إلى خادم البيانات، حاول مجدداً' }, { 'Cache-Control': 'no-store' });
     });
-    ures.on('end', () => {
-      if (totalSize > MAX_API_RESPONSE) return;
-      const body = Buffer.concat(chunks);
-      const ok = ures.statusCode >= 200 && ures.statusCode < 300;
-      if (ok) {
-        apiCache.set(target, { body, expires: Date.now() + API_TTL });
-        if (apiCache.size > MAX_CACHE_ENTRIES) {
-          const oldest = apiCache.keys().next().value;
-          apiCache.delete(oldest);
-        }
-      }
-      sendBuffer(
-        req,
-        res,
-        ures.statusCode || 502,
-        body,
-        {
-          'Content-Type': ures.headers['content-type'] || 'application/json; charset=utf-8',
-          'Cache-Control': ok ? 'public, max-age=180' : 'no-store',
-          'X-Cache': 'MISS'
-        },
-        { compress: true, noBody: isHead }
-      );
+
+    upstream.setTimeout(UPSTREAM_TIMEOUT, () => {
+      upstream.destroy(new Error('upstream timeout'));
     });
-  });
 
-  upstream.on('error', (err) => {
-    console.error('[proxy]', err.message);
-    sendJson(req, res, 502, { error: 'تعذّر الوصول إلى خادم البيانات، حاول مجدداً' }, { 'Cache-Control': 'no-store' });
-  });
+    upstream.end();
+  };
 
-  upstream.setTimeout(UPSTREAM_TIMEOUT, () => {
-    upstream.destroy(new Error('upstream timeout'));
-  });
-
-  upstream.end();
+  forward(0);
 }
 
 function sendText(req, res, status, message, noBody = false) {
@@ -430,7 +465,7 @@ function sendText(req, res, status, message, noBody = false) {
   }, { noBody });
 }
 
-function serveFile(req, res, filePath, status = 200, isHead = false) {
+function serveFile(req, res, filePath, isHead = false) {
   fs.readFile(filePath, (err, data) => {
     if (err) {
       sendText(req, res, 404, 'Not Found');
@@ -440,7 +475,7 @@ function serveFile(req, res, filePath, status = 200, isHead = false) {
     sendBuffer(
       req,
       res,
-      status,
+      200,
       data,
       {
         'Content-Type': MIME[ext] || 'application/octet-stream',
@@ -482,8 +517,15 @@ const server = http.createServer((req, res) => {
   if (reqUrl.pathname.startsWith(API_PREFIX)) {
     proxyApi(req, res, reqUrl, isHead).catch((err) => {
       console.error('[servers proxy]', err);
-      sendJson(req, res, 502, { error: 'تعذّر جلب معلومات الموقع' }, { 'Cache-Control': 'no-store' });
+      if (!res.headersSent) {
+        sendJson(req, res, 502, { error: 'تعذّر جلب معلومات الموقع' }, { 'Cache-Control': 'no-store' });
+      }
     });
+    // The API branch owns the response entirely — without this return the
+    // request falls through to the static handler, which writes a 404 and
+    // then crashes the process with ERR_HTTP_HEADERS_SENT (regression of
+    // 65ce8be6, restored from 7ce100f6).
+    return;
   }
 
   let decoded;

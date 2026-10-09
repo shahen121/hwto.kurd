@@ -15,6 +15,7 @@ import { navigate, previousHash, buildHash } from '../router.js';
 import {
   escapeHtml,
   attr,
+  cssUrl,
   lazyImage,
   backdropUrl,
   posterUrl,
@@ -95,7 +96,7 @@ export async function mount(params, view, { signal }) {
 
   view.innerHTML = `
     <article class="detail ${bg ? 'has-backdrop' : ''}">
-      ${bg ? `<div class="detail-backdrop" style="--d-img:url('${attr(bg)}')" aria-hidden="true"></div>` : ''}
+      ${bg ? `<div class="detail-backdrop" style="--d-img:${attr(cssUrl(bg))}" aria-hidden="true"></div>` : ''}
       <div class="detail-shade" aria-hidden="true"></div>
 
       <div class="container detail-inner">

@@ -9,6 +9,7 @@
 import {
   escapeHtml,
   attr,
+  cssUrl,
   lazyImage,
   hydrateLazyImages,
   attachImageFallbacks,
@@ -29,14 +30,56 @@ export function hydrate(root) {
 
 /* ------------------------------- shell -------------------------------- */
 
+const isCategory = (route, slug) =>
+  route.name === 'list' && route.section === 'category' && route.category === slug;
+
+/**
+ * The header nav. Items with `children` render as a dropdown («التصنيفات»)
+ * whose children are regular links — the panel is a child of the <li> so its
+ * absolute positioning escapes `.nav-list`'s horizontal scrolling.
+ */
 const NAV = [
   { href: '#/', label: 'الرئيسية', match: (r) => r.name === 'home' },
+  {
+    id: 'categories',
+    label: 'التصنيفات',
+    children: [
+      { href: '#/category/anime', label: 'أنمي', match: (r) => isCategory(r, 'anime') },
+      { href: '#/category/series', label: 'مسلسلات', match: (r) => isCategory(r, 'series') },
+      { href: '#/category/movies', label: 'أفلام', match: (r) => isCategory(r, 'movies') },
+      { href: '#/category/asian', label: 'أفلام ومسلسلات آسيوية', match: (r) => isCategory(r, 'asian') }
+    ]
+  },
   { href: '#/trending/movie', label: 'الأفلام الرائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'movie' },
   { href: '#/trending/tv', label: 'المسلسلات الرائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'tv' },
   { href: '#/upcoming', label: 'القادمة', match: (r) => r.name === 'list' && r.section === 'upcoming' },
   { href: '#/toprated/movie', label: 'الأعلى تقييماً', match: (r) => r.name === 'list' && r.section === 'toprated' },
   { href: '#/site', label: 'مكتبة الموقع', match: (r) => r.name === 'list' && r.section === 'site' }
 ];
+
+const navLink = (item) =>
+  `<a class="nav-link" href="${attr(item.href)}" data-nav="${attr(item.label)}">${escapeHtml(item.label)}</a>`;
+
+function navItem(item) {
+  if (!item.children) return `<li>${navLink(item)}</li>`;
+
+  const panelId = `nav-panel-${item.id}`;
+  return `
+            <li class="nav-drop" id="nav-drop">
+              <button class="nav-link nav-drop-toggle" type="button" aria-expanded="false" aria-controls="${panelId}">
+                <span>${escapeHtml(item.label)}</span>
+                <svg class="nav-drop-caret" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <ul class="nav-drop-panel" id="${panelId}">
+                ${item.children
+                  .map(
+                    (child) =>
+                      `<li><a class="nav-link nav-drop-link" href="${attr(child.href)}" data-nav="${attr(child.label)}">${escapeHtml(child.label)}</a></li>`
+                  )
+                  .join('')}
+              </ul>
+            </li>`;
+}
 
 export function renderShell(root) {
   root.innerHTML = `
@@ -52,7 +95,7 @@ export function renderShell(root) {
 
         <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
           <ul class="nav-list">
-            ${NAV.map((item) => `<li><a class="nav-link" href="${item.href}" data-nav="${escapeHtml(item.label)}">${escapeHtml(item.label)}</a></li>`).join('')}
+            ${NAV.map(navItem).join('')}
           </ul>
         </nav>
 
@@ -81,6 +124,10 @@ export function renderShell(root) {
         </div>
         <nav class="footer-nav" aria-label="روابط الموقع">
           <a href="#/">الرئيسية</a>
+          <a href="#/category/anime">أنمي</a>
+          <a href="#/category/series">مسلسلات</a>
+          <a href="#/category/movies">أفلام</a>
+          <a href="#/category/asian">آسيوية</a>
           <a href="#/trending/movie">أفلام رائجة</a>
           <a href="#/trending/tv">مسلسلات رائجة</a>
           <a href="#/upcoming">أفلام قادمة</a>
@@ -97,12 +144,22 @@ export function renderShell(root) {
 
 export function setNavActive(route) {
   const links = document.querySelectorAll('.nav-link');
-  const active = NAV.find((item) => item.match(route));
+  const candidates = NAV.flatMap((item) => (item.children ? item.children : [item]));
+  const active = candidates.find((item) => item.match && item.match(route));
+  const activeHref = active && active.href ? active.href : '';
   links.forEach((link) => {
-    const isActive = active ? link.getAttribute('href') === active.href : false;
+    const href = link.getAttribute('href');
+    const isActive = Boolean(activeHref) && href === activeHref;
     link.classList.toggle('is-active', isActive);
     if (isActive) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
+  });
+  // The «التصنيفات» dropdown lights up when any of its children is the route.
+  document.querySelectorAll('.nav-drop').forEach((drop) => {
+    const on = Boolean(drop.querySelector('.nav-link.is-active'));
+    drop.classList.toggle('is-active', on);
+    const toggle = drop.querySelector('.nav-drop-toggle');
+    if (toggle) toggle.classList.toggle('is-active', on);
   });
 }
 
@@ -119,6 +176,10 @@ export function sectionHeader(title, { href = '', subtitle = '' } = {}) {
     </div>`;
 }
 
+/**
+ * `meta` is raw HTML on purpose (callers pass static markup such as a counter
+ * span) — never feed API-derived text into it; escape such text before use.
+ */
 export function pageHeader(title, { subtitle = '', meta = '' } = {}) {
   return `
     <div class="page-head">
@@ -193,7 +254,7 @@ export function hero(item, { eyebrow = 'مختارات اليوم', kicker = '' 
   const rating = formatRating(item.voteAverage);
   const year = yearOf(item.releaseDate);
   return `
-    <section class="hero" ${bg ? `style="--hero-img:url('${attr(bg)}')"` : ''}>
+    <section class="hero" ${bg ? `style="--hero-img:${attr(cssUrl(bg))}"` : ''}>
       <div class="hero-backdrop" aria-hidden="true"></div>
       <div class="hero-glow" aria-hidden="true"></div>
       <div class="container hero-inner">

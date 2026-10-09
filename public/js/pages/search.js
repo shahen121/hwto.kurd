@@ -4,10 +4,11 @@
  * The page owns its input so typing never re-mounts the view: app.js routes
  * "same page, new query" calls into onRoute() instead of a full remount.
  *
- * Pagination model:
+ * Pagination model (the upstream search answers every page with the whole
+ * result set, so most clicks reveal buffered rows instead of re-fetching):
  *   page 1 → 20 results → [ عرض المزيد ]
- *   click  → page 2 → 20 new results appended under the old ones
- *   click  → page 3 → ...
+ *   click  → 20 more revealed under the old ones (no request)
+ *   click  → page N is fetched only once the buffer is empty
  *
  * The "Load More" button lives in a static wrapper OUTSIDE #search-results,
  * so re-rendering the results container can never destroy it. Clicking it
@@ -22,8 +23,6 @@ import { navigate } from '../router.js';
 
 const isAbort = (err) => Boolean(err && err.name === 'AbortError');
 
-const PAGE_SIZE = 20;
-
 const TABS = [
   { value: '', label: 'الكل' },
   { value: 'movie', label: 'أفلام' },
@@ -31,6 +30,9 @@ const TABS = [
 ];
 
 const EMPTY_HINT = 'جرّب: أكشن، دراما، أو اسم فيلم معروف';
+
+// How many results one screen (and one عرض المزيد click) adds.
+const RESULTS_PER_VIEW = 20;
 
 let pageSignal = null;
 let runCtrl = null;
@@ -109,8 +111,9 @@ export async function mount(params, view, { signal }) {
   const moreBtn = view.querySelector('#search-more-btn');
   const moreMeta = view.querySelector('#search-more-meta');
 
-  // State: items accumulate across pages; page tracks the last API page used.
-  const state = { q, type, page: 1, items: [], totalPages: 1, totalResults: 0, hasMore: false, loading: false };
+  // State: `items` holds everything fetched (deduped), `shown` is what the
+  // grid currently displays; page tracks the last API page used.
+  const state = { q, type, page: 1, items: [], shown: 0, totalPages: 1, totalResults: 0, loading: false };
 
   const setTabs = (nextType) => {
     tabs.forEach((tab) => {
@@ -120,33 +123,52 @@ export async function mount(params, view, { signal }) {
     });
   };
 
+  const hasMoreAvailable = () => state.shown < state.items.length || state.page < state.totalPages;
+
   const updateLoadMore = () => {
-    const visible = state.hasMore && Boolean(state.q.trim()) && state.items.length > 0;
+    const visible = Boolean(state.q.trim()) && state.items.length > 0 && hasMoreAvailable();
     moreWrap.hidden = !visible;
     moreBtn.disabled = state.loading;
     moreBtn.textContent = state.loading ? 'جارٍ التحميل…' : 'عرض المزيد';
     moreMeta.textContent = visible
-      ? `تم تحميل ${state.items.length} من ${state.totalResults || state.items.length} نتيجة (صفحة ${state.page}${state.totalPages > 1 ? ` من ${state.totalPages}` : ''})`
+      ? `تم عرض ${state.shown} من ${state.totalResults || state.items.length} نتيجة (صفحة ${state.page}${state.totalPages > 1 ? ` من ${state.totalPages}` : ''})`
       : '';
   };
 
-  const renderResults = (list, append = false, newItems = []) => {
-    if (append) {
-      const grid = results.querySelector('.movie-grid');
-      if (grid && newItems.length) {
-        grid.insertAdjacentHTML('beforeend', ui.movieGrid(newItems));
-        ui.hydrate(grid);
-      }
-      const countEl = results.querySelector('.results-count');
-      if (countEl) {
-        countEl.innerHTML = `تم عرض <strong>${state.items.length}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}`;
-      }
-      updateLoadMore();
-      return;
+  const updateCount = () => {
+    const countEl = results.querySelector('.results-count');
+    if (countEl) {
+      countEl.innerHTML = `تم عرض <strong>${state.shown}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}`;
     }
+  };
+
+  const appendCards = (items) => {
+    // movieGrid() renders `<div class="grid">`, so append cards directly —
+    // nesting another .grid would break the layout (the old `.movie-grid`
+    // selector matched nothing at all, so "load more" never appended).
+    const grid = results.querySelector('.grid');
+    if (grid && items.length) {
+      grid.insertAdjacentHTML('beforeend', items.map((item) => ui.movieCard(item)).join(''));
+      ui.hydrate(grid);
+    }
+    updateCount();
+    updateLoadMore();
+  };
+
+  /** Reveal the next batch of already-fetched results (no request). */
+  const revealMore = () => {
+    const next = Math.min(state.items.length, state.shown + RESULTS_PER_VIEW);
+    if (next <= state.shown) return;
+    const batch = state.items.slice(state.shown, next);
+    state.shown = next;
+    appendCards(batch);
+  };
+
+  const renderResults = () => {
+    const shown = state.items.slice(0, state.shown);
 
     // Full render (first page or new query) — the button is outside this box.
-    if (!list.items.length) {
+    if (!shown.length) {
       const scope = state.type ? (state.type === 'tv' ? ' في المسلسلات' : ' في الأفلام') : '';
       results.innerHTML = ui.emptyState(`لا توجد نتائج تطابق «${state.q}»${scope}.`, {
         title: 'لا نتائج',
@@ -157,30 +179,45 @@ export async function mount(params, view, { signal }) {
     }
 
     results.innerHTML = `
-      <p class="results-count">تم عرض <strong>${list.items.length}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}</p>
-      ${ui.movieGrid(list.items)}
+      <p class="results-count">تم عرض <strong>${state.shown}</strong> نتيجة${state.totalResults ? ` من ${state.totalResults}` : ''}</p>
+      ${ui.movieGrid(shown)}
     `;
     ui.hydrate(results);
     updateLoadMore();
   };
 
+  // Monotonic run id: only the newest run may touch state/UI, so a superseded
+  // request can neither render stale results nor clear the newer run's spinner.
+  let runSeq = 0;
+
   const run = async (nextPage = 1, append = false) => {
-    if (state.loading) return;
+    // A new run always supersedes the previous one (typing, tab switch, retry).
     if (runCtrl) runCtrl.abort();
     runCtrl = new AbortController();
     const localSignal = runCtrl.signal;
-    const onOuterAbort = () => runCtrl.abort();
-    if (pageSignal) pageSignal.addEventListener('abort', onOuterAbort, { once: true });
+    const seq = ++runSeq;
+    // Bound to THIS run's signal — the module-level runCtrl may already point
+    // at a different request by the time the outer signal fires.
+    const onOuterAbort = () => localSignal.abort();
 
     const query = state.q.trim();
     clearBtn.hidden = !state.q;
 
     if (!query) {
+      // Register nothing before this return: the abort listener used to leak
+      // here on every cleared query and later aborted unrelated runs.
       results.innerHTML = emptyPrompt();
-      state.hasMore = false;
+      state.items = [];
+      state.shown = 0;
+      state.page = 1;
+      state.totalPages = 1;
+      state.totalResults = 0;
+      state.loading = false;
       updateLoadMore();
       return;
     }
+
+    if (pageSignal) pageSignal.addEventListener('abort', onOuterAbort, { once: true });
 
     state.loading = true;
 
@@ -196,16 +233,18 @@ export async function mount(params, view, { signal }) {
       state.page = list.page;
       state.totalPages = list.totalPages;
       state.totalResults = list.totalResults;
-      state.hasMore = list.hasMore;
 
       if (append) {
         const existingKeys = new Set(state.items.map((item) => `${item.mediaType}:${item.id}`));
         const newItems = list.items.filter((item) => !existingKeys.has(`${item.mediaType}:${item.id}`));
+        const prevShown = state.shown;
         state.items.push(...newItems);
-        renderResults(list, true, newItems);
+        state.shown = Math.min(state.items.length, prevShown + RESULTS_PER_VIEW);
+        appendCards(state.items.slice(prevShown, state.shown));
       } else {
         state.items = list.items;
-        renderResults(list, false);
+        state.shown = Math.min(list.items.length, RESULTS_PER_VIEW);
+        renderResults();
       }
     } catch (err) {
       if (isAbort(err) || localSignal.aborted) return;
@@ -213,13 +252,21 @@ export async function mount(params, view, { signal }) {
         results.innerHTML = ui.errorState(err && err.message, { onRetry: true, retryId: 'search-retry' });
         const retry = results.querySelector('#search-retry');
         if (retry) retry.addEventListener('click', () => run(1, false));
-        state.hasMore = false;
+        // A failed first page must not leave the previous query's rows around.
+        state.items = [];
+        state.shown = 0;
+        state.page = 1;
+        state.totalPages = 1;
+        state.totalResults = 0;
       }
-      // On append failure keep hasMore so the user can retry the same page.
+      // On append failure keep state so the user can retry the same page.
     } finally {
-      state.loading = false;
-      updateLoadMore();
       if (pageSignal) pageSignal.removeEventListener('abort', onOuterAbort);
+      // A superseded run must not clear the newer run's spinner/state.
+      if (seq === runSeq) {
+        state.loading = false;
+        updateLoadMore();
+      }
     }
   };
 
@@ -263,9 +310,15 @@ export async function mount(params, view, { signal }) {
     tab.addEventListener('click', () => applyType(tab.dataset.type || ''));
   });
 
-  // Load more: fetch the next page, append, keep the URL unchanged.
+  // Load more: reveal buffered rows first, otherwise fetch the next page.
+  // The URL never changes.
   moreBtn.addEventListener('click', () => {
-    if (state.hasMore && !state.loading) run(state.page + 1, true);
+    if (state.loading) return;
+    if (state.shown < state.items.length) {
+      revealMore();
+      return;
+    }
+    if (state.page < state.totalPages) run(state.page + 1, true);
   });
 
   // Called by app.js when the route changes but the page stays on `search`.

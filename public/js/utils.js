@@ -18,6 +18,22 @@ export function attr(value) {
   return escapeHtml(value);
 }
 
+/**
+ * `url('…')` for a CSS declaration.
+ * attr() alone is not enough inside style="…": HTML entities are decoded
+ * before the CSS parser runs, so a quote or control character coming from an
+ * API-provided path could close the CSS string. Control characters are
+ * stripped and backslashes/quotes are CSS-escaped here; the caller still runs
+ * the result through attr() so the HTML attribute itself stays safe.
+ */
+export function cssUrl(value) {
+  const raw = String(value === null || value === undefined ? '' : value)
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+  return `url('${raw}')`;
+}
+
 /* ------------------------------ debounce ------------------------------ */
 
 export function debounce(fn, wait = CONFIG.searchDebounce) {

@@ -1,11 +1,15 @@
 /**
  * pages/list.js — every browse page (trending / upcoming / top rated / site).
- * Supports real page-based pagination (load-more fetches next page from API).
+ *
+ * Pagination model: the first request pulls two screens worth of rows (the
+ * upstream honours `limit` but not `page`), load-more reveals them from the
+ * in-memory buffer, and only a real next page is fetched once that buffer is
+ * empty.
  */
 
 import { api } from '../api.js';
 import * as ui from '../ui.js';
-import { LIMITS } from '../config.js';
+import { LIMITS, CATEGORIES } from '../config.js';
 import { rememberMany } from '../store.js';
 
 const isAbort = (err) => Boolean(err && err.name === 'AbortError');
@@ -38,10 +42,21 @@ const SECTIONS = {
     initial: LIMITS.myContent.initial,
     max: LIMITS.myContent.max,
     fetch: ({ type, limit, page, signal }) => api.getMyContent({ type, limit, page, signal })
+  },
+  // «التصنيفات»: عنوان/وصف لكل شريحة من CATEGORIES، والمحتوى يجهزه api.getCategory.
+  category: {
+    title: (_type, params) => (CATEGORIES[params.category] || CATEGORIES.anime).title,
+    subtitle: (params) => (CATEGORIES[params.category] || CATEGORIES.anime).subtitle,
+    initial: LIMITS.category.initial,
+    max: LIMITS.category.max,
+    fetch: ({ category, page, signal }) => api.getCategory({ category, page, signal })
   }
 };
 
 function limitsFor(section, type) {
+  if (section === 'category') {
+    return { initial: LIMITS.category.initial, max: LIMITS.category.max };
+  }
   if (section === 'toprated') {
     return type === 'tv'
       ? { initial: LIMITS.topRatedTv.initial, max: LIMITS.topRatedTv.max }
@@ -82,23 +97,22 @@ export async function mount(params, view, { signal }) {
   const cfg = SECTIONS[section];
   const type = params.type || '';
   const { initial, max } = limitsFor(section, type);
-  const title = cfg.title(type);
+  const title = cfg.title(type, params);
+  const subtitle = typeof cfg.subtitle === 'function' ? cfg.subtitle(params) : cfg.subtitle;
 
-  // State: page-based pagination
+  // State: buffered rows (all) + how many are on screen (shown).
   const state = {
     all: [],
     shown: 0,
     page: 1,
     totalPages: 1,
-    totalResults: 0,
-    hasMore: false,
     loading: false,
     sort: 'default'
   };
 
   view.innerHTML = `
     <div class="container page">
-      ${ui.pageHeader(title, { subtitle: cfg.subtitle, meta: '<span id="list-meta"></span>' })}
+      ${ui.pageHeader(title, { subtitle, meta: '<span id="list-meta"></span>' })}
       <div class="list-sort-bar">
         <span class="sort-label">ترتيب حسب:</span>
         <button class="btn-sort is-active" type="button" data-sort="default">الافتراضي</button>
@@ -106,7 +120,7 @@ export async function mount(params, view, { signal }) {
         <button class="btn-sort" type="button" data-sort="date">📅 الأحدث</button>
         <button class="btn-sort" type="button" data-sort="title">🔤 أبجدياً</button>
       </div>
-      <div id="list-body">${ui.skeletonGrid(section === 'site' ? 8 : max)}</div>
+      <div id="list-body">${ui.skeletonGrid(section === 'site' ? 8 : section === 'category' ? 12 : max)}</div>
     </div>`;
   ui.hydrate(view);
 
@@ -134,31 +148,35 @@ export async function mount(params, view, { signal }) {
       });
       return;
     }
-    const canLoadMore = state.hasMore && !state.loading;
+    // More rows are either buffered below the fold or waiting on the next page.
+    const canLoadMore = !state.loading && (state.shown < state.all.length || state.page < state.totalPages);
     body.innerHTML =
       ui.movieGrid(visible, { showRank: (section === 'trending' || section === 'toprated') && state.sort === 'default' }) +
       ui.loadMoreButton({ id: 'list-more', label: 'عرض المزيد', hidden: !canLoadMore });
     ui.hydrate(body);
     if (meta) {
-      meta.textContent = `عرض ${visible.length} من ${state.totalResults || state.all.length} عنوان`;
+      meta.textContent = `عرض ${visible.length} من ${state.all.length} عنوان`;
     }
     const btn = body.querySelector('#list-more');
     if (btn) btn.addEventListener('click', onLoadMore);
   };
 
   const fetchPage = async (page) => {
-    const list = await cfg.fetch({ type, limit: initial, page, signal });
+    // Two screens of rows in one request: the upstream ignores `page`, so
+    // load-more reveals the buffer before it ever asks for another page.
+    const fetchLimit = Math.min(max, initial * 2) || initial;
+    const list = await cfg.fetch({ type, category: params.category || '', limit: fetchLimit, page, signal });
     const items = list.items;
     if (type) rememberMany(type, items);
     else {
       rememberMany('movie', items.filter((i) => i.mediaType === 'movie'));
       rememberMany('tv', items.filter((i) => i.mediaType === 'tv'));
     }
-    return { items, hasMore: list.hasMore, totalPages: list.totalPages, totalResults: list.totalResults };
+    return { items, totalPages: list.totalPages };
   };
 
   const onLoadMore = async () => {
-    if (state.loading || !state.hasMore) return;
+    if (state.loading) return;
 
     // There are already-fetched items waiting below the fold — reveal them.
     if (state.shown < state.all.length) {
@@ -166,6 +184,7 @@ export async function mount(params, view, { signal }) {
       paint();
       return;
     }
+    if (state.page >= state.totalPages) return;
 
     state.loading = true;
     const btn = body.querySelector('#list-more');
@@ -176,11 +195,9 @@ export async function mount(params, view, { signal }) {
 
     const nextPage = state.page + 1;
     try {
-      const { items, hasMore, totalPages, totalResults } = await fetchPage(nextPage);
+      const { items, totalPages } = await fetchPage(nextPage);
       state.page = nextPage;
       state.totalPages = totalPages || 1;
-      state.totalResults = totalResults || 0;
-      state.hasMore = hasMore;
       const existingIds = new Set(state.all.map(i => `${i.mediaType}:${i.id}`));
       const newItems = items.filter(i => !existingIds.has(`${i.mediaType}:${i.id}`));
       state.all = dedupe([...state.all, ...newItems]);
@@ -198,11 +215,9 @@ export async function mount(params, view, { signal }) {
 
   // Initial load
   try {
-    const { items, hasMore, totalPages, totalResults } = await fetchPage(1);
+    const { items, totalPages } = await fetchPage(1);
     state.page = 1;
     state.totalPages = totalPages || 1;
-    state.totalResults = totalResults || 0;
-    state.hasMore = hasMore;
     state.all = dedupe(items);
   } catch (err) {
     if (isAbort(err)) return;

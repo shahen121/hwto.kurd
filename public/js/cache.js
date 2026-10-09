@@ -59,13 +59,17 @@ export function cacheSet(key, data, ttl = CONFIG.cacheTTL) {
   }
 }
 
+/**
+ * Canonical query string for BOTH the request URL and the cache key.
+ * Values are percent-encoded: a search query containing `&`, `=` or `#` used
+ * to inject extra API parameters (and collide with other cache entries).
+ */
 export function cacheKey(params) {
-  const sorted = Object.keys(params)
+  return Object.keys(params)
     .filter((k) => params[k] !== undefined && params[k] !== null && params[k] !== '')
     .sort()
-    .map((k) => k + '=' + params[k])
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(params[k]))}`)
     .join('&');
-  return sorted;
 }
 
 export function runOnce(key, producer) {

@@ -83,9 +83,47 @@ export const LIMITS = {
   upcoming: { initial: 20, max: 40 },
   topRatedMovie: { initial: 20, max: 20 },
   topRatedTv: { initial: 9, max: 9 },
-  search: { initial: 40, max: 40 },
-  myContent: { initial: 20, max: 100 }
+  myContent: { initial: 20, max: 100 },
+  category: { initial: 24, max: 240 }
 };
+
+/**
+ * The four «التصنيفات» entries — one screen each, reachable from the nav
+ * dropdown at `#/category/{slug}`. Slugs are the stable part of the URL and
+ * are what router.js, the nav and the list page agree on.
+ *
+ *   anime / asian — served from categories_data.js (the upstream cache has no
+ *                   genre or country filter, see that file's header).
+ *   series /movies — assembled live from the existing list endpoints.
+ */
+export const CATEGORIES = {
+  anime: {
+    slug: 'anime',
+    label: 'أنمي',
+    title: 'أنمي',
+    subtitle: 'أفلام ومسلسلات أنمي مختارة بعناية — من ناروتو وآتاك أون تايتان حتى استوديو غيبلي'
+  },
+  series: {
+    slug: 'series',
+    label: 'مسلسلات',
+    title: 'مسلسلات',
+    subtitle: 'كل مسلسلات الموقع: الرائجة والأعلى تقييماً ومحتوى المكتبة في شاشة واحدة'
+  },
+  movies: {
+    slug: 'movies',
+    label: 'أفلام',
+    title: 'أفلام',
+    subtitle: 'كل أفلام الموقع: الأعلى تقييماً والقادمة إلى الصالات ومحتوى المكتبة في شاشة واحدة'
+  },
+  asian: {
+    slug: 'asian',
+    label: 'أفلام ومسلسلات آسيوية',
+    title: 'آسيوية',
+    subtitle: 'أفلام ومسلسلات شرق وجنوب آسيا: كوريا واليابان والصين والهند وتايلاند'
+  }
+};
+
+export const CATEGORY_SLUGS = Object.keys(CATEGORIES);
 
 /**
  * Real seasons ("الأجزاء") and exact per-season episode counts for popular & trending TV series.

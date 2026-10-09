@@ -4,7 +4,7 @@
  * search and the mobile menu.
  */
 
-import './config.js';
+import { CATEGORIES } from './config.js';
 import { renderShell, setNavActive, hydrate, showToast, errorState, emptyState } from './ui.js';
 import { startRouter, navigate } from './router.js';
 import { debounce } from './utils.js';
@@ -24,11 +24,17 @@ const TITLES = {
 
 function titleFor(route) {
   if (route.name === 'list') {
-    const type = route.type === 'tv' ? 'مسلسلات' : 'أفلام';
-    if (route.section === 'trending') return `الرائجة: ${type} — hwto.kurd`;
+    // `type` is optional (e.g. the mixed #/site library) — never label it "أفلام".
+    const type = route.type === 'tv' ? 'مسلسلات' : route.type === 'movie' ? 'أفلام' : '';
+    const withType = (label) => `${label}${type ? `: ${type}` : ''} — hwto.kurd`;
+    if (route.section === 'trending') return withType('الرائجة');
     if (route.section === 'upcoming') return 'أفلام قادمة — hwto.kurd';
-    if (route.section === 'toprated') return `الأعلى تقييماً: ${type} — hwto.kurd`;
-    if (route.section === 'site') return `مكتبة الموقع: ${type} — hwto.kurd`;
+    if (route.section === 'toprated') return withType('الأعلى تقييماً');
+    if (route.section === 'site') return withType('مكتبة الموقع');
+    if (route.section === 'category') {
+      const cat = CATEGORIES[route.category];
+      return `${cat ? cat.title : 'التصنيفات'} — hwto.kurd`;
+    }
   }
   // The detail page replaces this with the real title once it has rendered.
   if (route.name === 'details') return `${route.type === 'tv' ? 'مسلسل' : 'فيلم'} — hwto.kurd`;
@@ -127,11 +133,64 @@ window.addEventListener('app:reload', reload);
 
 /* ------------------------------ header menu ---------------------------- */
 
+/* «التصنيفات» dropdown (desktop) / accordion (stacked, ≤860px).
+   The panel is absolutely positioned against `.site-nav`, so its coordinates
+   are recomputed every time it opens (nav scroll, resize, hover). */
+function dropEls() {
+  const drop = document.querySelector('.nav-drop');
+  if (!drop) return null;
+  return {
+    drop,
+    toggle: drop.querySelector('.nav-drop-toggle'),
+    panel: drop.querySelector('.nav-drop-panel'),
+    host: document.getElementById('site-nav')
+  };
+}
+
+const isStackedNav = () => window.matchMedia('(max-width: 860px)').matches;
+
+function positionDrop() {
+  const el = dropEls();
+  if (!el || !el.toggle || !el.panel || !el.host) return;
+  if (isStackedNav()) {
+    el.panel.style.left = '';
+    el.panel.style.top = '';
+    return;
+  }
+  const t = el.toggle.getBoundingClientRect();
+  const h = el.host.getBoundingClientRect();
+  const w = el.panel.offsetWidth;
+  const left = Math.min(Math.max(t.right - w - h.left, 0), Math.max(0, h.width - w));
+  el.panel.style.left = `${Math.round(left)}px`;
+  el.panel.style.top = `${Math.round(t.bottom - h.top + 8)}px`;
+}
+
+function openDrop() {
+  const el = dropEls();
+  if (!el || !el.toggle || !el.drop) return;
+  el.drop.classList.add('is-open');
+  el.toggle.setAttribute('aria-expanded', 'true');
+  positionDrop();
+}
+
+// Set while the panel is pinned open by a click: hover may then open it, but
+// only the next click / Escape / route change closes it again.
+let dropPinned = false;
+
+function closeDrop() {
+  const el = dropEls();
+  dropPinned = false;
+  if (!el || !el.toggle || !el.drop) return;
+  el.drop.classList.remove('is-open');
+  el.toggle.setAttribute('aria-expanded', 'false');
+}
+
 function closeMenu() {
   const header = document.getElementById('site-header');
   const toggle = document.getElementById('nav-toggle');
   if (header) header.classList.remove('is-open');
   if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  closeDrop();
 }
 
 function wireHeader() {
@@ -152,14 +211,61 @@ function wireHeader() {
     });
   }
 
+  // Dropdown behaviour.
+  const drop = document.querySelector('.nav-drop');
+  if (drop) {
+    const dropToggle = drop.querySelector('.nav-drop-toggle');
+    const hoverable = window.matchMedia('(hover: hover) and (pointer: fine)');
+
+    if (dropToggle) {
+      dropToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (drop.classList.contains('is-open')) {
+          // Hover may have opened it — the first click pins it instead of
+          // closing it, so a click right after hovering keeps the menu up.
+          if (dropPinned) closeDrop();
+          else dropPinned = true;
+        } else {
+          openDrop();
+          dropPinned = true;
+        }
+      });
+    }
+    if (hoverable.matches) {
+      drop.addEventListener('mouseenter', () => {
+        if (!dropPinned) openDrop();
+      });
+      drop.addEventListener('mouseleave', () => {
+        if (!dropPinned) closeDrop();
+      });
+    }
+    document.addEventListener('click', (e) => {
+      if (!drop.contains(e.target)) closeDrop();
+    });
+    window.addEventListener('resize', () => closeDrop());
+    const list = nav.querySelector('.nav-list');
+    if (list) {
+      list.addEventListener('scroll', () => {
+        if (drop.classList.contains('is-open')) positionDrop();
+      }, { passive: true });
+    }
+  }
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeMenu();
     if (e.key === '/' && document.activeElement === document.body) {
       const input = document.getElementById('global-search');
-      if (input) {
-        e.preventDefault();
-        input.focus();
+      if (!input) return;
+      // Small screens keep the search collapsed (visibility:hidden) until the
+      // menu opens — reveal it first so focus lands on something visible.
+      if (!input.getClientRects().length) {
+        const header = document.getElementById('site-header');
+        const toggle = document.getElementById('nav-toggle');
+        if (header) header.classList.add('is-open');
+        if (toggle) toggle.setAttribute('aria-expanded', 'true');
       }
+      e.preventDefault();
+      input.focus();
     }
   });
 
