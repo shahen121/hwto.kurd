@@ -151,6 +151,10 @@ h1, h2, h3, h4 {
   --font: "Segoe UI", Arial, sans-serif;
 }
 
+:root[lang='ckb'] {
+  --font: "Noto Sans Arabic", "Noto Naskh Arabic", "Segoe UI", Tahoma, sans-serif;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

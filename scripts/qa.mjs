@@ -271,12 +271,13 @@ if (languagePicker) {
       language: document.documentElement.lang,
       dir: document.documentElement.dir,
       home: document.querySelector('.nav-link[href="#/"]')?.textContent.trim(),
+      font: getComputedStyle(document.body).fontFamily,
       saved: localStorage.getItem('hwto:language')
     }));
     ok(`language picker switches to ${language}`,
       languageState.language === language && languageState.dir === dir &&
         languageState.saved === language && (!homeLabel || languageState.home === homeLabel) &&
-        (language !== 'ckb' || languageState.home !== 'الرئيسية'),
+        (language !== 'ckb' || (languageState.home !== 'الرئيسية' && languageState.font.includes('Noto Sans Arabic'))),
       JSON.stringify(languageState));
   }
   await page.selectOption('#language-switcher', 'en');
