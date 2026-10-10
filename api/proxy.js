@@ -129,7 +129,8 @@ function baseRow(item, mediaType) {
     vote_average: item.vote_average || 0,
     release_date: item.release_date || item.first_air_date || '',
     overview: item.overview || '',
-    media_type: mediaType || item.media_type
+    media_type: mediaType || item.media_type,
+    last_episode_to_air: item.last_episode_to_air || null
   };
 }
 
@@ -429,6 +430,7 @@ async function details(q, kind) {
       original_language: json.original_language || '',
       genre_ids: genreIds(json.genres),
       origin_country: json.origin_country || [],
+      last_episode_to_air: json.last_episode_to_air || null,
       cached: true
     };
   }

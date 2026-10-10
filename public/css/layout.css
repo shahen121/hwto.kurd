@@ -41,7 +41,7 @@
   height: 100%;
   display: flex;
   align-items: center;
-  gap: clamp(10px, 2vw, 26px);
+  gap: clamp(12px, 2vw, 24px);
 }
 
 .brand {
@@ -102,7 +102,7 @@
 }
 
 .site-nav {
-  position: relative; /* containing block for the «التصنيفات» panel */
+  position: relative; /* containing block for the browse panel */
   flex: 1;
   min-width: 0;
 }
@@ -110,8 +110,9 @@
 .nav-list {
   display: flex;
   align-items: center;
-  gap: 4px;
-  overflow-x: auto;
+  justify-content: center;
+  gap: 6px;
+  overflow: visible;
   scrollbar-width: none;
 }
 
@@ -122,9 +123,9 @@
 .nav-link {
   position: relative;
   display: inline-block;
-  padding: 9px 13px;
+  padding: 9px 12px;
   border-radius: 10px;
-  font-size: 0.93rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-2);
   white-space: nowrap;
@@ -183,6 +184,8 @@
   top: 100%;
   z-index: 70;
   min-width: 236px;
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
   margin: 0;
   padding: 8px;
   list-style: none;
@@ -211,6 +214,19 @@
   padding: 10px 12px;
   border-radius: 10px;
   font-size: 0.95rem;
+}
+
+.nav-drop-heading {
+  padding: 9px 12px 5px;
+  color: var(--text-3);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.nav-drop-heading:not(:first-child) {
+  margin-top: 5px;
+  border-top: 1px solid var(--line);
 }
 
 .nav-drop-panel .nav-drop-link.is-active {
@@ -669,6 +685,8 @@
     position: static;
     display: none;
     min-width: 0;
+    max-height: none;
+    overflow: visible;
     margin: 2px 0 6px;
     padding: 4px;
     border: 0;
@@ -690,6 +708,10 @@
     padding: 10px 14px;
     padding-inline-start: 30px;
     font-size: 0.95rem;
+  }
+
+  .nav-drop-heading {
+    padding-inline-start: 14px;
   }
 
   .nav-drop-panel .nav-drop-link.is-active::after {

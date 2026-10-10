@@ -22,6 +22,7 @@ import {
   detailHref,
   watchHref
 } from './utils.js';
+import { getLatestCatalogEpisode } from './config.js';
 
 export function hydrate(root) {
   hydrateLazyImages(root);
@@ -34,28 +35,30 @@ const isCategory = (route, slug) =>
   route.name === 'list' && route.section === 'category' && route.category === slug;
 
 /**
- * The header nav. Items with `children` render as a dropdown («التصنيفات»)
+ * The header nav. Items with `children` render as a grouped browse dropdown
  * whose children are regular links — the panel is a child of the <li> so its
  * absolute positioning escapes `.nav-list`'s horizontal scrolling.
  */
 const NAV = [
   { href: '#/', label: 'الرئيسية', match: (r) => r.name === 'home' },
   {
-    id: 'categories',
-    label: 'التصنيفات',
+    id: 'browse',
+    label: 'تصفّح',
     children: [
+      { group: 'التصنيفات' },
       { href: '#/category/anime', label: 'أنمي', match: (r) => isCategory(r, 'anime') },
+      { href: '#/category/asian', label: 'آسيوية', match: (r) => isCategory(r, 'asian') },
+      { href: '#/category/turkish', label: 'تركية', match: (r) => isCategory(r, 'turkish') },
       { href: '#/category/series', label: 'مسلسلات', match: (r) => isCategory(r, 'series') },
       { href: '#/category/movies', label: 'أفلام', match: (r) => isCategory(r, 'movies') },
-      { href: '#/category/asian', label: 'أفلام ومسلسلات آسيوية', match: (r) => isCategory(r, 'asian') },
-      { href: '#/category/turkish', label: 'تركية', match: (r) => isCategory(r, 'turkish') }
+      { group: 'اكتشف المزيد' },
+      { href: '#/trending/tv', label: 'المسلسلات الرائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'tv' },
+      { href: '#/trending/movie', label: 'الأفلام الرائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'movie' },
+      { href: '#/upcoming', label: 'أفلام قادمة', match: (r) => r.name === 'list' && r.section === 'upcoming' },
+      { href: '#/toprated/movie', label: 'الأعلى تقييماً', match: (r) => r.name === 'list' && r.section === 'toprated' },
+      { href: '#/site', label: 'مكتبة الموقع', match: (r) => r.name === 'list' && r.section === 'site' }
     ]
-  },
-  { href: '#/trending/movie', label: 'الأفلام الرائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'movie' },
-  { href: '#/trending/tv', label: 'المسلسلات الرائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'tv' },
-  { href: '#/upcoming', label: 'القادمة', match: (r) => r.name === 'list' && r.section === 'upcoming' },
-  { href: '#/toprated/movie', label: 'الأعلى تقييماً', match: (r) => r.name === 'list' && r.section === 'toprated' },
-  { href: '#/site', label: 'مكتبة الموقع', match: (r) => r.name === 'list' && r.section === 'site' }
+  }
 ];
 
 const navLink = (item) =>
@@ -74,8 +77,9 @@ function navItem(item) {
               <ul class="nav-drop-panel" id="${panelId}">
                 ${item.children
                   .map(
-                    (child) =>
-                      `<li><a class="nav-link nav-drop-link" href="${attr(child.href)}" data-nav="${attr(child.label)}">${escapeHtml(child.label)}</a></li>`
+                    (child) => child.group
+                      ? `<li class="nav-drop-heading">${escapeHtml(child.group)}</li>`
+                      : `<li><a class="nav-link nav-drop-link" href="${attr(child.href)}" data-nav="${attr(child.label)}">${escapeHtml(child.label)}</a></li>`
                   )
                   .join('')}
               </ul>
@@ -146,7 +150,8 @@ export function renderShell(root) {
 
 export function setNavActive(route) {
   const links = document.querySelectorAll('.nav-link');
-  const candidates = NAV.flatMap((item) => (item.children ? item.children : [item]));
+  const candidates = NAV.flatMap((item) => (item.children ? item.children : [item]))
+    .filter((item) => item.href && item.match);
   const active = candidates.find((item) => item.match && item.match(route));
   const activeHref = active && active.href ? active.href : '';
   links.forEach((link) => {
@@ -156,7 +161,7 @@ export function setNavActive(route) {
     if (isActive) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   });
-  // The «التصنيفات» dropdown lights up when any of its children is the route.
+  // The browse dropdown lights up when any of its children is the route.
   document.querySelectorAll('.nav-drop').forEach((drop) => {
     const on = Boolean(drop.querySelector('.nav-link.is-active'));
     drop.classList.toggle('is-active', on);
@@ -193,13 +198,19 @@ export function pageHeader(title, { subtitle = '', meta = '' } = {}) {
 
 /* ------------------------------- cards -------------------------------- */
 
-export function movieCard(item, { eager = false, showRank = false } = {}) {
+export function movieCard(item, { eager = false, showRank = false, showEpisodes = false } = {}) {
   if (!item) return '';
   const rating = formatRating(item.voteAverage);
   const hasRating = item.voteAverage > 0;
   const year = yearOf(item.releaseDate);
   const src = posterUrl(item);
   const href = detailHref(item);
+  const latestEpisode = item.mediaType === 'tv'
+    ? item.latestEpisode || getLatestCatalogEpisode(item.id)
+    : null;
+  const airTime = latestEpisode && latestEpisode.airDate ? Date.parse(latestEpisode.airDate) : NaN;
+  const now = Date.now();
+  const newEpisode = Number.isFinite(airTime) && airTime <= now && now - airTime <= 35 * 60 * 60 * 1000;
 
   return `
     <article class="card" tabindex="-1">
@@ -211,6 +222,7 @@ export function movieCard(item, { eager = false, showRank = false } = {}) {
             <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M12 17.3l-6.2 3.7 1.7-7L2 9.2l7.1-.6L12 2l2.9 6.6 7.1.6-5.5 4.8 1.7 7z"/></svg>
             ${escapeHtml(rating)}
           </span>` : ''}
+          ${showEpisodes && newEpisode ? '<span class="card-new">جديد</span>' : ''}
           ${showRank && item.rank ? `<span class="card-rank">#${escapeHtml(String(item.rank))}</span>` : ''}
           <span class="card-play" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M8 5.5v13l11-6.5z"/></svg>
@@ -218,7 +230,12 @@ export function movieCard(item, { eager = false, showRank = false } = {}) {
         </div>
         <div class="card-body">
           <h3 class="card-title">${escapeHtml(item.title || 'بدون عنوان')}</h3>
-          <p class="card-meta">${year ? escapeHtml(year) : '—'}${hasRating ? ` <span class="dot">•</span> ${escapeHtml(rating)} ★` : ''}</p>
+          <p class="card-meta">
+            ${showEpisodes && latestEpisode
+              ? `<span class="card-episode" title="آخر حلقة مسجلة: الموسم ${escapeHtml(String(latestEpisode.seasonNumber))}، الحلقة ${escapeHtml(String(latestEpisode.episodeNumber))}">م${escapeHtml(String(latestEpisode.seasonNumber))} · ح${escapeHtml(String(latestEpisode.episodeNumber))}</span>`
+              : ''}
+            <span>${year ? escapeHtml(year) : '—'}${hasRating ? ` <span class="dot">•</span> ${escapeHtml(rating)} ★` : ''}</span>
+          </p>
         </div>
       </a>
     </article>`;

@@ -87,7 +87,10 @@ function sortItems(items, sortBy) {
     return list.sort((a, b) => (b.voteAverage || 0) - (a.voteAverage || 0));
   }
   if (sortBy === 'date') {
-    return list.sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || '')));
+    return list.sort((a, b) =>
+      String(b.latestEpisode && b.latestEpisode.airDate || b.releaseDate || '')
+        .localeCompare(String(a.latestEpisode && a.latestEpisode.airDate || a.releaseDate || ''))
+    );
   }
   if (sortBy === 'title') {
     return list.sort((a, b) => String(a.title || '').localeCompare(String(a.title || ''), 'ar'));
@@ -102,6 +105,8 @@ export async function mount(params, view, { signal }) {
   const { initial, max } = limitsFor(section, type);
   const title = cfg.title(type, params);
   const subtitle = typeof cfg.subtitle === 'function' ? cfg.subtitle(params) : cfg.subtitle;
+  const isEpisodeCategory =
+    section === 'category' && ['anime', 'asian', 'turkish'].includes(params.category);
 
   // State: buffered rows (all) + how many are on screen (shown).
   const state = {
@@ -110,7 +115,7 @@ export async function mount(params, view, { signal }) {
     page: 1,
     totalPages: 1,
     loading: false,
-    sort: 'default',
+    sort: isEpisodeCategory ? 'date' : 'default',
     sections: []
   };
 
@@ -129,10 +134,10 @@ export async function mount(params, view, { signal }) {
       ${highlightsHtml}
       <div class="list-sort-bar">
         <span class="sort-label">ترتيب حسب:</span>
-        <button class="btn-sort is-active" type="button" data-sort="default">الافتراضي</button>
-        <button class="btn-sort" type="button" data-sort="rating">★ الأعلى تقييماً</button>
-        <button class="btn-sort" type="button" data-sort="date">📅 الأحدث</button>
-        <button class="btn-sort" type="button" data-sort="title">🔤 أبجدياً</button>
+        <button class="btn-sort${state.sort === 'default' ? ' is-active' : ''}" type="button" data-sort="default">الافتراضي</button>
+        <button class="btn-sort${state.sort === 'rating' ? ' is-active' : ''}" type="button" data-sort="rating">★ الأعلى تقييماً</button>
+        <button class="btn-sort${state.sort === 'date' ? ' is-active' : ''}" type="button" data-sort="date">📅 الأحدث</button>
+        <button class="btn-sort${state.sort === 'title' ? ' is-active' : ''}" type="button" data-sort="title">🔤 أبجدياً</button>
       </div>
       <div id="list-body">${ui.skeletonGrid(section === 'site' ? 8 : isCategory ? 12 : max)}</div>
     </div>`;
@@ -157,7 +162,9 @@ export async function mount(params, view, { signal }) {
       return;
     }
     highlights.hidden = false;
-    highlights.innerHTML = rows.map((row) => ui.section(row.label, row.items)).join('');
+    highlights.innerHTML = rows
+      .map((row) => ui.section(row.label, row.items, { card: { showEpisodes: isEpisodeCategory } }))
+      .join('');
     ui.hydrate(highlights);
   };
 
@@ -185,7 +192,10 @@ export async function mount(params, view, { signal }) {
     // More rows are either buffered below the fold or waiting on the next page.
     const canLoadMore = !state.loading && (state.shown < state.all.length || state.page < state.totalPages);
     body.innerHTML =
-      ui.movieGrid(visible, { showRank: (section === 'trending' || section === 'toprated') && state.sort === 'default' }) +
+      ui.movieGrid(visible, {
+        showRank: (section === 'trending' || section === 'toprated') && state.sort === 'default',
+        showEpisodes: isEpisodeCategory
+      }) +
       ui.loadMoreButton({ id: 'list-more', label: 'عرض المزيد', hidden: !canLoadMore });
     ui.hydrate(body);
     if (meta) {

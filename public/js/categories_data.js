@@ -22,7 +22,8 @@
  *
  * Row shape matches the list rows of the API (see api.js normaliseRow), so the
  * pages consume them through exactly the same code path as live data.
- * Rows are pre-sorted by rating — that is the default order of each screen.
+ * Rows are stored in rating order; the category screen presents them by
+ * release date by default and uses this snapshot for episode-number labels.
  */
 
 export const CATEGORY_ITEMS = {

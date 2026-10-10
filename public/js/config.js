@@ -344,3 +344,12 @@ export function getTvSeriesStructure(id, seasonNumber = 1, extraEpisodes = 0) {
     episodes: Array.from({ length: episodeCount }, (_, i) => i + 1)
   };
 }
+
+/** Latest season/episode recorded by the site's verified series catalogue. */
+export function getLatestCatalogEpisode(id) {
+  const seasons = TV_SERIES_CATALOG[String(id)] || (KNOWN_TV_SERIES[Number(id)] && KNOWN_TV_SERIES[Number(id)].episodes);
+  if (!Array.isArray(seasons) || seasons.length === 0) return null;
+  const episodeNumber = Number(seasons[seasons.length - 1]);
+  if (!Number.isInteger(episodeNumber) || episodeNumber < 1) return null;
+  return { seasonNumber: seasons.length, episodeNumber };
+}

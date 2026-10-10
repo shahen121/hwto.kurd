@@ -327,6 +327,9 @@ function normaliseRow(row, fallbackType) {
   let title = '';
   if (typeof row.title === 'string') title = row.title.trim();
   else if (typeof row.name === 'string') title = row.name.trim();
+  const episode = row.last_episode_to_air || row.latest_episode;
+  const episodeNumber = Number(episode && episode.episode_number);
+  const seasonNumber = Number(episode && episode.season_number);
 
   return {
     id: Number(row.id),
@@ -339,6 +342,13 @@ function normaliseRow(row, fallbackType) {
     dbPhoto: row.db_photo || '',
     voteAverage: toNumber(row.vote_average),
     releaseDate: row.release_date || row.first_air_date || '',
+    latestEpisode: Number.isInteger(episodeNumber) && episodeNumber > 0
+      ? {
+          seasonNumber: Number.isInteger(seasonNumber) && seasonNumber > 0 ? seasonNumber : 1,
+          episodeNumber,
+          airDate: typeof episode.air_date === 'string' ? episode.air_date : ''
+        }
+      : null,
     rank: row.rank !== undefined && row.rank !== null ? Number(row.rank) : null,
     inDatabase: row.in_database === true
   };
@@ -363,6 +373,9 @@ function normaliseList(json, fallbackType) {
 
 function normaliseDetail(json, mediaType) {
   const isTv = mediaType === 'tv';
+  const episode = isTv ? json.last_episode_to_air : null;
+  const episodeNumber = Number(episode && episode.episode_number);
+  const seasonNumber = Number(episode && episode.season_number);
   return {
     id: Number(json.id),
     mediaType,
@@ -379,6 +392,13 @@ function normaliseDetail(json, mediaType) {
     country: isTv ? json.origin_country || '' : '',
     hasCountry: isTv && Boolean(json.origin_country),
     genreIds: parseGenreIds(json.genre_ids),
+    latestEpisode: Number.isInteger(episodeNumber) && episodeNumber > 0
+      ? {
+          seasonNumber: Number.isInteger(seasonNumber) && seasonNumber > 0 ? seasonNumber : 1,
+          episodeNumber,
+          airDate: typeof episode.air_date === 'string' ? episode.air_date : ''
+        }
+      : null,
     cached: json.cached === true
   };
 }
