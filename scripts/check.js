@@ -90,7 +90,7 @@ else ok('app.js entry present');
 
 for (const file of frontendFiles(jsFiles)) {
   const rel = path.relative(ROOT, file).replaceAll('\\', '/');
-  if (rel === 'public/js/api.js' || rel === 'server.js' || rel.startsWith('api/')) continue;
+  if (rel === 'public/js/api.js' || rel === 'server.js') continue;
   const src = fs.readFileSync(file, 'utf8');
   const hits = src.match(/(^|[^.\w])fetch\s*\(/g);
   if (hits) fail(`LAYER ${rel} calls fetch() — only public/js/api.js may do that`);
