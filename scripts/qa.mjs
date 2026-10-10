@@ -255,6 +255,45 @@ for (const [name, hash, want] of ROUTES) {
     `cards=${p.cards} error=${JSON.stringify(p.error)} empty=${JSON.stringify(p.empty)} broken=${p.broken} doc=${p.docW}/${p.winW}`);
 }
 
+/* ---------- 1a. persistent language picker ---------------------------- */
+
+await settle('#/');
+const languagePicker = await page.$('#language-switcher');
+ok('language picker is available in the header', Boolean(languagePicker));
+if (languagePicker) {
+  for (const [language, dir, homeLabel] of [
+    ['en', 'ltr', 'Home'],
+    ['ckb', 'rtl', null],
+    ['ar', 'rtl', 'الرئيسية']
+  ]) {
+    await page.selectOption('#language-switcher', language);
+    const languageState = await page.evaluate(() => ({
+      language: document.documentElement.lang,
+      dir: document.documentElement.dir,
+      home: document.querySelector('.nav-link[href="#/"]')?.textContent.trim(),
+      saved: localStorage.getItem('hwto:language')
+    }));
+    ok(`language picker switches to ${language}`,
+      languageState.language === language && languageState.dir === dir &&
+        languageState.saved === language && (!homeLabel || languageState.home === homeLabel) &&
+        (language !== 'ckb' || languageState.home !== 'الرئيسية'),
+      JSON.stringify(languageState));
+  }
+  await page.selectOption('#language-switcher', 'en');
+  await settle('#/search?q=batman');
+  const translatedRoute = await page.evaluate(() => ({
+    language: document.documentElement.lang,
+    heading: document.querySelector('.page-title')?.textContent.trim(),
+    placeholder: document.querySelector('#search-input')?.getAttribute('placeholder'),
+    direction: document.documentElement.dir
+  }));
+  ok('language selection persists across navigation and translates search',
+    translatedRoute.language === 'en' && translatedRoute.direction === 'ltr' &&
+      translatedRoute.heading === 'Search' && translatedRoute.placeholder === 'Type a movie or TV title…',
+    JSON.stringify(translatedRoute));
+  await page.selectOption('#language-switcher', 'ar');
+}
+
 /* ---------- 1b. «التصنيفات» dropdown ----------------------------------- */
 
 await settle('#/');
@@ -398,6 +437,22 @@ for (const [label, width, height, hashes] of [
     await pg.waitForTimeout(400);
     const opened = await pg.evaluate(() => document.getElementById('site-header')?.classList.contains('is-open'));
     ok('mobile menu opens', opened === true, `open=${opened}`);
+
+    await pg.selectOption('#language-switcher', 'en');
+    const mobileLanguage = await pg.evaluate(() => {
+      const picker = document.getElementById('language-switcher');
+      const rect = picker.getBoundingClientRect();
+      return {
+        language: document.documentElement.lang,
+        text: document.querySelector('.nav-link[href="#/"]')?.textContent.trim(),
+        visible: rect.width > 0 && rect.right <= window.innerWidth,
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1
+      };
+    });
+    ok('mobile language picker stays visible and fits the screen',
+      mobileLanguage.language === 'en' && mobileLanguage.text === 'Home' &&
+        mobileLanguage.visible && !mobileLanguage.overflow, JSON.stringify(mobileLanguage));
+    await pg.selectOption('#language-switcher', 'ar');
 
     await pg.click('.nav-drop-toggle');
     await pg.waitForTimeout(400);

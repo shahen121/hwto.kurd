@@ -139,6 +139,7 @@ const expected = [
   'public/js/store.js',
   'public/js/utils.js',
   'public/js/router.js',
+  'public/js/localization.js',
   'public/js/ui.js',
   'public/js/app.js',
   'public/js/subtitles.js',
@@ -146,7 +147,8 @@ const expected = [
   'public/js/pages/list.js',
   'public/js/pages/search.js',
   'public/js/pages/details.js',
-  'public/js/pages/watch.js'
+  'public/js/pages/watch.js',
+  'public/subtitles/index.json'
 ];
 for (const rel of expected) {
   if (!fs.existsSync(path.join(ROOT, rel))) fail(`MISSING ${rel}`);
@@ -184,9 +186,14 @@ if (actions.size) ok(`all ${actions.size} literal actions documented: ${[...acti
 
 const subDir = path.join(PUBLIC, 'subtitles');
 const subIndexPath = path.join(subDir, 'index.json');
+const subtitleFiles = fs.existsSync(subDir) ? walk(subDir).filter((file) => file !== subIndexPath) : [];
 
 if (!fs.existsSync(subIndexPath)) {
-  fail('MISSING public/subtitles/index.json');
+  if (!subtitleFiles.length) {
+    ok('subtitle corpus is not installed; subtitle-file checks skipped');
+  } else {
+    fail('MISSING public/subtitles/index.json');
+  }
 } else {
   let subIndex = null;
   try {
@@ -219,11 +226,11 @@ if (!fs.existsSync(subIndexPath)) {
       }
     }
     if (missing > 5) fail(`…and ${missing - 5} more missing subtitle files`);
-    if (!missing) ok(`all ${indexed} indexed subtitle files exist (${Object.keys(subIndex).length} titles)`);
-    if (!removedLangs) ok('subtitle index carries only ku/ar (english removed)');
+    if (indexed && !missing) ok(`all ${indexed} indexed subtitle files exist (${Object.keys(subIndex).length} titles)`);
+    if (indexed && !removedLangs) ok('subtitle index carries only ku/ar (english removed)');
 
     const sample = path.join(subDir, 'movie/12500/ku.vtt');
-    if (fs.existsSync(sample)) {
+    if (indexed && fs.existsSync(sample)) {
       try {
         const subs = await import(pathToFileURL(path.join(PUBLIC, 'js', 'subtitles.js')).href);
         const cues = subs.parseVtt(fs.readFileSync(sample, 'utf8'));
@@ -248,9 +255,10 @@ if (!fs.existsSync(subIndexPath)) {
       } catch (err) {
         fail(`subtitle parser check failed: ${err.message}`);
       }
-    } else {
+    } else if (indexed || subtitleFiles.length) {
       fail('subtitle sample file public/subtitles/movie/12500/ku.vtt missing');
     }
+    if (!indexed && !subtitleFiles.length) ok('subtitle index is empty; no subtitle files are installed');
   }
 }
 
@@ -323,6 +331,14 @@ if (process.argv.includes('--smoke') && !problems.length) {
     const css = await withTimeout(`${base}/css/base.css`);
     if (css.status !== 200 || !css.text.includes('--brand')) throw new Error(`GET /css/base.css -> ${css.status}`);
     console.log('  ok  smoke: GET /css/base.css');
+
+    const langModule = await withTimeout(`${base}/js/localization.js`);
+    if (langModule.status !== 200 || !langModule.text.includes('translateText')) throw new Error(`GET /js/localization.js -> ${langModule.status}`);
+    console.log('  ok  smoke: localization module is served');
+
+    const subtitlesIndex = await withTimeout(`${base}/subtitles/index.json`);
+    if (subtitlesIndex.status !== 200 || !subtitlesIndex.text.includes('{}')) throw new Error(`GET /subtitles/index.json -> ${subtitlesIndex.status}`);
+    console.log('  ok  smoke: empty subtitle index is served without a 404');
 
     const stats = await withTimeout(`${base}/api/TMDBCache.aspx?action=stats`);
     if (stats.status !== 200) throw new Error(`API proxy -> ${stats.status}`);

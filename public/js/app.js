@@ -5,6 +5,7 @@
  */
 
 import { CATEGORIES } from './config.js';
+import { initLocalization } from './localization.js';
 import { renderShell, setNavActive, hydrate, showToast, errorState, emptyState } from './ui.js';
 import { startRouter, navigate } from './router.js';
 import { debounce } from './utils.js';
@@ -160,7 +161,9 @@ function positionDrop(drop) {
   const t = el.toggle.getBoundingClientRect();
   const h = el.host.getBoundingClientRect();
   const w = el.panel.offsetWidth;
-  const left = Math.min(Math.max(t.right - w - h.left, 0), Math.max(0, h.width - w));
+  const rtl = document.documentElement.dir !== 'ltr';
+  const anchor = rtl ? t.right - w - h.left : t.left - h.left;
+  const left = Math.min(Math.max(anchor, 0), Math.max(0, h.width - w));
   el.panel.style.left = `${Math.round(left)}px`;
   el.panel.style.top = `${Math.round(t.bottom - h.top + 8)}px`;
 }
@@ -309,6 +312,7 @@ function boot() {
   const root = document.getElementById('app');
   if (!root) return;
   renderShell(root);
+  initLocalization();
   wireHeader();
   hydrate(root);
   startRouter((route) => render(route));

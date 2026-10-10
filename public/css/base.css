@@ -147,6 +147,10 @@ h1, h2, h3, h4 {
   padding-inline: clamp(16px, 4vw, 34px);
 }
 
+:root[lang='en'] {
+  --font: "Segoe UI", Arial, sans-serif;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

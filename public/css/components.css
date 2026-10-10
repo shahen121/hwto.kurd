@@ -886,6 +886,8 @@
   line-height: 1.55;
   text-align: center;
   white-space: pre-line;
+  direction: auto;
+  unicode-bidi: plaintext;
   word-break: break-word;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
@@ -926,6 +928,14 @@
   color: var(--brand);
   font-size: 0.82em;
   font-weight: 600;
+}
+
+:root[lang='en'] .subtitle-bar[data-state='error'] .subtitle-label::after {
+  content: ' — subtitle file could not be loaded';
+}
+
+:root[lang='ckb'] .subtitle-bar[data-state='error'] .subtitle-label::after {
+  content: ' — نەتوانرا فایلی ژێرنووس بار بکرێت';
 }
 
 .sub-lang {
@@ -981,6 +991,14 @@
   .watch-actions .btn {
     flex: 1 1 auto;
     text-align: center;
+  }
+
+  .subtitle-bar {
+    align-items: stretch;
+  }
+
+  .subtitle-group {
+    flex: 1 1 100%;
   }
 }
 
@@ -1486,4 +1504,3 @@
     scroll-behavior: auto !important;
   }
 }
-

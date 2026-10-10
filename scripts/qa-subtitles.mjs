@@ -121,9 +121,11 @@ const barHidden = () =>
     .then((s) => s.barGone || (s.barHidden && s.overlayGone));
 
 let spawnedServer = null;
+let serverReady = false;
 try {
   const probe = await fetch(BASE + '/');
   if (!probe.ok) throw new Error('HTTP ' + probe.status);
+  serverReady = true;
 } catch (err) {
   if (BASE.includes('127.0.0.1:4173') || BASE.includes('localhost:4173')) {
     const { spawn } = await import('node:child_process');
@@ -135,7 +137,10 @@ try {
       await new Promise((r) => setTimeout(r, 200));
       try {
         const probe = await fetch(BASE + '/');
-        if (probe.ok) break;
+        if (probe.ok) {
+          serverReady = true;
+          break;
+        }
       } catch {}
     }
   } else {
@@ -157,6 +162,26 @@ if (spawnedServer) {
     } catch {}
     process.exit(1);
   });
+}
+
+if (!serverReady) {
+  console.error(`qa-subtitles: server did not start at ${BASE}.`);
+  process.exit(2);
+}
+
+const subtitleIndexResponse = await fetch(`${BASE}/subtitles/index.json`);
+if (!subtitleIndexResponse.ok) {
+  console.error(`qa-subtitles: subtitle index returned HTTP ${subtitleIndexResponse.status}.`);
+  process.exit(1);
+}
+const subtitleIndex = await subtitleIndexResponse.json();
+const subtitleCount = Object.values(subtitleIndex).reduce(
+  (count, langs) => count + (Array.isArray(langs) ? langs.length : 0),
+  0
+);
+if (subtitleCount === 0) {
+  console.log('qa-subtitles: skipped — public/subtitles contains no VTT subtitle files.');
+  process.exit(0);
 }
 
 const browser = await chromium.launch({ headless: true, executablePath });

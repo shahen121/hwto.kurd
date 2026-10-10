@@ -262,6 +262,30 @@
   color: #fff;
 }
 
+.header-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.language-switcher {
+  min-height: 40px;
+  padding: 7px 30px 7px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.language-switcher:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
 .nav-toggle {
   display: none;
   flex-direction: column;
@@ -624,7 +648,12 @@
 
   .nav-toggle {
     display: flex;
+    order: 3;
+  }
+
+  .header-actions {
     order: 2;
+    margin-inline-start: auto;
   }
 
   .site-nav {
@@ -737,6 +766,12 @@
   .brand-logo-img {
     height: 38px;
     max-width: 105px;
+  }
+
+  .language-switcher {
+    min-height: 38px;
+    padding: 6px 26px 6px 9px;
+    font-size: 0.82rem;
   }
 
   .footer-logo-img {

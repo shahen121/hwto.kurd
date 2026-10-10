@@ -103,6 +103,15 @@ export function renderShell(root) {
           <span></span><span></span><span></span>
         </button>
 
+        <div class="header-actions">
+          <label class="sr-only" for="language-switcher">لغة الموقع</label>
+          <select class="language-switcher" id="language-switcher" aria-label="لغة الموقع">
+            <option value="ar">العربية</option>
+            <option value="ckb">کوردی</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+
         <nav class="site-nav" id="site-nav" aria-label="التنقل الرئيسي">
           <ul class="nav-list">
             ${NAV.map(navItem).join('')}
