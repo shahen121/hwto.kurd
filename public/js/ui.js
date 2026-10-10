@@ -18,6 +18,7 @@ import {
   formatRating,
   ratingPercent,
   yearOf,
+  isNewRelease,
   mediaLabel,
   detailHref,
   watchHref
@@ -34,9 +35,11 @@ const isCategory = (route, slug) =>
   route.name === 'list' && route.section === 'category' && route.category === slug;
 
 /**
- * The header nav. Items with `children` render as a dropdown («التصنيفات»)
- * whose children are regular links — the panel is a child of the <li> so its
- * absolute positioning escapes `.nav-list`'s horizontal scrolling.
+ * The header nav — three groups, no repeats: content («التصنيفات»),
+ * discovery («الرائجة» / «القادمة» / «الأعلى تقييماً») and the library.
+ * Items with `children` render as a dropdown whose children are regular
+ * links — the panel is a child of the <li> so its absolute positioning
+ * escapes `.nav-list`'s horizontal scrolling.
  */
 const NAV = [
   { href: '#/', label: 'الرئيسية', match: (r) => r.name === 'home' },
@@ -45,14 +48,20 @@ const NAV = [
     label: 'التصنيفات',
     children: [
       { href: '#/category/anime', label: 'أنمي', match: (r) => isCategory(r, 'anime') },
+      { href: '#/category/asian', label: 'آسيوية', match: (r) => isCategory(r, 'asian') },
+      { href: '#/category/turkish', label: 'تركية', match: (r) => isCategory(r, 'turkish') },
       { href: '#/category/series', label: 'مسلسلات', match: (r) => isCategory(r, 'series') },
-      { href: '#/category/movies', label: 'أفلام', match: (r) => isCategory(r, 'movies') },
-      { href: '#/category/asian', label: 'أفلام ومسلسلات آسيوية', match: (r) => isCategory(r, 'asian') },
-      { href: '#/category/turkish', label: 'تركية', match: (r) => isCategory(r, 'turkish') }
+      { href: '#/category/movies', label: 'أفلام', match: (r) => isCategory(r, 'movies') }
     ]
   },
-  { href: '#/trending/movie', label: 'الأفلام الرائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'movie' },
-  { href: '#/trending/tv', label: 'المسلسلات الرائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'tv' },
+  {
+    id: 'trending',
+    label: 'الرائجة',
+    children: [
+      { href: '#/trending/movie', label: 'أفلام رائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'movie' },
+      { href: '#/trending/tv', label: 'مسلسلات رائجة', match: (r) => r.name === 'list' && r.section === 'trending' && r.type === 'tv' }
+    ]
+  },
   { href: '#/upcoming', label: 'القادمة', match: (r) => r.name === 'list' && r.section === 'upcoming' },
   { href: '#/toprated/movie', label: 'الأعلى تقييماً', match: (r) => r.name === 'list' && r.section === 'toprated' },
   { href: '#/site', label: 'مكتبة الموقع', match: (r) => r.name === 'list' && r.section === 'site' }
@@ -66,7 +75,7 @@ function navItem(item) {
 
   const panelId = `nav-panel-${item.id}`;
   return `
-            <li class="nav-drop" id="nav-drop">
+            <li class="nav-drop" id="nav-drop-${attr(item.id)}">
               <button class="nav-link nav-drop-toggle" type="button" aria-expanded="false" aria-controls="${panelId}">
                 <span>${escapeHtml(item.label)}</span>
                 <svg class="nav-drop-caret" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
@@ -193,13 +202,15 @@ export function pageHeader(title, { subtitle = '', meta = '' } = {}) {
 
 /* ------------------------------- cards -------------------------------- */
 
-export function movieCard(item, { eager = false, showRank = false } = {}) {
+export function movieCard(item, { eager = false, showRank = false, rank = 0 } = {}) {
   if (!item) return '';
   const rating = formatRating(item.voteAverage);
   const hasRating = item.voteAverage > 0;
   const year = yearOf(item.releaseDate);
   const src = posterUrl(item);
   const href = detailHref(item);
+  const rankNum = rank || item.rank;
+  const isNew = isNewRelease(item.releaseDate);
 
   return `
     <article class="card" tabindex="-1">
@@ -211,7 +222,8 @@ export function movieCard(item, { eager = false, showRank = false } = {}) {
             <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M12 17.3l-6.2 3.7 1.7-7L2 9.2l7.1-.6L12 2l2.9 6.6 7.1.6-5.5 4.8 1.7 7z"/></svg>
             ${escapeHtml(rating)}
           </span>` : ''}
-          ${showRank && item.rank ? `<span class="card-rank">#${escapeHtml(String(item.rank))}</span>` : ''}
+          ${showRank && rankNum ? `<span class="card-rank">${rank ? '' : '#'}${escapeHtml(String(rankNum))}</span>` : ''}
+          ${isNew ? '<span class="card-new">جديد</span>' : ''}
           <span class="card-play" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M8 5.5v13l11-6.5z"/></svg>
           </span>
@@ -236,7 +248,12 @@ export function movieRow(items, opts = {}) {
 export function movieGrid(items, opts = {}) {
   const list = (items || []).filter(Boolean);
   if (!list.length) return '';
-  return `<div class="grid">${list.map((item) => movieCard(item, opts)).join('')}</div>`;
+  // `numbered` stamps each card with its position in the list (1, 2, 3 …).
+  const numbered = opts.numbered === true;
+  const cards = list.map((item, i) =>
+    numbered ? movieCard(item, { ...opts, showRank: true, rank: i + 1 }) : movieCard(item, opts)
+  );
+  return `<div class="grid">${cards.join('')}</div>`;
 }
 
 export function section(title, items, { href = '', subtitle = '', card = {} } = {}) {

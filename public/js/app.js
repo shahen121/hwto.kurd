@@ -133,11 +133,11 @@ window.addEventListener('app:reload', reload);
 
 /* ------------------------------ header menu ---------------------------- */
 
-/* «التصنيفات» dropdown (desktop) / accordion (stacked, ≤860px).
+/* «التصنيفات» / «الرائجة» dropdowns (desktop) — accordions (stacked, ≤860px).
    The panel is absolutely positioned against `.site-nav`, so its coordinates
-   are recomputed every time it opens (nav scroll, resize, hover). */
-function dropEls() {
-  const drop = document.querySelector('.nav-drop');
+   are recomputed every time it opens (nav scroll, resize, hover). Several
+   dropdowns may exist; every helper takes the specific <li> it operates on. */
+function dropEls(drop) {
   if (!drop) return null;
   return {
     drop,
@@ -149,8 +149,8 @@ function dropEls() {
 
 const isStackedNav = () => window.matchMedia('(max-width: 860px)').matches;
 
-function positionDrop() {
-  const el = dropEls();
+function positionDrop(drop) {
+  const el = dropEls(drop);
   if (!el || !el.toggle || !el.panel || !el.host) return;
   if (isStackedNav()) {
     el.panel.style.left = '';
@@ -165,24 +165,30 @@ function positionDrop() {
   el.panel.style.top = `${Math.round(t.bottom - h.top + 8)}px`;
 }
 
-function openDrop() {
-  const el = dropEls();
+function openDrop(drop) {
+  const el = dropEls(drop);
   if (!el || !el.toggle || !el.drop) return;
+  // Only one panel open at a time.
+  document.querySelectorAll('.nav-drop.is-open').forEach((other) => {
+    if (other !== drop) closeDrop(other);
+  });
   el.drop.classList.add('is-open');
   el.toggle.setAttribute('aria-expanded', 'true');
-  positionDrop();
+  positionDrop(drop);
 }
 
-// Set while the panel is pinned open by a click: hover may then open it, but
-// only the next click / Escape / route change closes it again.
-let dropPinned = false;
+// The dropdown pinned open by a click: hover may then open it, but only the
+// next click / Escape / route change closes it again.
+let dropPinned = null;
 
-function closeDrop() {
-  const el = dropEls();
-  dropPinned = false;
-  if (!el || !el.toggle || !el.drop) return;
-  el.drop.classList.remove('is-open');
-  el.toggle.setAttribute('aria-expanded', 'false');
+function closeDrop(drop = null) {
+  const targets = drop ? [drop] : Array.from(document.querySelectorAll('.nav-drop'));
+  targets.forEach((d) => {
+    d.classList.remove('is-open');
+    const toggle = d.querySelector('.nav-drop-toggle');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  });
+  if (!drop || dropPinned === drop) dropPinned = null;
 }
 
 function closeMenu() {
@@ -211,11 +217,10 @@ function wireHeader() {
     });
   }
 
-  // Dropdown behaviour.
-  const drop = document.querySelector('.nav-drop');
-  if (drop) {
+  // Dropdown behaviour — one wiring pass per dropdown.
+  const hoverable = window.matchMedia('(hover: hover) and (pointer: fine)');
+  document.querySelectorAll('.nav-drop').forEach((drop) => {
     const dropToggle = drop.querySelector('.nav-drop-toggle');
-    const hoverable = window.matchMedia('(hover: hover) and (pointer: fine)');
 
     if (dropToggle) {
       dropToggle.addEventListener('click', (e) => {
@@ -223,32 +228,32 @@ function wireHeader() {
         if (drop.classList.contains('is-open')) {
           // Hover may have opened it — the first click pins it instead of
           // closing it, so a click right after hovering keeps the menu up.
-          if (dropPinned) closeDrop();
-          else dropPinned = true;
+          if (dropPinned === drop) closeDrop(drop);
+          else dropPinned = drop;
         } else {
-          openDrop();
-          dropPinned = true;
+          openDrop(drop);
+          dropPinned = drop;
         }
       });
     }
     if (hoverable.matches) {
       drop.addEventListener('mouseenter', () => {
-        if (!dropPinned) openDrop();
+        if (dropPinned !== drop) openDrop(drop);
       });
       drop.addEventListener('mouseleave', () => {
-        if (!dropPinned) closeDrop();
+        if (dropPinned !== drop) closeDrop(drop);
       });
     }
-    document.addEventListener('click', (e) => {
-      if (!drop.contains(e.target)) closeDrop();
-    });
-    window.addEventListener('resize', () => closeDrop());
-    const list = nav.querySelector('.nav-list');
-    if (list) {
-      list.addEventListener('scroll', () => {
-        if (drop.classList.contains('is-open')) positionDrop();
-      }, { passive: true });
-    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.nav-drop')) closeDrop();
+  });
+  window.addEventListener('resize', () => closeDrop());
+  const list = nav.querySelector('.nav-list');
+  if (list) {
+    list.addEventListener('scroll', () => {
+      document.querySelectorAll('.nav-drop.is-open').forEach((drop) => positionDrop(drop));
+    }, { passive: true });
   }
 
   document.addEventListener('keydown', (e) => {

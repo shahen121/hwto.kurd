@@ -104,17 +104,20 @@ export async function mount(params, view, { signal }) {
   const subtitle = typeof cfg.subtitle === 'function' ? cfg.subtitle(params) : cfg.subtitle;
 
   // State: buffered rows (all) + how many are on screen (shown).
+  const isCategory = section === 'category';
+  // Category screens open newest-first («أحدث … يليه الأقدم»); everywhere
+  // else keeps the upstream order behind the «الافتراضي» button.
+  const initialSort = isCategory ? 'date' : 'default';
+
   const state = {
     all: [],
     shown: 0,
     page: 1,
     totalPages: 1,
     loading: false,
-    sort: 'default',
+    sort: initialSort,
     sections: []
   };
-
-  const isCategory = section === 'category';
 
   // Category screens open with highlight rows (أحدث الإصدارات / الأعلى تقييماً
   // / …) and keep the full sortable grid underneath them.
@@ -123,16 +126,19 @@ export async function mount(params, view, { signal }) {
        ${ui.sectionHeader('كل العناصر')}`
     : '';
 
+  const sortBtn = (mode, label) =>
+    `<button class="btn-sort${state.sort === mode ? ' is-active' : ''}" type="button" data-sort="${mode}">${label}</button>`;
+
   view.innerHTML = `
     <div class="container page">
       ${ui.pageHeader(title, { subtitle, meta: '<span id="list-meta"></span>' })}
       ${highlightsHtml}
       <div class="list-sort-bar">
         <span class="sort-label">ترتيب حسب:</span>
-        <button class="btn-sort is-active" type="button" data-sort="default">الافتراضي</button>
-        <button class="btn-sort" type="button" data-sort="rating">★ الأعلى تقييماً</button>
-        <button class="btn-sort" type="button" data-sort="date">📅 الأحدث</button>
-        <button class="btn-sort" type="button" data-sort="title">🔤 أبجدياً</button>
+        ${sortBtn('default', 'الافتراضي')}
+        ${sortBtn('rating', '★ الأعلى تقييماً')}
+        ${sortBtn('date', '📅 الأحدث')}
+        ${sortBtn('title', '🔤 أبجدياً')}
       </div>
       <div id="list-body">${ui.skeletonGrid(section === 'site' ? 8 : isCategory ? 12 : max)}</div>
     </div>`;
@@ -185,7 +191,10 @@ export async function mount(params, view, { signal }) {
     // More rows are either buffered below the fold or waiting on the next page.
     const canLoadMore = !state.loading && (state.shown < state.all.length || state.page < state.totalPages);
     body.innerHTML =
-      ui.movieGrid(visible, { showRank: (section === 'trending' || section === 'toprated') && state.sort === 'default' }) +
+      ui.movieGrid(visible, {
+        showRank: (section === 'trending' || section === 'toprated') && state.sort === 'default',
+        numbered: isCategory
+      }) +
       ui.loadMoreButton({ id: 'list-more', label: 'عرض المزيد', hidden: !canLoadMore });
     ui.hydrate(body);
     if (meta) {

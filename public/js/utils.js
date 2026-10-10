@@ -93,6 +93,17 @@ export function yearOf(value) {
   return m ? m[1] : '';
 }
 
+/** Released within the last 35 hours — drives the red «جديد» card badge. */
+const NEW_WINDOW_MS = 35 * 60 * 60 * 1000;
+
+export function isNewRelease(value) {
+  if (!value) return false;
+  const t = Date.parse(value);
+  if (!Number.isFinite(t)) return false;
+  const age = Date.now() - t;
+  return age >= 0 && age <= NEW_WINDOW_MS;
+}
+
 export function formatRating(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return '—';

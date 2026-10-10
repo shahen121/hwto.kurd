@@ -137,6 +137,22 @@
   box-shadow: 0 6px 16px rgba(255, 77, 109, 0.35);
 }
 
+.card-new {
+  position: absolute;
+  inset-inline-end: 9px;
+  bottom: 9px;
+  z-index: 2;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, #ff2d46, #d40016);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 6px 16px rgba(229, 9, 20, 0.45);
+}
+
 .card-play {
   position: absolute;
   inset: 0;
