@@ -7,6 +7,8 @@
  *   #/upcoming             -> { name: 'list', section: 'upcoming', type: 'movie' }
  *   #/toprated/tv          -> { name: 'list', section: 'toprated', type: 'tv' }
  *   #/site[/movie|/tv]     -> { name: 'list', section: 'site', type: ''|movie|tv }
+ *   #/category/anime       -> { name: 'list', section: 'category', category: 'anime' }
+ *                             slugs: anime | series | movies | asian | turkish
  *   #/search?q=batman      -> { name: 'search', q: 'batman', type: ''|movie|tv }
  *   #/movie/278            -> { name: 'details', type: 'movie', id: 278 }
  *   #/tv/1396              -> { name: 'details', type: 'tv', id: 1396 }
@@ -17,12 +19,18 @@
  * this id directly: https://vidcore.io/movie/{id} or /tv/{id}/{season}/{ep}.
  */
 
+import { CATEGORY_SLUGS } from './config.js';
+
 const ROUTES = [
   { re: /^\/?$/, make: () => ({ name: 'home' }) },
   { re: /^\/trending\/(movie|tv)\/?$/, make: (m) => ({ name: 'list', section: 'trending', type: m[1] }) },
   { re: /^\/upcoming\/?$/, make: () => ({ name: 'list', section: 'upcoming', type: 'movie' }) },
   { re: /^\/toprated\/(movie|tv)\/?$/, make: (m) => ({ name: 'list', section: 'toprated', type: m[1] }) },
   { re: /^\/site(?:\/(movie|tv))?\/?$/, make: (m) => ({ name: 'list', section: 'site', type: m[1] || '' }) },
+  {
+    re: /^\/category\/(anime|series|movies|asian|turkish)\/?$/,
+    make: (m) => ({ name: 'list', section: 'category', category: m[1], type: '' })
+  },
   { re: /^\/search\/?$/, make: () => ({ name: 'search', q: '', type: '', page: 1 }) },
   { re: /^\/watch\/tv\/(\d+)\/(\d+)\/(\d+)\/?$/, make: (m) => ({ name: 'watch', type: 'tv', id: Number(m[1]), season: m[2], episode: m[3] }) },
   { re: /^\/watch\/(movie|tv)\/(\d+)\/?$/, make: (m) => ({ name: 'watch', type: m[1], id: Number(m[2]) }) },
@@ -62,6 +70,9 @@ export function buildHash(params) {
       if (params.section === 'trending') return `#/trending/${params.type || 'movie'}`;
       if (params.section === 'toprated') return `#/toprated/${params.type || 'movie'}`;
       if (params.section === 'site') return params.type ? `#/site/${params.type}` : '#/site';
+      if (params.section === 'category') {
+        return `#/category/${CATEGORY_SLUGS.includes(params.category) ? params.category : CATEGORY_SLUGS[0]}`;
+      }
       return '#/';
     }
     case 'search': {

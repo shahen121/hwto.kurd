@@ -156,6 +156,7 @@ const pageErrors = [];
 const failedResponses = [];
 const foreignErrors = [];
 const foreignFailures = [];
+const navNoise = [];
 let injecting = false;
 
 /** A foreign frame is present when the watch screen's player is mounted. */
@@ -165,8 +166,16 @@ const hasForeignFrame = () =>
 page.on('console', (m) => {
   if (m.type() !== 'error' || injecting) return;
   const url = (m.location() && m.location().url) || '';
+  const text = m.text();
+  // This gate navigates away while images/XHR are still in flight; Chromium
+  // logs the suspended request as an error. That is test choreography — the
+  // app's own breakage is covered by probe() (incl. broken images) below.
+  if (text.includes('ERR_NETWORK_IO_SUSPENDED')) {
+    navNoise.push(text);
+    return;
+  }
   if (url && !url.startsWith(BASE)) foreignErrors.push(`console ${url}`);
-  else consoleErrors.push(m.text());
+  else consoleErrors.push(url ? `${text} @ ${url}` : text);
 });
 page.on('pageerror', (e) => {
   // Playwright does not say which frame threw; an embedded foreign document
@@ -185,11 +194,12 @@ page.on('response', (r) => {
 
 const settle = async (hash) => {
   await page.goto(BASE + '/' + hash, { waitUntil: 'domcontentloaded' });
+  // Real content only: skeleton placeholders are `.card.skeleton`, and home's
+  // skeleton alone is 18 of them — counting those made the gate race the API.
   await page.waitForFunction(() => {
     const b = document.querySelector('#app-view');
     if (!b) return false;
-    return b.querySelector('.card, .state-error, .state-empty') !== null
-      || (b.innerText || '').trim().length > 40;
+    return b.querySelector('.card:not(.skeleton), .state-error, .state-empty') !== null;
   }, null, { timeout: 45000 }).catch(() => {});
   await page.waitForTimeout(2500);
 };
@@ -198,7 +208,7 @@ const probe = () => page.evaluate(() => {
   const imgs = [...document.images].filter((i) => i.getAttribute('src') || i.getAttribute('data-src'));
   const broken = imgs.filter((i) => i.complete && i.getAttribute('src') && i.naturalWidth === 0);
   return {
-    cards: document.querySelectorAll('.card').length,
+    cards: document.querySelectorAll('.card:not(.skeleton)').length,
     error: document.querySelector('.state-error')?.innerText.replace(/\s+/g, ' ').slice(0, 90) || null,
     empty: document.querySelector('.state-empty')?.innerText.replace(/\s+/g, ' ').slice(0, 60) || null,
     broken: broken.length + document.querySelectorAll('[data-lazy="broken"]').length,
@@ -219,6 +229,12 @@ const ROUTES = [
   ['site', '#/site', { cards: 5 }],
   ['site/movie', '#/site/movie', { cards: 5 }],
   ['site/tv', '#/site/tv', { cards: 5 }],
+  ['category/anime', '#/category/anime', { cards: 5 }],
+  ['category/series', '#/category/series', { cards: 5 }],
+  ['category/movies', '#/category/movies', { cards: 5 }],
+  ['category/asian', '#/category/asian', { cards: 5 }],
+  ['category/turkish', '#/category/turkish', { cards: 5 }],
+  ['category/unknown', '#/category/nope', { empty: true }],
   ['search/batman', '#/search?q=batman', { cards: 5 }],
   ['search/empty', '#/search?q=', { empty: true }],
   ['search/no-hit', '#/search?q=zzzzqqqxyz', { empty: true }],
@@ -237,6 +253,59 @@ for (const [name, hash, want] of ROUTES) {
   const noOverflow = p.docW <= p.winW + 1;
   ok(name, wantCards && wantError && wantEmpty && noOverflow && p.broken === 0,
     `cards=${p.cards} error=${JSON.stringify(p.error)} empty=${JSON.stringify(p.empty)} broken=${p.broken} doc=${p.docW}/${p.winW}`);
+}
+
+/* ---------- 1b. «التصنيفات» dropdown ----------------------------------- */
+
+await settle('#/');
+await page.click('.nav-drop-toggle');
+await page.waitForTimeout(500);
+const dropInfo = await page.evaluate(() => {
+  const drop = document.querySelector('.nav-drop');
+  const panel = document.querySelector('.nav-drop-panel');
+  const toggle = document.querySelector('.nav-drop-toggle');
+  if (!drop || !panel || !toggle) return { ok: false, why: 'missing dropdown markup' };
+  const r = panel.getBoundingClientRect();
+  const cx = Math.max(4, Math.min(window.innerWidth - 4, r.left + r.width / 2));
+  const probe = (cy) => {
+    const el = document.elementFromPoint(cx, Math.max(4, Math.min(window.innerHeight - 4, cy)));
+    return Boolean(el) && panel.contains(el);
+  };
+  return {
+    open: drop.classList.contains('is-open'),
+    expanded: toggle.getAttribute('aria-expanded'),
+    // Hit-testing the panel's lower edge proves it is painted below the nav
+    // row: if `.nav-list` clipped it, the point would return the hero instead.
+    hitsTop: probe(r.top + 12),
+    hitsBottom: probe(r.bottom - 10),
+    inViewport: r.left >= 0 && r.right <= window.innerWidth + 1 && r.top >= 0 && r.bottom <= window.innerHeight + 1,
+    rect: `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`
+  };
+});
+ok('dropdown opens below the header', dropInfo.open === true && dropInfo.expanded === 'true', JSON.stringify(dropInfo));
+ok('dropdown panel is visible and unclipped', dropInfo.hitsTop === true && dropInfo.hitsBottom === true && dropInfo.inViewport === true, JSON.stringify(dropInfo));
+
+await page.click('.nav-drop-panel a[href="#/category/anime"]');
+await page.waitForFunction(() => location.hash === '#/category/anime', null, { timeout: 15000 }).catch(() => {});
+await page.waitForTimeout(1200);
+const dropRoute = await probe();
+ok('dropdown link opens the anime screen', dropRoute.cards >= 5 && !dropRoute.error, `cards=${dropRoute.cards} error=${JSON.stringify(dropRoute.error)}`);
+const dropClosed = await page.evaluate(() => !document.querySelector('.nav-drop')?.classList.contains('is-open'));
+ok('dropdown closes after navigating', dropClosed === true, `open=${!dropClosed}`);
+
+/* ---------- 1c. category screens are organised into rows ---------------- */
+
+for (const [slug, minRows] of [['anime', 3], ['asian', 3], ['turkish', 2], ['movies', 3], ['series', 3]]) {
+  await settle(`#/category/${slug}`);
+  const rows = await page.evaluate(() =>
+    [...document.querySelectorAll('#list-highlights .section')].map((s) => ({
+      title: (s.querySelector('.section-title') || {}).textContent || '',
+      cards: s.querySelectorAll('.card:not(.skeleton)').length
+    }))
+  );
+  const grid = await page.evaluate(() => document.querySelectorAll('#list-body .card:not(.skeleton)').length);
+  const okRows = rows.length >= minRows && rows.every((r) => r.cards >= 3) && grid >= 5;
+  ok(`category/${slug}: highlight rows + full grid`, okRows, `${rows.length} rows ${JSON.stringify(rows)} grid=${grid}`);
 }
 
 /* ---------- 2. injected failure + working retry ------------------------ */
@@ -261,7 +330,7 @@ ok('error state has a retry control', hasRetry > 0);
 await page.unroute('**/TMDBCache.aspx**');
 if (hasRetry) {
   await page.locator('.state-error .btn').first().click();
-  await page.waitForFunction(() => document.querySelectorAll('.card').length > 0, null, { timeout: 60000 }).catch(() => {});
+  await page.waitForFunction(() => document.querySelectorAll('.card:not(.skeleton)').length > 0, null, { timeout: 60000 }).catch(() => {});
   await page.waitForTimeout(1500);
   p = await probe();
   ok('retry recovers', p.cards > 0, `cards=${p.cards}`);
@@ -291,7 +360,8 @@ ok('slash focuses search input', focused === 'global-search', `focused=${focused
 for (let i = 0; i < 8; i++) {
   await page.goto(BASE + (i % 2 ? '#/toprated/tv' : '#/site/movie'), { waitUntil: 'commit' });
 }
-await page.waitForTimeout(4000);
+await page.waitForFunction(() => document.querySelector('.card:not(.skeleton)') !== null, null, { timeout: 45000 }).catch(() => {});
+await page.waitForTimeout(1500);
 p = await probe();
 ok('rapid navigation ends in a stable view', p.cards > 0 && !p.error, `cards=${p.cards} error=${JSON.stringify(p.error)}`);
 
@@ -312,7 +382,7 @@ for (const [label, width, height, hashes] of [
     await pg.goto(BASE + '/' + hash, { waitUntil: 'domcontentloaded' });
     await pg.waitForFunction(() => {
       const b = document.querySelector('#app-view');
-      return Boolean(b) && (b.querySelector('.card, .state-error, .state-empty') !== null || (b.innerText || '').length > 40);
+      return Boolean(b) && (b.querySelector('.card:not(.skeleton), .state-error, .state-empty') !== null || (b.innerText || '').length > 40);
     }, null, { timeout: 45000 }).catch(() => {});
     await pg.waitForTimeout(2000);
     const m = await pg.evaluate(() => ({ doc: document.documentElement.scrollWidth, win: window.innerWidth }));
@@ -328,6 +398,23 @@ for (const [label, width, height, hashes] of [
     await pg.waitForTimeout(400);
     const opened = await pg.evaluate(() => document.getElementById('site-header')?.classList.contains('is-open'));
     ok('mobile menu opens', opened === true, `open=${opened}`);
+
+    await pg.click('.nav-drop-toggle');
+    await pg.waitForTimeout(400);
+    const acc = await pg.evaluate(() => {
+      const drop = document.querySelector('.nav-drop');
+      const panel = document.querySelector('.nav-drop-panel');
+      if (!drop || !panel) return { open: false, why: 'missing dropdown markup' };
+      const cs = getComputedStyle(panel);
+      const r = panel.getBoundingClientRect();
+      return {
+        open: drop.classList.contains('is-open'),
+        display: cs.display,
+        visible: cs.display !== 'none' && r.height > 10 && r.width > 10,
+        links: panel.querySelectorAll('a').length
+      };
+    });
+    ok('mobile: «التصنيفات» accordion expands', acc.open === true && acc.visible === true && acc.links === 5, JSON.stringify(acc));
   }
   await c.close();
 }
@@ -341,12 +428,12 @@ await page.waitForTimeout(1800);
 let hist = await page.evaluate(() => ({
   hash: location.hash,
   hero: Boolean(document.querySelector('.hero')),
-  cards: document.querySelectorAll('.card').length
+  cards: document.querySelectorAll('.card:not(.skeleton)').length
 }));
 ok('back returns to the previous route', hist.hash === '#/' && (hist.hero || hist.cards > 40), JSON.stringify(hist));
 await page.goForward();
 await page.waitForTimeout(1800);
-hist = await page.evaluate(() => ({ hash: location.hash, cards: document.querySelectorAll('.card').length }));
+hist = await page.evaluate(() => ({ hash: location.hash, cards: document.querySelectorAll('.card:not(.skeleton)').length }));
 ok('forward returns to the list route', hist.hash === '#/toprated/tv' && hist.cards > 0, JSON.stringify(hist));
 
 /* ---------- 8. load-more paginates without duplicates ------------------ */
@@ -614,7 +701,7 @@ await perfCtx.close();
 ok('no page errors', pageErrors.length === 0, JSON.stringify(pageErrors.slice(0, 3)));
 ok('no console errors', consoleErrors.length === 0, JSON.stringify(consoleErrors.slice(0, 3)));
 ok('no failed HTTP responses', failedResponses.length === 0, JSON.stringify(failedResponses.slice(0, 5)));
-console.log(`      (ignored: ${foreignErrors.length} errors and ${foreignFailures.length} failed responses from the embedded player)`);
+console.log(`      (ignored: ${foreignErrors.length} errors and ${foreignFailures.length} failed responses from the embedded player, ${navNoise.length} navigation-suspended requests)`);
 
 await browser.close();
 console.log(fails ? `\n${fails} FAILING` : '\nall passed');

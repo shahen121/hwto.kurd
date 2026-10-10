@@ -83,9 +83,86 @@ export const LIMITS = {
   upcoming: { initial: 20, max: 40 },
   topRatedMovie: { initial: 20, max: 20 },
   topRatedTv: { initial: 9, max: 9 },
-  search: { initial: 40, max: 40 },
-  myContent: { initial: 20, max: 100 }
+  myContent: { initial: 20, max: 100 },
+  category: { initial: 24, max: 240 }
 };
+
+/**
+ * The five «التصنيفات» entries — one screen each, reachable from the nav
+ * dropdown at `#/category/{slug}`. Slugs are the stable part of the URL and
+ * are what router.js, the nav and the list page agree on.
+ *
+ *   anime / asian / turkish — served from categories_data.js (the upstream
+ *                   cache has no genre or country filter, see that file's
+ *                   header).
+ *   series / movies — assembled live from the existing list endpoints.
+ *
+ * `rows` are the highlight rows rendered ABOVE the full grid on the screen
+ * (pages/list.js): `key` matches the section keys api.getCategory() returns,
+ * `label` is the row heading. Rows with fewer than 3 items are skipped.
+ */
+export const CATEGORIES = {
+  anime: {
+    slug: 'anime',
+    label: 'أنمي',
+    title: 'أنمي',
+    subtitle: 'أفلام ومسلسلات أنمي مختارة بعناية — من ناروتو وآتاك أون تايتان حتى استوديو غيبلي',
+    rows: [
+      { key: 'new', label: 'أحدث إصدارات الأنمي' },
+      { key: 'top', label: 'الأعلى تقييماً' },
+      { key: 'tv', label: 'مسلسلات أنمي' },
+      { key: 'movie', label: 'أفلام أنمي' }
+    ]
+  },
+  series: {
+    slug: 'series',
+    label: 'مسلسلات',
+    title: 'مسلسلات',
+    subtitle: 'كل مسلسلات الموقع: محتوى المكتبة والأعلى تقييماً والرائجة الآن في شاشة واحدة',
+    rows: [
+      { key: 'library', label: 'آخر إضافات مكتبة الموقع' },
+      { key: 'top', label: 'الأعلى تقييماً' },
+      { key: 'trending', label: 'رائجة الآن' }
+    ]
+  },
+  movies: {
+    slug: 'movies',
+    label: 'أفلام',
+    title: 'أفلام',
+    subtitle: 'كل أفلام الموقع: محتوى المكتبة والأعلى تقييماً وما هو قادم إلى الصالات في شاشة واحدة',
+    rows: [
+      { key: 'library', label: 'آخر إضافات مكتبة الموقع' },
+      { key: 'top', label: 'الأعلى تقييماً' },
+      { key: 'upcoming', label: 'قادمة إلى الصالات' }
+    ]
+  },
+  asian: {
+    slug: 'asian',
+    label: 'أفلام ومسلسلات آسيوية',
+    title: 'آسيوية',
+    subtitle: 'أفلام ومسلسلات شرق وجنوب آسيا: كوريا واليابان والصين والهند وتايلاند',
+    rows: [
+      { key: 'new', label: 'أحدث الإصدارات الآسيوية' },
+      { key: 'top', label: 'الأعلى تقييماً' },
+      { key: 'tv', label: 'مسلسلات آسيوية' },
+      { key: 'movie', label: 'أفلام آسيوية' }
+    ]
+  },
+  turkish: {
+    slug: 'turkish',
+    label: 'تركية',
+    title: 'تركية',
+    subtitle: 'أفلام ومسلسلات تركية: دراما تاريخية وأكشن وكوميديا',
+    rows: [
+      { key: 'new', label: 'أحدث الإصدارات التركية' },
+      { key: 'top', label: 'الأعلى تقييماً' },
+      { key: 'tv', label: 'مسلسلات تركية' },
+      { key: 'movie', label: 'أفلام تركية' }
+    ]
+  }
+};
+
+export const CATEGORY_SLUGS = Object.keys(CATEGORIES);
 
 /**
  * Real seasons ("الأجزاء") and exact per-season episode counts for popular & trending TV series.

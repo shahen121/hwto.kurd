@@ -34,9 +34,15 @@ function walk(dir) {
 
 const allFiles = walk(ROOT).filter((f) => !f.includes(`${path.sep}node_modules${path.sep}`));
 const jsFiles = allFiles.filter((f) => f.endsWith('.js') || f.endsWith('.mjs'));
-// This file is a Node-side test harness: it may call fetch() and it must be
-// able to name the forbidden key in order to detect it.
-const frontendFiles = (list) => list.filter((f) => !f.startsWith(path.join(ROOT, 'scripts')));
+// Server-side code lives in scripts/, api/ and server.js: it runs in Node and
+// may legitimately call fetch() (proxying, scraping, test harness). The layer
+// rule and the secret scan apply to the browser app plus human-facing docs.
+const BACKEND_PREFIXES = [
+  path.join(ROOT, 'scripts') + path.sep,
+  path.join(ROOT, 'api') + path.sep,
+  path.join(ROOT, 'server.js')
+];
+const frontendFiles = (list) => list.filter((f) => !BACKEND_PREFIXES.some((b) => f === b || f.startsWith(b)));
 
 /* 1. Syntax ------------------------------------------------------------- */
 
@@ -117,6 +123,7 @@ const expected = [
   'package.json',
   'scripts/check.js',
   'scripts/qa.mjs',
+  'scripts/qa-subtitles.mjs',
   'public/index.html',
   'public/favicon.svg',
   'public/logo.svg',
@@ -126,6 +133,7 @@ const expected = [
   'public/js/config.js',
   'public/js/tv_catalog.js',
   'public/js/catalog_data.js',
+  'public/js/categories_data.js',
   'public/js/cache.js',
   'public/js/api.js',
   'public/js/store.js',
@@ -133,6 +141,7 @@ const expected = [
   'public/js/router.js',
   'public/js/ui.js',
   'public/js/app.js',
+  'public/js/subtitles.js',
   'public/js/pages/home.js',
   'public/js/pages/list.js',
   'public/js/pages/search.js',
@@ -170,6 +179,81 @@ for (const action of actions) {
 }
 if (actions.size) ok(`all ${actions.size} literal actions documented: ${[...actions].join(', ')}`);
 
+/* 8. Subtitle corpus: index.json must match the files, and the parser works
+     on a real VTT file (the watch screen renders these cues). -------------- */
+
+const subDir = path.join(PUBLIC, 'subtitles');
+const subIndexPath = path.join(subDir, 'index.json');
+
+if (!fs.existsSync(subIndexPath)) {
+  fail('MISSING public/subtitles/index.json');
+} else {
+  let subIndex = null;
+  try {
+    subIndex = JSON.parse(fs.readFileSync(subIndexPath, 'utf8'));
+  } catch (err) {
+    fail(`subtitles/index.json is not valid JSON: ${err.message}`);
+  }
+
+  if (subIndex && typeof subIndex === 'object') {
+    // English files were removed on purpose — only Kurdish and Arabic stay.
+    const ALLOWED_LANGS = new Set(['ku', 'ar']);
+    let indexed = 0;
+    let missing = 0;
+    let removedLangs = 0;
+    for (const [key, langs] of Object.entries(subIndex)) {
+      if (!Array.isArray(langs)) {
+        fail(`subtitle entry ${key} is not an array of languages`);
+        continue;
+      }
+      for (const lang of langs) {
+        if (!ALLOWED_LANGS.has(lang)) {
+          removedLangs += 1;
+          if (removedLangs <= 5) fail(`subtitle entry ${key} still lists removed language "${lang}"`);
+        }
+        indexed += 1;
+        if (!fs.existsSync(path.join(subDir, `${key}/${lang}.vtt`))) {
+          missing += 1;
+          if (missing <= 5) fail(`subtitle file missing: public/subtitles/${key}/${lang}.vtt`);
+        }
+      }
+    }
+    if (missing > 5) fail(`…and ${missing - 5} more missing subtitle files`);
+    if (!missing) ok(`all ${indexed} indexed subtitle files exist (${Object.keys(subIndex).length} titles)`);
+    if (!removedLangs) ok('subtitle index carries only ku/ar (english removed)');
+
+    const sample = path.join(subDir, 'movie/12500/ku.vtt');
+    if (fs.existsSync(sample)) {
+      try {
+        const subs = await import(pathToFileURL(path.join(PUBLIC, 'js', 'subtitles.js')).href);
+        const cues = subs.parseVtt(fs.readFileSync(sample, 'utf8'));
+        if (cues.length < 10) {
+          fail(`subtitle parser produced only ${cues.length} cues from movie/12500/ku.vtt`);
+        } else {
+          const probe = cues[5];
+          const hit = subs.cueAt(cues, (probe.start + probe.end) / 2);
+          if (hit !== probe.text) fail('cueAt() did not return the covering cue');
+          else ok(`subtitle parser: ${cues.length} cues parsed, cueAt() verified`);
+        }
+
+        // 17% of the corpus carries ASS/SRT markup — it must never reach the screen.
+        const styled = path.join(subDir, 'movie/157354/ar.vtt');
+        if (fs.existsSync(styled)) {
+          const styledCues = subs.parseVtt(fs.readFileSync(styled, 'utf8'));
+          const markup = styledCues.find((cue) => /[<{]/.test(cue.text));
+          if (!styledCues.length) fail('subtitle parser produced no cues from the markup sample');
+          else if (markup) fail(`subtitle parser left markup behind: ${JSON.stringify(markup.text.slice(0, 70))}`);
+          else ok('subtitle parser strips ASS/font markup');
+        }
+      } catch (err) {
+        fail(`subtitle parser check failed: ${err.message}`);
+      }
+    } else {
+      fail('subtitle sample file public/subtitles/movie/12500/ku.vtt missing');
+    }
+  }
+}
+
 /* ------------------------------------------------------------------------ */
 
 function report() {
@@ -184,7 +268,7 @@ function report() {
 
 report();
 
-/* 8. Optional smoke test -------------------------------------------------- */
+/* 9. Optional smoke test -------------------------------------------------- */
 
 if (process.argv.includes('--smoke') && !problems.length) {
   const PORT = Number(process.env.SMOKE_PORT) || 4177;

@@ -14,6 +14,8 @@
 const BASE = 'https://api.themoviedb.org/3';
 const LANGUAGE = process.env.TMDB_LANGUAGE || 'en-US';
 const TIMEOUT_MS = 15000;
+const SCRAPE_TIMEOUT_MS = 8000;
+const SERVERS_BUDGET_MS = 20000;
 const PAGE_SIZE = 20;
 const MAX_PAGES = 5;
 
@@ -153,6 +155,9 @@ async function fetchPageText(url, options) {
     const res = await fetch(url, {
       redirect: 'follow',
       ...options,
+      // Per-page deadline (or the caller's total budget) — a slow upstream
+      // must never hold the serverless request open.
+      signal: (options && options.signal) || AbortSignal.timeout(SCRAPE_TIMEOUT_MS),
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; hwto.kurd/1.0)',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -190,14 +195,14 @@ function extractIframeSrc(html) {
   return m ? m[1] : null;
 }
 
-async function findMovieIdByTitle(title, tmdbid) {
+async function findMovieIdByTitle(title, tmdbid, signal) {
   if (!title.trim() && !tmdbid) return null;
   if (tmdbid) {
-    const located = await findMovieIdByTmdbId(String(tmdbid), title);
+    const located = await findMovieIdByTmdbId(String(tmdbid), title, signal);
     if (located) return located;
   }
   if (!title.trim()) return null;
-  const r = await fetchPageText(`https://kurdcinama.com/Search.aspx?q=${encodeURIComponent(title.trim())}`);
+  const r = await fetchPageText(`https://kurdcinama.com/Search.aspx?q=${encodeURIComponent(title.trim())}`, { signal });
   if (!r || !r.ok || !r.text) return null;
   const norm = (s) => String(s || '').toLowerCase().replace(/\(\d{4}\)/g, '').replace(/\s+/g, ' ').trim();
   const target = norm(title).slice(0, 40);
@@ -212,13 +217,13 @@ async function findMovieIdByTitle(title, tmdbid) {
   return null;
 }
 
-async function findMovieIdByTmdbId(tmdbId, searchTitle) {
+async function findMovieIdByTmdbId(tmdbId, searchTitle, signal) {
   if (!tmdbId) return null;
   if (!searchTitle.trim()) searchTitle = '';
   const searchUrl = searchTitle.trim()
     ? `https://kurdcinama.com/Search.aspx?q=${encodeURIComponent(searchTitle.trim())}`
     : `https://kurdcinama.com/Search.aspx`;
-  const r = await fetchPageText(searchUrl);
+  const r = await fetchPageText(searchUrl, { signal });
   if (!r || !r.ok || !r.text) return null;
   const ids = [];
   let m;
@@ -235,7 +240,7 @@ async function findMovieIdByTmdbId(tmdbId, searchTitle) {
   }
   // Fetch each candidate details page and compare its embedded tmdbId.
   for (const cand of ids.slice(0, 12)) {
-    const detail = await fetchPageText(`https://kurdcinama.com/moves-details.aspx?movieid=${cand}`);
+    const detail = await fetchPageText(`https://kurdcinama.com/moves-details.aspx?movieid=${cand}`, { signal });
     if (!detail || !detail.ok || !detail.text) continue;
     const hidden = detail.text.match(/<input[^>]*type=["']hidden["'][^>]*id=["']tmdbId["'][^>]*value=["'](\d+)["']/i);
     if (hidden && hidden[1] === String(tmdbId)) return cand;
@@ -243,9 +248,9 @@ async function findMovieIdByTmdbId(tmdbId, searchTitle) {
   return null;
 }
 
-async function scrapeKurdishServers(movieid) {
+async function scrapeKurdishServers(movieid, signal) {
   const pageUrl = `https://kurdcinama.com/online.aspx?movieid=${encodeURIComponent(movieid)}`;
-  const index = await fetchPageText(pageUrl);
+  const index = await fetchPageText(pageUrl, { signal });
   if (!index || !index.ok || !index.text) return { error: 'تعذّر جلب صفحة المشغل' };
 
   const options = extractServerOptions(index.text);
@@ -253,7 +258,7 @@ async function scrapeKurdishServers(movieid) {
 
   const servers = [];
   for (const opt of options) {
-    const refreshed = await fetchPageText(pageUrl);
+    const refreshed = await fetchPageText(pageUrl, { signal });
     const hidden = refreshed && refreshed.text ? extractHiddenInputs(refreshed.text) : extractHiddenInputs(index.text);
     const body = new URLSearchParams();
     for (const [k, v] of Object.entries(hidden)) body.set(k, v);
@@ -266,7 +271,8 @@ async function scrapeKurdishServers(movieid) {
     const post = await fetchPageText(pageUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': pageUrl },
-      body: body.toString()
+      body: body.toString(),
+      signal
     });
     const src = post && post.ok ? extractIframeSrc(post.text) : null;
     if (src) servers.push({ key: opt.label.replace(/^\d+[-.)\s]*/, '').trim(), label: opt.label, url: src });
@@ -470,18 +476,19 @@ export default async function handler(req, res) {
       case 'movie': payload = await details(q, 'movie'); break;
       case 'tv': payload = await details(q, 'tv'); break;
       case 'servers': {
+        const signal = AbortSignal.timeout(SERVERS_BUDGET_MS);
         const movieid = String(first(q.movieid) || '').trim();
-        if (movieid) { payload = await scrapeKurdishServers(movieid); break; }
+        if (movieid) { payload = await scrapeKurdishServers(movieid, signal); break; }
         const title = String(first(q.title) || '').trim();
         const tmdbId = String(first(q.tmdbid) || '').trim();
         if (tmdbId) {
-          const foundId = await findMovieIdByTitle(title, tmdbId);
-          payload = await scrapeKurdishServers(foundId || '');
+          const foundId = await findMovieIdByTitle(title, tmdbId, signal);
+          payload = await scrapeKurdishServers(foundId || '', signal);
           break;
         }
         if (title) {
-          const foundId = await findMovieIdByTitle(title, '');
-          payload = await scrapeKurdishServers(foundId || '');
+          const foundId = await findMovieIdByTitle(title, '', signal);
+          payload = await scrapeKurdishServers(foundId || '', signal);
           break;
         }
         payload = { error: 'movieid, title or tmdbid is required for action=servers' };

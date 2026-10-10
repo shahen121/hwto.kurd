@@ -843,6 +843,111 @@
   display: block;
 }
 
+/* Local subtitle overlay — drawn above the cross-origin frame (the frame
+   keeps all pointer events, so playback controls stay usable). */
+.subtitle-overlay {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  padding: 0 18px;
+  pointer-events: none;
+}
+
+.subtitle-overlay[hidden] {
+  display: none;
+}
+
+.subtitle-cue {
+  max-width: min(92%, 46ch);
+  padding: 5px 13px;
+  border-radius: 9px;
+  background: rgba(6, 6, 12, 0.8);
+  color: #fff;
+  font-size: clamp(0.95rem, 2.1vw, 1.25rem);
+  line-height: 1.55;
+  text-align: center;
+  white-space: pre-line;
+  word-break: break-word;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.subtitle-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.subtitle-bar[hidden] {
+  display: none;
+}
+
+.subtitle-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.subtitle-label {
+  color: var(--text-2);
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.subtitle-bar[data-state='error'] .subtitle-label::after {
+  content: ' — تعذّر تحميل ملف الترجمة';
+  color: var(--brand);
+  font-size: 0.82em;
+  font-weight: 600;
+}
+
+.sub-lang {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-3, transparent);
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.sub-lang.is-active,
+.sub-lang:hover {
+  color: #fff;
+  border-color: var(--brand);
+  background: var(--brand);
+}
+
+.subtitle-offset {
+  min-width: 68px;
+  text-align: center;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sub-lang {
+    transition: none;
+  }
+}
+
 .watch-actions {
   display: flex;
   flex-wrap: wrap;

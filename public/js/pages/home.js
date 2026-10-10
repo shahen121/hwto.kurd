@@ -53,8 +53,11 @@ export async function mount(_params, view, { signal }) {
   const parts = [];
 
   if (heroItem) {
-    const extra = heroImage(heroItem) ? '' : 'صورة الغلاف غير متوفرة لهذا العنوان';
-    parts.push(ui.hero(heroItem, { kicker: extra || 'الأكثر رواجاً الآن' }));
+    // Missing artwork must never replace the kicker with an error message.
+    const kicker = heroImage(heroItem)
+      ? 'الأكثر رواجاً الآن'
+      : 'الأكثر رواجاً الآن — صورة الغلاف غير متوفرة';
+    parts.push(ui.hero(heroItem, { kicker }));
   }
 
   parts.push(ui.statsBar(stats));
@@ -91,16 +94,34 @@ export async function mount(_params, view, { signal }) {
   if (scrollBtn) {
     scrollBtn.addEventListener('click', () => {
       const target = document.getElementById('sections');
-      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (target) target.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
     });
   }
 
   animateCounts(view);
 }
 
+function prefersReducedMotion() {
+  return Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
 function animateCounts(root) {
   const nodes = root.querySelectorAll('[data-count]');
-  if (!nodes.length || !('IntersectionObserver' in window)) return;
+  if (!nodes.length) return;
+
+  const settle = () => {
+    nodes.forEach((n) => {
+      const target = Number(n.getAttribute('data-count'));
+      if (Number.isFinite(target)) n.textContent = String(target);
+    });
+  };
+
+  // Honour prefers-reduced-motion: show the final numbers, no animation.
+  if (prefersReducedMotion() || !('IntersectionObserver' in window)) {
+    settle();
+    return;
+  }
+
   const io = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
@@ -112,6 +133,8 @@ function animateCounts(root) {
         const started = performance.now();
         const dur = 900;
         const tick = (now) => {
+          // The view may have been replaced mid-animation — stop writing.
+          if (!el.isConnected) return;
           const t = Math.min(1, (now - started) / dur);
           const eased = 1 - Math.pow(1 - t, 3);
           el.textContent = String(Math.round(target * eased));

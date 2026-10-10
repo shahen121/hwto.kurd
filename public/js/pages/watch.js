@@ -9,8 +9,10 @@ import { navigate, previousHash, buildHash } from '../router.js';
 import { escapeHtml, attr, mediaLabel, mediaPlural } from '../utils.js';
 import { getTvSeriesStructure, PLAYER_SERVERS } from '../config.js';
 import { api } from '../api.js';
+import { attachSubtitles } from '../subtitles.js';
 
 let ctx = null;
+let subtitles = null;
 
 /** Build player embed URL using the primary VidCore server. */
 function playerUrl(params) {
@@ -61,6 +63,26 @@ export async function mount(params, view, { signal }) {
           title="مشغّل ${attr(title || 'الفيديو')}"
           allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope; clipboard-write; web-share"
           referrerpolicy="origin-when-cross-origin"></iframe>
+        <div class="subtitle-overlay" id="subtitle-overlay" hidden>
+          <span class="subtitle-cue" id="subtitle-cue"></span>
+        </div>
+      </div>
+
+      <div class="subtitle-bar" id="subtitle-bar" hidden>
+        <div class="subtitle-group">
+          <span class="subtitle-label">الترجمة:</span>
+          <div class="subtitle-langs" id="subtitle-langs" role="group" aria-label="لغة الترجمة"></div>
+        </div>
+        <div class="subtitle-group subtitle-sync">
+          <span class="subtitle-label">المزامنة:</span>
+          <button class="btn btn-ghost btn-sm" type="button" data-sub-offset="-5" title="تأخير 5 ثوانٍ">−5ث</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-sub-offset="-0.5" title="تأخير نصف ثانية">−0.5ث</button>
+          <output class="subtitle-offset" id="subtitle-offset-value">0.0 ث</output>
+          <button class="btn btn-ghost btn-sm" type="button" data-sub-offset="0.5" title="تقديم نصف ثانية">+0.5ث</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-sub-offset="5" title="تقديم 5 ثوانٍ">+5ث</button>
+          <button class="btn btn-ghost btn-sm subtitle-reset" type="button" id="subtitle-reset" title="إلغاء أي تعويض وإعادة الترجمة إلى 00:00 من هذه اللحظة">↻ إعادة ضبط</button>
+          <button class="btn btn-outline btn-sm" type="button" id="subtitle-toggle" aria-pressed="true">إخفاء الترجمة</button>
+        </div>
       </div>
 
       <div class="watch-actions">
@@ -116,6 +138,10 @@ export async function mount(params, view, { signal }) {
   wireDownloadAndCopy(view, url);
   if (media === 'tv') wireTvControls(view, params);
   wireAlternateServers(view, params, media);
+
+  // Local WebVTT overlay (movies only — the index has no TV entries).
+  if (subtitles) subtitles.destroy();
+  subtitles = attachSubtitles(view, { type: media, id: params.id, signal });
 
   updateDocTitle(title, media, currentSeason, currentEpisode);
 }
