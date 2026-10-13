@@ -77,7 +77,7 @@ const CSP = [
   "font-src 'self' https://fonts.gstatic.com",
   "frame-src 'self' https://vidcore.io https:",
   "connect-src 'self'",
-  "media-src 'self'",
+  "media-src 'self' blob:",
   "manifest-src 'self'"
 ].join('; ');
 
