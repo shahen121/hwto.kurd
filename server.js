@@ -66,18 +66,18 @@ const HSTS_HEADER = process.env.NODE_ENV === 'production'
   : {};
 
 const CSP = [
-  "default-src 'self'",
+  "default-src 'self' https: data: blob:",
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "script-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: https://image.tmdb.org https://kurdcinama.com",
-  "font-src 'self' https://fonts.gstatic.com",
-  "frame-src 'self' https://vidcore.io https:",
-  "connect-src 'self'",
-  "media-src 'self' blob:",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "frame-src 'self' https: http:",
+  "connect-src 'self' https: blob:",
+  "media-src 'self' blob: https:",
   "manifest-src 'self'"
 ].join('; ');
 
