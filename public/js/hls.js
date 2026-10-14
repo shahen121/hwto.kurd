@@ -1,18 +1,5 @@
 /**
  * hls.js loader — native-HLS playback on the watch screen.
- *
- * The library is vendored at /vendor/hls.min.js (the app's CSP is
- * `script-src 'self'`, so a CDN copy would be blocked). It is injected only
- * when native playback is actually requested, so the home screen's first-load
- * payload stays untouched.
- *
- * Every segment the manifest references lives on the embed server's CDN
- * (cross-origin). hls.js fetches those with XHR, which would trip both
- * `connect-src` and CORS. So the custom loader rewrites any cross-origin URL
- * back through the same-origin /api/fastvid proxy — one code path, no CORS,
- * no CSP violations. Trade-off: segments transit Vercel. If an embed server
- * ever serves segments with `Access-Control-Allow-Origin`, set
- * `window.HWTO_HLS_DIRECT = true` to bypass the proxy for those.
  */
 
 let libPromise = null;
@@ -48,11 +35,12 @@ const proxyUrl = (url, from) =>
   `/api/fastvid?url=${encodeURIComponent(url)}${from ? `&from=${encodeURIComponent(from)}` : ''}`;
 
 /**
- * hls.js loader that transparently proxies cross-origin requests. Same-origin
- * URLs (already-proxied manifests) pass through untouched.
+ * دمج وقراءة الـ Loader الافتراضي بأمان ودعم الحرف الصغير والكبير
  */
 function makeProxiedLoader(Hls, from) {
-  const BaseLoader = Hls.DefaultConfig.loader;
+  const BaseLoader = (Hls.defaultConfig || Hls.DefaultConfig || {}).loader;
+  if (!BaseLoader) return null;
+
   return class ProxiedLoader extends BaseLoader {
     load(context, config, callbacks) {
       const url = context.url;
@@ -68,20 +56,15 @@ function makeProxiedLoader(Hls, from) {
 }
 
 /**
- * Start HLS playback of `m3u8Url` on `video`. Returns { destroy() }.
- * The manifest is fetched through the same-origin proxy; segments follow the
- * loader rule above. Errors are recovered the way the original snippet did.
+ * تشغيل بث HLS على عنصر الفيديو مباشرة
  */
 export async function attachHls(video, m3u8Url, { signal, from } = {}) {
   const Hls = await loadHls();
   if (signal && signal.aborted) return { destroy() {} };
 
-  // The manifest itself always goes through the proxy (it carries the spoofed
-  // Referer the origin requires); the loader handles the rest.
   const source = proxyUrl(m3u8Url, from);
 
   if (!Hls.isSupported()) {
-    // Safari plays HLS natively; give it the proxied manifest directly.
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = source;
       return {
@@ -94,18 +77,25 @@ export async function attachHls(video, m3u8Url, { signal, from } = {}) {
     throw new Error('HLS is not supported in this browser');
   }
 
-  const hls = new Hls({
-    enableWorker: true,
+  const customLoader = makeProxiedLoader(Hls, from);
+
+  const hlsConfig = {
+    enableWorker: false, // إيقاف الـ Worker لمنع مشاكل الـ CSP وبرامج الحماية نهائياً
     lowLatencyMode: false,
-    maxBufferLength: 30,
-    loader: makeProxiedLoader(Hls, from)
-  });
+    maxBufferLength: 30
+  };
+
+  if (customLoader) {
+    hlsConfig.loader = customLoader;
+  }
+
+  const hls = new Hls(hlsConfig);
 
   hls.loadSource(source);
   hls.attachMedia(video);
 
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
-    /* autoplay stays off — the viewer presses play */
+    video.play().catch(() => {});
   });
 
   hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -128,9 +118,7 @@ export async function attachHls(video, m3u8Url, { signal, from } = {}) {
     destroy() {
       try {
         hls.destroy();
-      } catch {
-        /* already torn down */
-      }
+      } catch {}
     }
   };
 }

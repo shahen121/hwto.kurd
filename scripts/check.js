@@ -89,9 +89,18 @@ else ok('app.js entry present');
 
 /* 4. Single service layer: fetch() only inside api.js -------------------- */
 
+// Diagnostic / test harness files that legitimately call fetch() from the
+// browser but are NOT part of the shipped app bundle. They are excluded from
+// the layer rule only — the rest of the checks still apply to them.
+const LAYER_EXEMPT = new Set([
+  'public/player.js', // isolated player test page (#player / #src)
+  'test-gate.js'      // local 302/cookie diagnostic tool
+]);
+
 for (const file of frontendFiles(jsFiles)) {
   const rel = path.relative(ROOT, file).replaceAll('\\', '/');
   if (rel === 'public/js/api.js' || rel === 'server.js') continue;
+  if (LAYER_EXEMPT.has(rel)) continue;
   const src = fs.readFileSync(file, 'utf8');
   const hits = src.match(/(^|[^.\w])fetch\s*\(/g);
   if (hits) fail(`LAYER ${rel} calls fetch() — only public/js/api.js may do that`);

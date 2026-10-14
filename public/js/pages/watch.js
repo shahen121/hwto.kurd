@@ -44,7 +44,12 @@ async function playNative(root, m3u8Url, { from, signal } = {}) {
   if (!frame || !m3u8Url) return;
 
   destroyNativePlayer();
-  if (iframe) iframe.hidden = true;
+
+  // إخفاء الـ iframe صراحة لمنعه من تغطية الفيديو
+  if (iframe) {
+    iframe.hidden = true;
+    iframe.style.display = 'none';
+  }
 
   let video = frame.querySelector('video');
   if (!video) {
@@ -52,7 +57,11 @@ async function playNative(root, m3u8Url, { from, signal } = {}) {
     video.controls = true;
     video.playsInline = true;
     video.setAttribute('playsinline', '');
+    // تنسيق صريح لاحتلال المساحة بالكامل ومنع الشاشة السوداء
+    video.style.cssText = 'position: absolute; inset: 0; width: 100%; height: 100%; background: #000; z-index: 2; object-fit: contain;';
     frame.insertBefore(video, frame.firstChild);
+  } else {
+    video.style.display = 'block';
   }
   video.hidden = false;
 
@@ -61,7 +70,11 @@ async function playNative(root, m3u8Url, { from, signal } = {}) {
   } catch (err) {
     ui.showToast('تعذّر تشغيل البث على هذا المتصفح');
     video.hidden = true;
-    if (iframe) iframe.hidden = false;
+    video.style.display = 'none';
+    if (iframe) {
+      iframe.hidden = false;
+      iframe.style.display = '';
+    }
   }
 }
 
@@ -210,30 +223,14 @@ export async function mount(params, view, { signal }) {
 }
 
 /* ------------------------------------------------------------------ *
- * Playback servers — a simple horizontal bar above the player with one *
- * small numbered button per server. No panels, no toggles, no overlay. *
- * Titled "سيرفرات التشغيل" (Kurdish: ڕاژەکارەکانی بینین). Number 1 is  *
- * always VidCore (the primary embed), then the alternates resolved and *
- * health-checked server-side by lib/servers.mjs.                        *
+ * Playback servers                                                   *
  * ------------------------------------------------------------------ */
 
 const PRIMARY = { key: 'vidcore', label: 'VidCore', source: 'vidcore' };
-// Shahid4u: resolved server-side by /api/shahid4u-extractor, played natively
-// via hls.js (the embed page is only an input to the extractor, never shown).
-const SHAHID4U = { key: 'shahid4u', label: 'شاهد فور يو', source: 'shahid4u' };
 
 function serverUrl(entry, params, media) {
   if (entry.source === 'vidcore') return playerUrl({ ...params, type: media });
   return entry.url;
-}
-
-/** The fastvip/shahid4u embed page URL for this title (extractor input). */
-function shahid4uEmbedUrl(params, media) {
-  const id = params.id;
-  if (!id) return '';
-  // fastvip.space/e/<code> — code is title-specific; until a resolver exists we
-  // fall back to the demo code so the pipeline is exercisable end to end.
-  return `https://fastvip.space/e/${encodeURIComponent(params.shahidCode || 'uw2xnhcfket2')}`;
 }
 
 function renderServerBar(list, servers, selectedKey) {
@@ -269,20 +266,19 @@ async function refreshServerBar(root, params, media) {
   } catch {
     // Servers are optional — the primary VidCore player keeps working.
   }
-  if (root !== (ctx && ctx.view)) return; // view was replaced while we fetched
+  if (root !== (ctx && ctx.view)) return;
 
-  // Same host can carry several distinct embeds — keep every button unique.
+  // الحفاظ على فرادة مفاتيح السيرفرات وإلغاء الزر الوهمي الثابت
   const seenKeys = new Map();
   const servers = [
     PRIMARY,
-    SHAHID4U,
     ...alternates.map((s) => {
       const n = (seenKeys.get(s.key) || 0) + 1;
       seenKeys.set(s.key, n);
       return n === 1 ? s : { ...s, key: `${s.key}#${n}` };
     })
   ];
-  // Alternates are optional, but VidCore + Shahid4u always show.
+
   if (ctx) ctx.servers = servers;
   renderServerBar(list, servers, (ctx && ctx.selectedServerKey) || 'vidcore');
 }
@@ -302,12 +298,14 @@ function pickServer(root, params, media, key) {
     });
   }
 
-  if (entry.source === 'shahid4u') {
-    const embed = shahid4uEmbedUrl(params, media);
-    playViaShahid4u(root, embed, { signal: ctx && ctx.signal });
+  // إذا كان الرابط يتبع لسيرفرات Fastvid، قم باستخراج البث وتشغيله في مشغل موقعك النظيف بدون إعلانات
+  const isFastvid = entry.url && (entry.url.includes('fastved.') || entry.url.includes('fastvid.') || entry.url.includes('fastvip.'));
+  if (isFastvid) {
+    playViaShahid4u(root, entry.url, { signal: ctx && ctx.signal });
     return;
   }
 
+  // بقية السيرفرات العادية تعمل كـ iframe
   const url = serverUrl(entry, params, media);
   if (!url) return;
 
