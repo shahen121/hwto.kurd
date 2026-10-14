@@ -353,7 +353,8 @@ export default async function handler(req, res) {
           year: String(first(q.year) || '').trim(),
           type: first(q.type) === 'tv' ? 'tv' : 'movie',
           season: String(first(q.season) || '').trim(),
-          episode: String(first(q.episode) || '').trim()
+          episode: String(first(q.episode) || '').trim(),
+          lang: String(first(q.lang) || '').trim()
         };
         if (!params.movieid && !params.tmdbid && !params.title) {
           res.setHeader('Cache-Control', 'no-store');

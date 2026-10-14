@@ -135,6 +135,10 @@ export async function mount(params, view, { signal }) {
 
       <div class="server-bar" id="server-bar" hidden aria-label="سيرفرات التشغيل">
           <span class="server-bar-label">سيرفرات التشغيل</span>
+          <div class="server-lang" id="server-lang" role="group" aria-label="لغة السيرفرات">
+            <button type="button" class="server-lang-btn" data-server-lang="ar">عربي</button>
+            <button type="button" class="server-lang-btn" data-server-lang="ku">کوردی</button>
+          </div>
           <div class="server-bar-list" id="server-bar-list"></div>
         </div>
 
@@ -242,6 +246,23 @@ function renderServerBar(list, servers, selectedKey) {
     .join('');
 }
 
+/** Site UI language → server language group ('ar' Arabic, else 'ku' Kurdish). */
+function siteServerLang() {
+  return document.documentElement.lang === 'ar' ? 'ar' : 'ku';
+}
+
+function updateServerLangToggle(root) {
+  const wrap = root.querySelector('#server-lang');
+  if (!wrap) return;
+  const active = (ctx && ctx.serverLang) || siteServerLang();
+  wrap.querySelectorAll('.server-lang-btn').forEach((btn) => {
+    const on = btn.getAttribute('data-server-lang') === active;
+    btn.classList.toggle('is-active', on);
+    if (on) btn.setAttribute('aria-current', 'true');
+    else btn.removeAttribute('aria-current');
+  });
+}
+
 /** Fetch the servers, then draw the numbered buttons. */
 async function refreshServerBar(root, params, media) {
   const bar = root.querySelector('#server-bar');
@@ -249,7 +270,19 @@ async function refreshServerBar(root, params, media) {
   if (!bar || !list) return;
 
   if (ctx) ctx.selectedServerKey = ctx.selectedServerKey || 'vidcore';
+  if (ctx) ctx.serverLang = ctx.serverLang || siteServerLang();
   bar.hidden = false;
+
+  // VidCore renders instantly — the alternates stream in afterwards, so a
+  // slow upstream never blocks the primary player.
+  if (ctx) ctx.servers = [PRIMARY];
+  renderServerBar(list, [PRIMARY], 'vidcore');
+  updateServerLangToggle(root);
+
+  // One token per refresh: a language toggle issued while a fetch is in
+  // flight makes the older response a no-op.
+  if (ctx) ctx.serversToken = (ctx.serversToken || 0) + 1;
+  const token = ctx && ctx.serversToken;
 
   let alternates = [];
   try {
@@ -260,13 +293,14 @@ async function refreshServerBar(root, params, media) {
       year: params.year || '',
       season: media === 'tv' ? params.season : undefined,
       episode: media === 'tv' ? params.episode : undefined,
+      serverLang: (ctx && ctx.serverLang) || siteServerLang(),
       signal: ctx && ctx.signal
     });
     alternates = (data && data.servers) || [];
   } catch {
     // Servers are optional — the primary VidCore player keeps working.
   }
-  if (root !== (ctx && ctx.view)) return;
+  if (root !== (ctx && ctx.view) || token !== (ctx && ctx.serversToken)) return;
 
   // الحفاظ على فرادة مفاتيح السيرفرات وإلغاء الزر الوهمي الثابت
   const seenKeys = new Map();
@@ -278,6 +312,12 @@ async function refreshServerBar(root, params, media) {
       return n === 1 ? s : { ...s, key: `${s.key}#${n}` };
     })
   ];
+
+  // The selected key can vanish when the language group switches; fall back
+  // to VidCore so exactly one button is always active.
+  if (ctx && !servers.some((s) => s.key === ctx.selectedServerKey)) {
+    ctx.selectedServerKey = 'vidcore';
+  }
 
   if (ctx) ctx.servers = servers;
   renderServerBar(list, servers, (ctx && ctx.selectedServerKey) || 'vidcore');
@@ -328,6 +368,7 @@ function wireServerBar(root, params, media) {
   if (!bar || !list) return;
 
   if (ctx) ctx.selectedServerKey = 'vidcore';
+  if (ctx) ctx.serverLang = ctx.serverLang || siteServerLang();
 
   // Read ctx.params at click time — an episode switch replaces the params object.
   list.addEventListener('click', (e) => {
@@ -335,6 +376,21 @@ function wireServerBar(root, params, media) {
     if (!btn) return;
     pickServer(root, (ctx && ctx.params) || params, media, btn.getAttribute('data-server-key'));
   });
+
+  // Arabic / Kurdish server-group toggle (label keeps its position; only the
+  // numbered buttons are re-rendered).
+  const langWrap = root.querySelector('#server-lang');
+  if (langWrap) {
+    langWrap.addEventListener('click', (e) => {
+      const btn = e.target.closest('.server-lang-btn');
+      if (!btn || !ctx) return;
+      const lang = btn.getAttribute('data-server-lang');
+      if (!lang || lang === ctx.serverLang) return;
+      ctx.serverLang = lang;
+      updateServerLangToggle(root);
+      refreshServerBar(root, (ctx && ctx.params) || params, media);
+    });
+  }
 
   refreshServerBar(root, params, media);
 }

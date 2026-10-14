@@ -214,7 +214,8 @@ async function proxyApi(req, res, reqUrl, isHead = false) {
       year: (search.get('year') || '').trim(),
       type: search.get('type') === 'tv' ? 'tv' : 'movie',
       season: (search.get('season') || '').trim(),
-      episode: (search.get('episode') || '').trim()
+      episode: (search.get('episode') || '').trim(),
+      lang: (search.get('lang') || '').trim()
     };
     const hasLookup = Boolean(params.movieid || params.tmdbid || params.title);
     if (!hasLookup) {

@@ -571,11 +571,14 @@ export async function getDetail(mediaType, id, { signal } = {}) {
  * drops dead links, orders VidCore-family first. No API key involved.
  *
  * params: { title, type: 'movie'|'tv', year?, season?, episode?,
- *           tmdbid?, movieid? }
+ *           tmdbid?, movieid?, serverLang?: 'ar'|'ku' }
+ *   serverLang 'ar' → Shahid4u only, 'ku' → Beenar + kurdcinama only,
+ *   so the server skips roughly two thirds of the upstream work.
  * returns: { servers: [{ key, label, url, host, quality, source }],
  *            sources: { beenar, kurdcinama }, matched, cached } */
-export async function getServers({ movieid, title, tmdbid, type = 'movie', year, season, episode, signal } = {}) {
+export async function getServers({ movieid, title, tmdbid, type = 'movie', year, season, episode, serverLang, signal } = {}) {
   const paramsObj = { action: 'servers', type: type === 'tv' ? 'tv' : 'movie' };
+  if (serverLang === 'ar' || serverLang === 'ku') paramsObj.lang = serverLang;
   if (movieid) paramsObj.movieid = String(movieid);
   if (title) paramsObj.title = String(title);
   if (tmdbid) paramsObj.tmdbid = String(tmdbid);

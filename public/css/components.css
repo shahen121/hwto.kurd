@@ -1077,6 +1077,40 @@
   color: #fff;
 }
 
+/* Arabic / Kurdish server-group switch inside the strip. */
+.server-lang {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface-3);
+}
+
+.server-lang-btn {
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.server-lang-btn:hover,
+.server-lang-btn:focus-visible {
+  color: #fff;
+}
+
+.server-lang-btn.is-active {
+  background: var(--brand);
+  color: #fff;
+}
+
 @media (max-width: 560px) {
   .server-bar {
     gap: 8px;
@@ -1091,6 +1125,11 @@
     width: 32px;
     height: 32px;
     font-size: 0.85rem;
+  }
+
+  .server-lang-btn {
+    font-size: 0.74rem;
+    padding: 5px 8px;
   }
 }
 /* ------------------------------- list sort --------------------------- */
