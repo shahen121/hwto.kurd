@@ -390,7 +390,9 @@ export default async function handler(req, res) {
           const hit = await getSubtitleVtt({ ...params, signal: budget });
           if (!hit) {
             // A language the scrapers do not carry is a valid empty answer.
-            res.setHeader('Cache-Control', 'public, max-age=300');
+            // Must self-heal fast: the empty response of a transient upstream
+            // block must not stick in browser/edge caches.
+            res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
             res.status(200).json({ langs: [], empty: true });
             return;
           }
@@ -405,8 +407,10 @@ export default async function handler(req, res) {
           'Cache-Control',
           langs.length
             ? 's-maxage=1800, stale-while-revalidate=300'
-            : 's-maxage=300, stale-while-revalidate=300'
+            : 's-maxage=60, stale-while-revalidate=60'
         );
+        res.status(200).json({ langs });
+        return;
         res.status(200).json({ langs });
         return;
       }
