@@ -168,6 +168,12 @@ export async function mount(params, view, { signal }) {
           <button class="btn btn-ghost btn-sm subtitle-reset" type="button" id="subtitle-reset" title="إلغاء أي تعويض وإعادة الترجمة إلى 00:00 من هذه اللحظة">↻ إعادة ضبط</button>
           <button class="btn btn-outline btn-sm" type="button" id="subtitle-toggle" aria-pressed="true">إخفاء الترجمة</button>
         </div>
+        <div class="subtitle-group subtitle-size">
+          <span class="subtitle-label">الحجم:</span>
+          <button class="btn btn-ghost btn-sm" type="button" data-sub-font="-1" title="تصغير خط الترجمة" aria-label="تصغير خط الترجمة">أ−</button>
+          <output class="subtitle-offset" id="subtitle-font-value">100%</output>
+          <button class="btn btn-ghost btn-sm" type="button" data-sub-font="1" title="تكبير خط الترجمة" aria-label="تكبير خط الترجمة">أ+</button>
+        </div>
       </div>
 
       <div class="watch-actions">
@@ -219,9 +225,16 @@ export async function mount(params, view, { signal }) {
   if (media === 'tv') wireTvControls(view, params);
   wireServerBar(view, params, media);
 
-  // Local WebVTT overlay (movies only — the index has no TV entries).
+  // Automatic subtitles (local corpus + the remote resolver) — both handle
+  // movies and TV; TV keys off the current season/episode.
   if (subtitles) subtitles.destroy();
-  subtitles = attachSubtitles(view, { type: media, id: params.id, signal });
+  subtitles = attachSubtitles(view, {
+    type: media,
+    id: params.id,
+    season: currentSeason,
+    episode: currentEpisode,
+    signal
+  });
 
   updateDocTitle(title, media, currentSeason, currentEpisode);
 }

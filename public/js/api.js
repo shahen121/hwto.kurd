@@ -61,6 +61,17 @@
  *        match) or `movieid`. Empty `servers` is a valid answer — the VidCore
  *        player keeps working, so callers must treat failures as "no alternates".
  *
+ *   ?action=subtitles&id=<tmdb>&type=movie|tv[&season=][&episode=]
+ *     -> {langs:[{code,label}]}
+ *        Remote subtitles resolved server-side (Wyzie / SubDL / the vidcore
+ *        keyless proxy; see lib/subtitles.mjs). An empty list is a valid
+ *        answer, never an error — only the `id` missing is a 400.
+ *
+ *   ?action=subtitles&id=..&lang=<code>[&season=][&episode=]
+ *     -> the subtitle file itself as WebVTT (text/vtt), or
+ *        {"langs":[],"empty":true} when no source carries that language.
+ *        Served with Cache-Control: max-age=21600; safe to re-request freely.
+ *
  *   NOTE — there is NO genre / country / language action: list rows never
  *     carry `genre_ids`, so "الأفلام" / "المسلسلات" are slices of the lists
  *     above, while "أنمي" / "آسيوية" come from the frozen collections in
@@ -662,6 +673,66 @@ export async function getSubtitleText({ type = 'movie', id, lang, signal } = {})
 }
 
 /**
+ * Remote subtitle services (lib/subtitles.mjs via action=subtitles) — the
+ * automatic counterpart to the local corpus above. Language probing goes
+ * through the standard `request` cache (30 min client side); the file itself
+ * is raw WebVTT text and must not be cached aggressively (each title+lang
+ * pair is fetched at most once per session thanks to the 6h server cache).
+ *
+ * params: { type:'movie'|'tv', id, lang?, season?, episode? }
+ */
+export async function getRemoteSubtitleLangs({ type = 'movie', id, season, episode, signal } = {}) {
+  const paramsObj = { action: 'subtitles', type: type === 'tv' ? 'tv' : 'movie', id: String(id) };
+  if (type === 'tv') {
+    paramsObj.season = String(Number(season) || 1);
+    paramsObj.episode = String(Number(episode) || 1);
+  }
+  const json = await request(paramsObj, { ttl: 30 * 60 * 1000, signal });
+  const langs = Array.isArray(json && json.langs) ? json.langs : [];
+  return langs.filter((l) => l && typeof l.code === 'string' && l.code);
+}
+
+export async function getRemoteSubtitleText({ type = 'movie', id, lang, season, episode, signal } = {}) {
+  if (!id || !lang) {
+    throw new ApiError('معرّف الترجمة غير مكتمل', { code: 'bad-args', retriable: false });
+  }
+  const paramsObj = new URLSearchParams({
+    action: 'subtitles',
+    type: type === 'tv' ? 'tv' : 'movie',
+    id: String(id),
+    lang: String(lang)
+  });
+  if (type === 'tv') {
+    paramsObj.set('season', String(Number(season) || 1));
+    paramsObj.set('episode', String(Number(episode) || 1));
+  }
+  const res = await fetch(`${CONFIG.apiBase}?${paramsObj}`, {
+    signal,
+    headers: { Accept: 'text/vtt, application/json, text/plain' }
+  }).catch((err) => {
+    throw new ApiError(err && err.message ? err.message : 'تعذّر جلب ملف الترجمة', {
+      code: 'network',
+      retriable: true
+    });
+  });
+
+  if (!res.ok) {
+    throw new ApiError(`تعذّر جلب ملف الترجمة (${res.status})`, {
+      code: 'http',
+      status: res.status,
+      retriable: res.status >= 500
+    });
+  }
+
+  const text = await res.text();
+  // An empty-language answer arrives as JSON ({"langs":[],"empty":true}).
+  if (/^\s*[{[]/.test(text) && !/^WEBVTT/.test(text)) {
+    throw new ApiError('هذه الترجمة غير متوفرة', { code: 'not-found', status: 404, retriable: false });
+  }
+  return text;
+}
+
+/**
  * Extract a direct HLS stream URL from a Shahid4u / fastvip embed page.
  * Proxy hits /api/shahid4u-extractor, which uses Scrape.do to read the page
  * and regex out the tokenised master.m3u8. Returns { stream_url }.
@@ -704,5 +775,7 @@ export const api = {
   getServers,
   getSubtitleIndex,
   getSubtitleText,
+  getRemoteSubtitleLangs,
+  getRemoteSubtitleText,
   getShahid4uStream
 };

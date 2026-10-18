@@ -5,6 +5,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { collectServers } from './lib/servers.mjs';
+import { listSubtitles, getSubtitleVtt } from './lib/subtitles.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -178,7 +179,7 @@ function isAllowedApiPath(pathname, search) {
   const action = params.get('action');
   const allowedActions = new Set([
     'trending', 'upcoming', 'toprated', 'search',
-    'mycontent', 'stats', 'movie', 'tv', 'popular', 'servers'
+    'mycontent', 'stats', 'movie', 'tv', 'popular', 'servers', 'subtitles'
   ]);
   return allowedActions.has(action);
 }
@@ -235,6 +236,61 @@ async function proxyApi(req, res, reqUrl, isHead = false) {
       }, isHead);
     } catch (err) {
       sendJson(req, res, 502, { error: err.message || 'servers lookup failed' }, { 'Cache-Control': 'no-store' }, isHead);
+    }
+    return;
+  }
+
+  // Automatic subtitles by TMDB id, resolved server-side in lib/subtitles.mjs.
+  //   shape: /api/TMDBCache.aspx?action=subtitles&id=27205&type=movie
+  //          /api/TMDBCache.aspx?action=subtitles&id=1396&type=tv&season=1&episode=1&lang=ar
+  //   No lang -> the language list ({langs:[{code,label}]}); with lang -> the
+  //   file itself as WebVTT. An empty list is a valid answer, never an error.
+  if (new URLSearchParams(reqUrl.search).get('action') === 'subtitles') {
+    const search = new URLSearchParams(reqUrl.search);
+    const params = {
+      id: (search.get('id') || '').trim(),
+      type: search.get('type') === 'tv' ? 'tv' : 'movie',
+      season: (search.get('season') || '').trim(),
+      episode: (search.get('episode') || '').trim(),
+      lang: (search.get('lang') || '').trim()
+    };
+    if (!params.id) {
+      sendJson(req, res, 400, { error: 'id is required for action=subtitles' }, { 'Cache-Control': 'no-store' }, isHead);
+      return;
+    }
+    try {
+      if (params.lang) {
+        const hit = await getSubtitleVtt({ ...params, signal: AbortSignal.timeout(SERVERS_BUDGET_MS) });
+        if (!hit) {
+          // A language the scrapers simply do not carry is not an error.
+          sendJson(req, res, 200, { langs: [], empty: true }, { 'Cache-Control': 'public, max-age=300' }, isHead);
+          return;
+        }
+        sendBuffer(
+          req,
+          res,
+          200,
+          Buffer.from(hit.vtt, 'utf8'),
+          {
+            'Content-Type': 'text/vtt; charset=utf-8',
+            'Cache-Control': 'public, max-age=21600, stale-while-revalidate=86400',
+            'X-Subtitle-Source': hit.source
+          },
+          { compress: true }
+        );
+        return;
+      }
+      const langs = await listSubtitles({ ...params, signal: AbortSignal.timeout(12000) });
+      sendJson(req, res, 200, { langs }, {
+        'Cache-Control': langs.length
+          ? 'public, max-age=1800, stale-while-revalidate=300'
+          : 'public, max-age=300, stale-while-revalidate=300'
+      }, isHead);
+    } catch (err) {
+      console.error('[subtitles]', err && err.message);
+      if (!res.headersSent) {
+        sendJson(req, res, 200, { langs: [] }, { 'Cache-Control': 'no-store' }, isHead);
+      }
     }
     return;
   }

@@ -14,6 +14,7 @@
  */
 
 import { collectServers } from '../lib/servers.mjs';
+import { listSubtitles, getSubtitleVtt } from '../lib/subtitles.mjs';
 
 const BASE = 'https://api.themoviedb.org/3';
 const LANGUAGE = process.env.TMDB_LANGUAGE || 'en-US';
@@ -371,12 +372,49 @@ export default async function handler(req, res) {
         res.status(200).json(payload);
         return;
       }
+      case 'subtitles': {
+        const params = {
+          id: String(first(q.id) || '').trim(),
+          type: first(q.type) === 'tv' ? 'tv' : 'movie',
+          season: String(first(q.season) || '').trim(),
+          episode: String(first(q.episode) || '').trim(),
+          lang: String(first(q.lang) || '').trim()
+        };
+        if (!params.id) {
+          res.setHeader('Cache-Control', 'no-store');
+          res.status(400).json({ error: 'id is required for action=subtitles' });
+          return;
+        }
+        const budget = AbortSignal.timeout(SERVERS_BUDGET_MS);
+        if (params.lang) {
+          const hit = await getSubtitleVtt({ ...params, signal: budget });
+          if (!hit) {
+            // A language the scrapers do not carry is a valid empty answer.
+            res.setHeader('Cache-Control', 'public, max-age=300');
+            res.status(200).json({ langs: [], empty: true });
+            return;
+          }
+          res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+          res.setHeader('Cache-Control', 's-maxage=21600, stale-while-revalidate=86400');
+          res.setHeader('X-Subtitle-Source', hit.source);
+          res.status(200).send(hit.vtt);
+          return;
+        }
+        const langs = await listSubtitles({ ...params, signal: budget });
+        res.setHeader(
+          'Cache-Control',
+          langs.length
+            ? 's-maxage=1800, stale-while-revalidate=300'
+            : 's-maxage=300, stale-while-revalidate=300'
+        );
+        res.status(200).json({ langs });
+        return;
+      }
       default:
         res.setHeader('Cache-Control', 'no-store');
         res.status(400).json({ error: 'Unknown action' });
         return;
     }
-
 
     // Unknown ids answer HTTP 200 with {"error": "..."} and must not be cached.
     res.setHeader(

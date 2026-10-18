@@ -10,7 +10,9 @@
  *      free of markup ({\an8} / <font> style leftovers),
  *   3. the sync offset (+5s / reset) is applied and remembered per title,
  *   4. hide/show and language switching work without errors,
- *   5. TV titles and movies outside index.json never show the bar,
+ *   5. TV titles and movies outside index.json never show the bar (the
+ *      remote subtitle resolver is intercepted to an empty pool here so the
+ *      app's empty-pool behaviour is measured deterministically),
  *   6. every /subtitles/ request is 200, no console errors, no failed
  *      responses — the embedded player's own noise is bucketed separately,
  *      exactly like scripts/qa.mjs does.
@@ -286,16 +288,30 @@ const afterSwitch = await page.evaluate(() => ({
 ok('language switch succeeds', afterSwitch.active === 'ar' && afterSwitch.state !== 'error',
   JSON.stringify(afterSwitch));
 
-/* ---- 6. titles without files never show the bar ------------------------ */
+/* ---- 6. titles whose subtitle pool stays empty never show the bar ------
+ *
+ * The remote resolver (action=subtitles) is intercepted here so this
+ * section measures the app's behaviour with an empty language pool, not
+ * whatever the network happens to carry today. The remote path itself is
+ * exercised by scripts/server logic + a manual smoke test, not by this gate.
+ */
+
+await page.route('**/TMDBCache.aspx?action=subtitles*', (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: 'application/json; charset=utf-8',
+    body: '{"langs":[]}'
+  })
+);
 
 await settle('#/watch/tv/1396/1/1?title=Breaking%20Bad');
 await page.waitForTimeout(1500);
-ok('TV titles show no subtitle bar (index has no TV)', await barHidden());
+ok('TV titles with an empty subtitle pool show no bar', await barHidden());
 
 await settle('#/watch/movie/11?title=Star%20Wars%3A%20Episode%20IV');
 await page.waitForSelector('#subtitle-bar:not([hidden])', { timeout: 5000 }).catch(() => {});
 await page.waitForTimeout(1200);
-ok('a movie outside the index shows no subtitle bar', await barHidden());
+ok('a movie with no local files and an empty remote pool shows no bar', await barHidden());
 
 /* ---- 7. leaving the screen stops everything ---------------------------- */
 

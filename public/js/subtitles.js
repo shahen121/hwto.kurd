@@ -84,11 +84,43 @@ export function cueAt(cues, time) {
 
 /* ------------------------------- offsets ------------------------------- */
 
-// English files were removed from the corpus — only these two remain.
-const LANG_ORDER = ['ku', 'ar'];
-const LANG_LABELS = { ku: 'كردية', ar: 'العربية' };
+// Kurdish and Arabic first (this site's audience); English is the remote
+// fallback — the local corpus no longer ships English files.
+const LANG_ORDER = ['ku', 'ar', 'en'];
+const LANG_LABELS = { ku: 'كردية', ar: 'العربية', en: 'English' };
+
+/** A remote row may label things slightly differently; normalise once. */
+const CODE_OVERRIDES = { 'pt-br': 'pt', 'zh-tw': 'zh' };
 
 const offsetKey = (type, id) => `sub:offset:${type}/${id}`;
+const FONT_KEY = 'sub:fontScale';
+const FONT_MIN = 0.7;
+const FONT_MAX = 2;
+const FONT_STEP = 0.1;
+
+function readFontScale() {
+  try {
+    const value = Number(localStorage.getItem(FONT_KEY));
+    if (Number.isFinite(value) && value >= FONT_MIN && value <= FONT_MAX) return Math.round(value * 10) / 10;
+  } catch {
+    /* private mode */
+  }
+  return 1;
+}
+
+function writeFontScale(value) {
+  try {
+    localStorage.setItem(FONT_KEY, String(value));
+  } catch {
+    /* private mode */
+  }
+}
+
+/** The scale lives on :root — CSS resolves it as var(--sub-font-scale, 1). */
+function applyFontScale(root, value) {
+  document.documentElement.style.setProperty('--sub-font-scale', String(value));
+  void root;
+}
 
 function readOffset(type, id) {
   try {
@@ -116,23 +148,26 @@ function writeOffset(type, id, value) {
  * Wire the subtitle bar + overlay inside `root` (the watch view).
  * Returns { destroy() } — the ticker also self-stops if the view is detached.
  */
-export function attachSubtitles(root, { type = 'movie', id, signal } = {}) {
+export function attachSubtitles(root, { type = 'movie', id, season, episode, signal } = {}) {
   const bar = root.querySelector('#subtitle-bar');
   const overlay = root.querySelector('#subtitle-overlay');
   const cueEl = root.querySelector('#subtitle-cue');
   const langsEl = root.querySelector('#subtitle-langs');
   const offsetEl = root.querySelector('#subtitle-offset-value');
+  const fontEl = root.querySelector('#subtitle-font-value');
   const toggleEl = root.querySelector('#subtitle-toggle');
   const frame = root.querySelector('.watch-frame iframe');
 
   const noop = { destroy() {} };
   if (!bar || !overlay || !cueEl || !langsEl) return noop;
-  // The subtitle index currently covers movies only.
-  if (type !== 'movie' || !id) {
+  if (!id) {
     bar.hidden = true;
     overlay.hidden = true;
     return noop;
   }
+
+  /* Where each language lives: local corpus files vs the remote resolver. */
+  const langSource = new Map(); // code -> 'local' | 'remote'
 
   let destroyed = false;
   let cues = [];
@@ -141,9 +176,14 @@ export function attachSubtitles(root, { type = 'movie', id, signal } = {}) {
   let origin = performance.now();
   let ticker = null;
   let loadCtrl = null;
+  let fontScale = readFontScale();
 
   const renderOffset = () => {
     if (offsetEl) offsetEl.textContent = `${offset > 0 ? '+' : ''}${offset.toFixed(1)} ث`;
+  };
+
+  const renderFont = () => {
+    if (fontEl) fontEl.textContent = `${Math.round(fontScale * 100)}%`;
   };
 
   const renderCue = () => {
@@ -178,7 +218,7 @@ export function attachSubtitles(root, { type = 'movie', id, signal } = {}) {
     renderCue();
   };
 
-  const selectLanguage = async (lang) => {
+  const selectLanguage = async (lang, source = langSource.get(lang) || 'local') => {
     if (loadCtrl) loadCtrl.abort();
     loadCtrl = new AbortController();
     const local = loadCtrl.signal;
@@ -193,7 +233,10 @@ export function attachSubtitles(root, { type = 'movie', id, signal } = {}) {
     overlay.hidden = true;
 
     try {
-      const text = await api.getSubtitleText({ type, id, lang, signal: local });
+      const text =
+        source === 'local'
+          ? await api.getSubtitleText({ type, id, lang, signal: local })
+          : await api.getRemoteSubtitleText({ type, id, lang, season, episode, signal: local });
       if (aborted()) return;
       cues = parseVtt(text);
       if (!cues.length) throw new Error('empty');
@@ -207,17 +250,22 @@ export function attachSubtitles(root, { type = 'movie', id, signal } = {}) {
     }
   };
 
-  const renderLangButtons = (langs) => {
-    langsEl.innerHTML = langs
+  const renderLangButtons = (configs) => {
+    // [{code, source, label}] — one button per language, local files first.
+    const seen = new Set();
+    const unique = configs.filter((c) => c && c.code && !seen.has(c.code) && seen.add(c.code));
+    langsEl.innerHTML = unique
       .map(
         (lang) => `
-        <button type="button" class="sub-lang" data-sub-lang="${escapeHtml(lang)}" aria-pressed="false">
-          ${escapeHtml(LANG_LABELS[lang] || lang.toUpperCase())}
+        <button type="button" class="sub-lang" data-sub-lang="${escapeHtml(lang.code)}" data-sub-source="${escapeHtml(lang.source)}" aria-pressed="false">
+          ${escapeHtml(lang.label || LANG_LABELS[lang.code] || lang.code.toUpperCase())}
         </button>`
       )
       .join('');
     langsEl.querySelectorAll('[data-sub-lang]').forEach((btn) => {
-      btn.addEventListener('click', () => selectLanguage(btn.getAttribute('data-sub-lang')));
+      btn.addEventListener('click', () =>
+        selectLanguage(btn.getAttribute('data-sub-lang'), btn.getAttribute('data-sub-source') || 'local')
+      );
     });
   };
 
@@ -229,6 +277,17 @@ export function attachSubtitles(root, { type = 'movie', id, signal } = {}) {
       writeOffset(type, id, offset);
       renderOffset();
       renderCue();
+    });
+  });
+
+  /* Font size — one shared scale (±), remembered across titles. */
+  bar.querySelectorAll('[data-sub-font]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const dir = Number(btn.getAttribute('data-sub-font'));
+      fontScale = Math.min(FONT_MAX, Math.max(FONT_MIN, Math.round((fontScale + dir * FONT_STEP) * 10) / 10));
+      writeFontScale(fontScale);
+      applyFontScale(root, fontScale);
+      renderFont();
     });
   });
 
@@ -259,23 +318,92 @@ export function attachSubtitles(root, { type = 'movie', id, signal } = {}) {
 
   if (frame) frame.addEventListener('load', onFrameLoad);
   renderOffset();
+  renderFont();
+  applyFontScale(root, fontScale);
   startTicker();
 
-  // Discover the languages for this title; the bar stays hidden if there are none.
+  /* Auto-fit: the ticker self-destroys once the watch view unmounts. */
+
+  // The local corpus may lag behind the remote resolver; merge both language
+  // pools (local wins on clash) and keep one of each entry in a stable order:
+  // Kurdish, Arabic, English first — RTL/native-audience first — then the rest
+  // of the remote catalogue alphabetical.
+  /* Track the local index result so the remote merge keeps it. */
+  let localLangs = [];
+  const localLangsSnapshot = () => localLangs;
+  let discovered = false; // the bar is revealed exactly once
+
+  const mergeLangs = (localLangs, remoteLangs) => {
+    langSource.clear();
+    const configs = [];
+    const local = new Set((localLangs || []).map((c) => String(c).toLowerCase()));
+    const remote = new Map();
+    for (const entry of remoteLangs || []) {
+      let code = String(entry && entry.code || '').toLowerCase();
+      code = code.split('-')[0]; // "pt-BR" -> "pt", "zh-TW" -> "zh"
+      if (!/^[a-z]{2,5}$/.test(code)) continue;
+      const label =
+        entry && typeof entry.label === 'string' && entry.label.trim()
+          ? entry.label.trim()
+          : LANG_LABELS[code] || code.toUpperCase();
+      remote.set(code, label);
+    }
+    for (const code of LANG_ORDER) {
+      if (local.has(code)) {
+        langSource.set(code, 'local');
+        configs.push({ code, source: 'local', label: LANG_LABELS[code] });
+      } else if (remote.has(code)) {
+        langSource.set(code, 'remote');
+        configs.push({ code, source: 'remote', label: remote.get(code) });
+      }
+    }
+    const rest = [...remote.keys()].filter((c) => !LANG_ORDER.includes(c) && !seen(configs, c)).sort();
+    for (const code of rest) {
+      langSource.set(code, 'remote');
+      configs.push({ code, source: 'remote', label: remote.get(code) });
+    }
+    return configs;
+  };
+  const seen = (configs, code) => configs.some((c) => c.code === code);
+
+  const reveal = (configs) => {
+    if (destroyed || discovered || !configs.length) return;
+    discovered = true;
+    renderLangButtons(configs);
+    bar.hidden = false;
+    const preferred = configs[0];
+    if (preferred) selectLanguage(preferred.code, preferred.source);
+  };
+
+  // Discover: the local corpus first (movies), falling through to the remote
+  // resolver (movies and TV) whenever the index comes back empty or missing.
   api
     .getSubtitleIndex({ signal })
     .then((index) => {
       if (destroyed) return;
-      const langs = (index && index[`movie/${id}`]) || [];
-      if (!langs.length) return;
-      renderLangButtons(langs);
-      bar.hidden = false;
-      const preferred = LANG_ORDER.find((l) => langs.includes(l)) || langs[0];
-      return selectLanguage(preferred);
+      const langs = (index && index[`${type}/${id}`]) || [];
+      localLangs = langs;
+      const configs = mergeLangs(localLangs, null);
+      if (configs.length) reveal(configs);
+      else remoteLangsMerge();
     })
     .catch(() => {
-      /* subtitles are optional — the player keeps working without them */
+      remoteLangsMerge();
     });
+
+  const remoteLangsMerge = () => {
+    if (destroyed) return;
+    api
+      .getRemoteSubtitleLangs({ type, id, season, episode, signal })
+      .then((remoteLangs) => {
+        if (destroyed) return;
+        const configs = mergeLangs(localLangsSnapshot(), remoteLangs);
+        reveal(configs);
+      })
+      .catch(() => {
+        /* subtitles are optional — the player keeps working without them */
+      });
+  };
 
   function destroy() {
     if (destroyed) return;

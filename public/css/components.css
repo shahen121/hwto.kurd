@@ -892,7 +892,7 @@
   border-radius: 9px;
   background: rgba(6, 6, 12, 0.8);
   color: #fff;
-  font-size: clamp(0.95rem, 2.1vw, 1.25rem);
+  font-size: calc(clamp(0.95rem, 2.1vw, 1.25rem) * var(--sub-font-scale, 1));
   line-height: 1.55;
   text-align: center;
   white-space: pre-line;
@@ -976,6 +976,12 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 6px 8px;
+}
+
+/* Font-size controls share the offset output styling; narrow the pill so a
+   three-item group (أ− / 100% / أ+) does not inflate the bar on mobile. */
+.subtitle-size .subtitle-offset {
+  min-width: 52px;
 }
 
 @media (prefers-reduced-motion: reduce) {
