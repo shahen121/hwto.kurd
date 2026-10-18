@@ -397,11 +397,47 @@ export async function decryptWithModule(modPromise, encryptedB64) {
 
 /** Compile a wasm module once per URL so repeated extractions reuse it. */
 const wasmModules = new Map();
-function compileWasm(url) {
-  if (!wasmModules.has(url)) {
+
+/**
+ * The wasm_url comes from third-party page data (the CONFIG payload), so its
+ * HOST must be on this allowlist before the module is downloaded and
+ * compiled. Default: the VidSrc family; extendable via
+ * VIDSRC_WASM_ALLOW_HOSTS (comma list). A non-listed host means no
+ * decryption -> the caller sees an empty playlist list, not a crash.
+ */
+function wasmAllowlist() {
+  const fromEnv = (process.env.VIDSRC_WASM_ALLOW_HOSTS || '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  return fromEnv.length
+    ? fromEnv
+    : ['vidsrc.to', 'vidsrc.pm', 'vidsrc.xyz', 'vidsrc.cc', 'vsembed.ru', 'vsembed.win'];
+}
+
+export function isAllowedWasmUrl(wasmUrl) {
+  let url;
+  try {
+    url = new URL(String(wasmUrl || '').trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:') return null;
+  const host = url.hostname.toLowerCase();
+  const ok = wasmAllowlist().some((allowed) => host === allowed || host.endsWith('.' + allowed));
+  return ok ? url : null;
+}
+
+function compileWasm(rawUrl) {
+  if (!wasmModules.has(rawUrl)) {
+    const url = isAllowedWasmUrl(rawUrl);
+    const gate = url
+      ? Promise.resolve(url.href)
+      : Promise.reject(Object.assign(new Error(`wasm host not allowed: ${String(rawUrl).slice(0, 80)}`), { code: 'WASM_HOST' }));
     wasmModules.set(
-      url,
-      fetch(url)
+      rawUrl,
+      gate
+        .then((href) => fetch(href))
         .then((r) => {
           if (!r.ok) throw new Error(`wasm ${r.status}`);
           return r.arrayBuffer();
@@ -409,8 +445,9 @@ function compileWasm(url) {
         .then((b) => WebAssembly.compile(b))
     );
   }
-  return wasmModules.get(url);
+  return wasmModules.get(rawUrl);
 }
+
 
 /**
  * Turn a stream_urls envelope into a list of playlist URLs.
@@ -426,8 +463,14 @@ export async function resolveStreamUrls(payload) {
     ? resolveFrameUrl(decodeEscaped(vs.wasm_url), null)
     : null;
   if (!wasmUrl) return { playlists: [], decrypted: false };
-  const text = await decryptWithModule(compileWasm(wasmUrl), urls);
-  return { playlists: text.split('\n').filter(Boolean), decrypted: true };
+  try {
+    const text = await decryptWithModule(compileWasm(wasmUrl), urls);
+    return { playlists: text.split('\n').filter(Boolean), decrypted: true };
+  } catch (err) {
+    const reason = err && (err.code === 'WASM_HOST' ? 'host not allowlisted' : err.message);
+    console.error('[vidsrc-extractor] wasm decryption skipped:', reason);
+    return { playlists: [], decrypted: false };
+  }
 }
 
 /**

@@ -23,6 +23,11 @@ const MAX_CACHE_ENTRIES = 400;
 const MAX_CACHE_KEY_LEN = 512;
 const RATE_LIMIT_WINDOW = 60 * 1000;
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX) || 120;
+// The four serverless routes (fastvid/scraper/vidsrc/shahid4u-extractors) get
+// their own budget: fastvid carries HLS *segments*, so one valid playback
+// session fires dozens of requests per minute — the 120/min API budget must
+// not starve it, and the extraction routes are heavier per request but rare.
+const RATE_LIMIT_SERVERLESS_MAX = Number(process.env.RATE_LIMIT_SERVERLESS_MAX) || 600;
 
 // قائمة المسارات الخاصة ببيئة التطوير المحلية (Localhost)
 const SERVERLESS_ROUTES = {
@@ -51,6 +56,7 @@ const MIME = {
 
 const apiCache = new Map();
 const rateLimitMap = new Map();
+const serverlessRateMap = new Map();
 
 /* Response hardening + compression -------------------------------------- */
 const SECURITY_HEADERS = {
@@ -72,7 +78,7 @@ const CSP = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
+  "script-src 'self' 'unsafe-inline' blob:",
   "worker-src 'self' blob:",
   "child-src 'self' blob:",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -145,28 +151,38 @@ function getRealIp(req) {
 
 function cleanupRateLimit() {
   const now = Date.now();
-  for (const [ip, entry] of rateLimitMap) {
-    if (entry.resetTime < now) rateLimitMap.delete(ip);
+  for (const map of [rateLimitMap, serverlessRateMap]) {
+    for (const [ip, entry] of map) {
+      if (entry.resetTime < now) map.delete(ip);
+    }
   }
 }
 setInterval(cleanupRateLimit, RATE_LIMIT_WINDOW * 2).unref();
 
-function checkRateLimit(ip) {
+function checkRateLimitOn(ip, map, max) {
   const now = Date.now();
-  const entry = rateLimitMap.get(ip);
+  const entry = map.get(ip);
   if (!entry) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    map.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
     return true;
   }
   if (entry.resetTime < now) {
-    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    map.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
     return true;
   }
-  if (entry.count >= RATE_LIMIT_MAX) {
+  if (entry.count >= max) {
     return false;
   }
   entry.count++;
   return true;
+}
+
+function checkRateLimit(ip) {
+  return checkRateLimitOn(ip, rateLimitMap, RATE_LIMIT_MAX);
+}
+
+function checkServerlessRateLimit(ip) {
+  return checkRateLimitOn(ip, serverlessRateMap, RATE_LIMIT_SERVERLESS_MAX);
 }
 
 /* Alternate playback servers ------------------------------------------- *
@@ -429,9 +445,14 @@ const server = http.createServer((req, res) => {
 
   const isHead = req.method === 'HEAD';
 
-  // معالجة ملفات api في بيئة التطوير المحلية
+  // معالجة ملفات api في بيئة التطوير المحلية — محكومة بالمعدل الآن مثل باقي
+  // المسارات (الميزانية مستقلة لأن fastvid يفتح شرائح HLS بمعدل عالٍ).
   const serverless = SERVERLESS_ROUTES[reqUrl.pathname];
   if (serverless) {
+    if (!checkServerlessRateLimit(getRealIp(req))) {
+      sendJson(req, res, 429, { error: 'Too many requests, please slow down' }, { 'Cache-Control': 'no-store' });
+      return;
+    }
     import(serverless.module)
       .then(({ default: handler }) => {
         const apiRes = {

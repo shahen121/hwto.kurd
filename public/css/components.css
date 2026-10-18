@@ -1628,3 +1628,126 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ==================================================================== *
+ * refinements — a conservative pass of polish over the existing pieces.  *
+ * Adds no new classes, only deepens depth, legibility and focus states. *
+ * ==================================================================== */
+
+/* Player frame: a brand-tinted hairline ring sits on top of the plain
+   border so the embedded video reads as a "stage" instead of a rectangle. */
+.watch-frame {
+  box-shadow: var(--shadow), 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 44px rgba(255, 77, 109, 0.10);
+}
+
+/* Subtitle overlay: layered glaze so cues stay legible on bright scenes. */
+.subtitle-overlay {
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.55));
+}
+
+.subtitle-cue {
+  background: rgba(6, 6, 12, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(7px) saturate(1.08);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 22px rgba(0, 0, 0, 0.5);
+  -webkit-text-stroke: 0.5px rgba(0, 0, 0, 0.35);
+}
+
+/* Subtitle bar: glassy control strip with dividers between groups. */
+.subtitle-bar {
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  padding: 12px 16px;
+}
+
+.subtitle-group:not(:first-child) {
+  position: relative;
+  padding-inline-start: 12px;
+}
+
+.subtitle-group:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--line-strong);
+}
+
+.subtitle-bar[data-state='error'] {
+  border-color: rgba(255, 77, 109, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 77, 109, 0.08);
+}
+
+/* Language pills: crisper active state + press feedback. */
+.sub-lang {
+  padding: 7px 16px;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.sub-lang.is-active {
+  box-shadow: 0 6px 16px rgba(255, 77, 109, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.sub-lang:active,
+.server-btn:active,
+.server-lang-btn:active {
+  transform: translateY(1px);
+}
+
+/* Server strip chips: brand glow only on the selected one so the strip
+   stays calm until you click; focus ring inherits the global one. */
+.server-btn {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.server-btn.is-active {
+  box-shadow: 0 6px 18px rgba(255, 77, 109, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+/* Season / language tabs: unified press depth. */
+.tab,
+.tab-season,
+.btn-watch-ep {
+  will-change: transform;
+}
+
+.tab.is-active,
+.tab-season.is-active,
+.btn-watch-ep.is-active,
+.btn-sort.is-active {
+  box-shadow: 0 8px 22px rgba(255, 77, 109, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+/* Cards: calmer lift on touch devices (no hover there anyway) and a
+   slightly tighter parity between hovered and focused states. */
+@media (hover: none) {
+  .card:hover {
+    transform: none;
+  }
+}
+
+/* Toast: subtle brand edge so confirmations read as "system voice". */
+.toast {
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 77, 109, 0.28);
+  letter-spacing: 0.01em;
+}
+
+/* Small screens: the three subtitle-bar groups stack comfortably and
+   dividers turn into the mini separators they already are. */
+@media (max-width: 700px) {
+  .subtitle-bar {
+    row-gap: 10px;
+  }
+
+  .subtitle-group:not(:first-child)::before {
+    display: none;
+  }
+
+  .subtitle-group:not(:first-child) {
+    padding-inline-start: 0;
+  }
+}
