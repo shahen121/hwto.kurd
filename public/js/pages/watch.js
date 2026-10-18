@@ -1,5 +1,5 @@
 /**
- * pages/watch.js — the player screen: embeds vidcore.io directly using the
+ * pages/watch.js — the player screen: embeds vidlink.pro directly using the
  * TMDB id, with full support for TV series seasons/episodes, direct stream
  * copying, and an integrated download/playback options modal.
  */
@@ -16,7 +16,7 @@ let ctx = null;
 let subtitles = null;
 let hlsPlayer = null;
 
-/** Build player embed URL using the primary VidCore server. */
+/** Build player embed URL using the primary VidLink server. */
 function playerUrl(params) {
   const media = params.type === 'tv' ? 'tv' : 'movie';
   const id = params.id;
@@ -24,6 +24,43 @@ function playerUrl(params) {
   const e = Number(params.episode) || 1;
   const server = PLAYER_SERVERS[0];
   return media === 'tv' ? server.tvUrl(id, s, e) : server.movieUrl(id);
+}
+
+/** Caption-menu labels for VidLink's external track. */
+const SUB_LABELS = { ku: 'کوردی', ar: 'العربية' };
+
+/**
+ * VidLink accepts one external WebVTT track (?sub_file= + ?sub_label=). When
+ * the title is in our local corpus we point the embed at our own copy of the
+ * file — the deployed site serves it as text/vtt with CORS, while
+ * raw.githubusercontent.com sends text/plain and browsers refuse that as a
+ * track. Returns true once a track was added, so the overlay can stay quiet
+ * while the embed already renders the subtitles.
+ */
+async function applyEmbedSubtitle(root, { type, id }, signal) {
+  let langs = [];
+  try {
+    const index = await api.getSubtitleIndex({ signal });
+    langs = (index && index[`${type}/${id}`]) || [];
+  } catch {
+    return false; // subtitles are optional — the player keeps working
+  }
+  if (!langs.length || !ctx || root !== ctx.view || (signal && signal.aborted)) return false;
+  if (ctx.selectedServerKey && ctx.selectedServerKey !== PRIMARY.key) return false;
+
+  const preferred = siteServerLang();
+  const lang = langs.includes(preferred) ? preferred : langs[0];
+  const subFile = `${location.origin}/subtitles/${encodeURIComponent(type)}/${encodeURIComponent(id)}/${encodeURIComponent(lang)}.vtt`;
+
+  const url = new URL(playerUrl({ type, id }));
+  url.searchParams.set('sub_file', subFile);
+  url.searchParams.set('sub_label', SUB_LABELS[lang] || lang.toUpperCase());
+
+  const iframe = root.querySelector('.watch-frame iframe');
+  if (iframe && !iframe.hidden) iframe.src = url.toString();
+  const streamInput = root.querySelector('#stream-url-input');
+  if (streamInput) streamInput.value = url.toString();
+  return true;
 }
 
 /** Tear down the native HLS player (if any) and restore the iframe embed. */
@@ -226,14 +263,19 @@ export async function mount(params, view, { signal }) {
   wireServerBar(view, params, media);
 
   // Automatic subtitles (local corpus + the remote resolver) — both handle
-  // movies and TV; TV keys off the current season/episode.
+  // movies and TV; TV keys off the current season/episode. The embed hint is
+  // resolved first: VidLink can carry our VTT file itself, in which case the
+  // overlay is wired but left hidden until the viewer picks a language.
+  const embedSubtitles = await applyEmbedSubtitle(view, { type: media, id: params.id }, signal);
+
   if (subtitles) subtitles.destroy();
   subtitles = attachSubtitles(view, {
     type: media,
     id: params.id,
     season: currentSeason,
     episode: currentEpisode,
-    signal
+    signal,
+    embedSubtitles
   });
 
   updateDocTitle(title, media, currentSeason, currentEpisode);
@@ -243,10 +285,10 @@ export async function mount(params, view, { signal }) {
  * Playback servers                                                   *
  * ------------------------------------------------------------------ */
 
-const PRIMARY = { key: 'vidcore', label: 'VidCore', source: 'vidcore' };
+const PRIMARY = { key: 'vidlink', label: 'VidLink', source: 'vidlink' };
 
 function serverUrl(entry, params, media) {
-  if (entry.source === 'vidcore') return playerUrl({ ...params, type: media });
+  if (entry.source === 'vidlink') return playerUrl({ ...params, type: media });
   return entry.url;
 }
 
@@ -291,15 +333,15 @@ async function refreshServerBar(root, params, media) {
   const list = root.querySelector('#server-bar-list');
   if (!bar || !list) return;
 
-  if (ctx) ctx.selectedServerKey = ctx.selectedServerKey || 'vidcore';
+  if (ctx) ctx.selectedServerKey = ctx.selectedServerKey || 'vidlink';
   if (ctx) ctx.serverLang = ctx.serverLang || siteServerLang();
   bar.hidden = false;
 
-  // VidCore renders instantly — the alternates stream in afterwards, so a
+  // VidLink renders instantly — the alternates stream in afterwards, so a
   // slow upstream never blocks the primary player. A inline spinner shows
   // that the language group is still being fetched.
   if (ctx) ctx.servers = [PRIMARY];
-  renderServerBar(list, [PRIMARY], 'vidcore', { loading: true });
+  renderServerBar(list, [PRIMARY], 'vidlink', { loading: true });
   updateServerLangToggle(root);
 
   // One token per refresh: a language toggle issued while a fetch is in
@@ -321,7 +363,7 @@ async function refreshServerBar(root, params, media) {
     });
     alternates = (data && data.servers) || [];
   } catch {
-    // Servers are optional — the primary VidCore player keeps working.
+    // Servers are optional — the primary VidLink player keeps working.
   }
   if (root !== (ctx && ctx.view) || token !== (ctx && ctx.serversToken)) return;
 
@@ -343,13 +385,13 @@ async function refreshServerBar(root, params, media) {
   ];
 
   // The selected key can vanish when the language group switches; fall back
-  // to VidCore so exactly one button is always active.
+  // to VidLink so exactly one button is always active.
   if (ctx && !servers.some((s) => s.key === ctx.selectedServerKey)) {
-    ctx.selectedServerKey = 'vidcore';
+    ctx.selectedServerKey = 'vidlink';
   }
 
   if (ctx) ctx.servers = servers;
-  renderServerBar(list, servers, (ctx && ctx.selectedServerKey) || 'vidcore', { empty: alternates.length === 0 });
+  renderServerBar(list, servers, (ctx && ctx.selectedServerKey) || 'vidlink', { empty: alternates.length === 0 });
 }
 
 function pickServer(root, params, media, key) {
@@ -396,7 +438,7 @@ function wireServerBar(root, params, media) {
   const list = root.querySelector('#server-bar-list');
   if (!bar || !list) return;
 
-  if (ctx) ctx.selectedServerKey = 'vidcore';
+  if (ctx) ctx.selectedServerKey = 'vidlink';
   if (ctx) ctx.serverLang = ctx.serverLang || siteServerLang();
 
   // Read ctx.params at click time — an episode switch replaces the params object.
@@ -704,8 +746,8 @@ function wireTvControls(root, params) {
       { replace: true }
     );
 
-    // Alternates are per-episode on Beenar — reset to VidCore and re-fetch.
-    if (ctx) ctx.selectedServerKey = 'vidcore';
+    // Alternates are per-episode on Beenar — reset to VidLink and re-fetch.
+    if (ctx) ctx.selectedServerKey = 'vidlink';
     refreshServerBar(root, params, 'tv');
   }
 }
@@ -746,7 +788,7 @@ export function onRoute(params) {
     if (streamInput) streamInput.value = nextUrl;
 
     // Back to the primary player and re-fetch per-episode alternates.
-    ctx.selectedServerKey = 'vidcore';
+    ctx.selectedServerKey = 'vidlink';
     refreshServerBar(ctx.view, params, params.type === 'tv' ? 'tv' : 'movie');
 
     const media = params.type === 'tv' ? 'tv' : 'movie';

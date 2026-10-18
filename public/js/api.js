@@ -611,7 +611,7 @@ export async function getServers({ movieid, title, tmdbid, type = 'movie', year,
 
 const SUB_INDEX_TTL = 6 * 60 * 60 * 1000; // the index changes rarely
 
-/** { "movie/12500": ["ku","ar"], … } — 4074 movies, no TV, english removed. */
+/** { "movie/12500": ["ku","ar"], … } — the local corpus (movies, ku/ar). */
 export async function getSubtitleIndex({ signal } = {}) {
   const cached = cacheGet('subtitle-index');
   if (cached !== undefined) return cached;
@@ -670,6 +670,32 @@ export async function getSubtitleText({ type = 'movie', id, lang, signal } = {})
     });
   }
   return res.text();
+}
+
+/**
+ * URL of the WebVTT file for one title/language — builds the address only, no
+ * request is made here. It exists for <track src> on the native player, where
+ * the browser performs the load itself: the local corpus is same-origin, and
+ * the remote file comes back from action=subtitles with a text/vtt body.
+ */
+export function subtitleVttUrl({ type = 'movie', id, lang, source = 'local', season, episode } = {}) {
+  if (!id || !lang) {
+    throw new ApiError('معرّف الترجمة غير مكتمل', { code: 'bad-args', retriable: false });
+  }
+  if (source === 'remote') {
+    const paramsObj = new URLSearchParams({
+      action: 'subtitles',
+      type: type === 'tv' ? 'tv' : 'movie',
+      id: String(id),
+      lang: String(lang)
+    });
+    if (type === 'tv') {
+      paramsObj.set('season', String(Number(season) || 1));
+      paramsObj.set('episode', String(Number(episode) || 1));
+    }
+    return `${CONFIG.apiBase}?${paramsObj}`;
+  }
+  return `/subtitles/${encodeURIComponent(type)}/${encodeURIComponent(id)}/${encodeURIComponent(lang)}.vtt`;
 }
 
 /**
@@ -775,6 +801,7 @@ export const api = {
   getServers,
   getSubtitleIndex,
   getSubtitleText,
+  subtitleVttUrl,
   getRemoteSubtitleLangs,
   getRemoteSubtitleText,
   getShahid4uStream

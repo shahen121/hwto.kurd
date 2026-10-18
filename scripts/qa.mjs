@@ -660,7 +660,7 @@ ok('deep-linked detail: back stays inside the app', deepBack > 0 && deepState.ha
 ok('deep-linked detail: no errors', deepErrs.length === 0, JSON.stringify(deepErrs.slice(0, 3)));
 await deepCtx.close();
 
-/* ---------- 12. watch screen: vidcore.io player integration ------------ */
+/* ---------- 12. watch screen: vidlink.pro player integration ----------- */
 
 await settle('#/movie/278');
 const hasWatchBtn = await page.locator('.btn-watch').count();
@@ -679,9 +679,9 @@ if (hasWatchBtn > 0) {
     const extBtnCount = await page.locator('#btn-external-player').count();
     const serverBarCount = await page.locator('.watch-server-bar').count();
     const title = await page.evaluate(() => document.title);
-    ok('watch: embeds vidcore.io player with TMDB ID',
-      /^https:\/\/vidcore\.io\/movie\/278/.test(frameSrc || ''), frameSrc || 'no src');
-    ok('watch: iframe has NO sandbox (VidCore playback requires it removed)',
+    ok('watch: embeds vidlink.pro player with TMDB ID',
+      /^https:\/\/vidlink\.pro\/movie\/278/.test(frameSrc || ''), frameSrc || 'no src');
+    ok('watch: iframe has NO sandbox (VidLink playback requires it removed)',
       sandbox === null,
       sandbox ? `unexpected sandbox: ${sandbox}` : 'correctly absent');
     ok('watch: external player button is removed', extBtnCount === 0, `btnCount=${extBtnCount}`);
@@ -692,8 +692,8 @@ if (hasWatchBtn > 0) {
 
 await settle('#/watch/tv/1396?title=' + encodeURIComponent('Breaking Bad') + '&season=1&episode=1');
 const tvFrameSrc = await page.locator('.watch-frame iframe').getAttribute('src');
-ok('watch: TV route embeds vidcore.io with season/episode',
-  tvFrameSrc === 'https://vidcore.io/tv/1396/1/1', tvFrameSrc || 'no src');
+ok('watch: TV route embeds vidlink.pro with season/episode',
+  tvFrameSrc === 'https://vidlink.pro/tv/1396/1/1', tvFrameSrc || 'no src');
 
 /* ---------- 13. transport: security headers, compression, budget ------- */
 
@@ -702,13 +702,13 @@ const htmlBody = await htmlRes.text();
 const csp = htmlRes.headers.get('content-security-policy') || '';
 // The policy was deliberately widened (script-src 'unsafe-inline'/'unsafe-eval'
 // blob:, an open https: connect-src) so the embedded players can run — assert
-// the hard directives survive and VidCore stays reachable either explicitly
+// the hard directives survive and VidLink stays reachable either explicitly
 // or through the https: wildcard.
 const connectSrc = (csp.match(/connect-src ([^;]+)/) || [])[1] || '';
-const vidcoreAllowed = connectSrc.includes('https://vidcore.io') || /\bhttps:/.test(connectSrc);
+const vidlinkAllowed = connectSrc.includes('https://vidlink.pro') || /\bhttps:/.test(connectSrc);
 ok('html ships a CSP with the hard directives',
   csp.includes("default-src 'self'") && csp.includes('frame-ancestors') && csp.includes("connect-src 'self'")
-  && vidcoreAllowed,
+  && vidlinkAllowed,
   JSON.stringify(csp.slice(0, 90)));
 ok('html carries the hardening headers',
   htmlRes.headers.get('x-content-type-options') === 'nosniff'

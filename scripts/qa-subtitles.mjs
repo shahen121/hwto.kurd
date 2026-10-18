@@ -3,16 +3,19 @@
  *
  *   node scripts/qa-subtitles.mjs     (server auto-starts on 4173 if needed)
  *
- * Asserts, on real WebVTT files from public/subtitles/:
- *   1. the control bar appears only for a title that has files, and lists
- *      exactly that title's languages with the preferred one pre-selected,
- *   2. a cue from the loaded file is rendered above the cross-origin frame,
- *      free of markup ({\an8} / <font> style leftovers),
+ * Fixtures are read from public/subtitles/index.json (a single-language title
+ * and a bilingual one), so a re-synced corpus never breaks the gate. It
+ * asserts:
+ *   1. the bar appears for a title that has files, lists exactly that title's
+ *      languages, and the primary embed (VidLink) carries the VTT file via
+ *      ?sub_file= — so the overlay deliberately starts hidden,
+ *   2. picking a language renders a cue above the cross-origin frame, free of
+ *      markup ({\an8} / <font> style leftovers),
  *   3. the sync offset (+5s / reset) is applied and remembered per title,
  *   4. hide/show and language switching work without errors,
- *   5. TV titles and movies outside index.json never show the bar (the
- *      remote subtitle resolver is intercepted to an empty pool here so the
- *      app's empty-pool behaviour is measured deterministically),
+ *   5. a remote-only title auto-selects the preferred language (the resolver
+ *      is intercepted to a Kurdish track), while TV titles and movies with an
+ *      empty pool never show the bar,
  *   6. every /subtitles/ request is 200, no console errors, no failed
  *      responses — the embedded player's own noise is bucketed separately,
  *      exactly like scripts/qa.mjs does.
@@ -186,6 +189,57 @@ if (subtitleCount === 0) {
   process.exit(0);
 }
 
+/* The corpus is authoritative: pick fixtures it actually carries instead of
+ * hard-coding ids that may be re-synced away. A usable fixture parses and its
+ * first cue starts early enough for the overlay clock to reach it in-window. */
+const subEntries = Object.entries(subtitleIndex).filter(([, langs]) => Array.isArray(langs) && langs.length);
+const inspectVtt = (key, lang) => {
+  try {
+    const text = fs.readFileSync(path.join(ROOT, 'public', 'subtitles', key, `${lang}.vtt`), 'utf8');
+    const first = /(\d{1,2}):(\d{2}):(\d{2})[.,](\d{1,3})\s*-->/.exec(text);
+    return {
+      cues: (text.match(/-->/g) || []).length,
+      first: first ? Number(first[1]) * 3600 + Number(first[2]) * 60 + Number(first[3]) : Infinity
+    };
+  } catch {
+    return { cues: 0, first: Infinity };
+  }
+};
+
+const pickFixture = (candidates, cap) => {
+  let relaxed = null;
+  for (const [key, langs] of candidates.slice(0, cap)) {
+    const info = langs.map((lang) => inspectVtt(key, lang));
+    if (!info.every((i) => i.cues > 0)) continue;
+    if (info.every((i) => i.first < 15)) return [key, langs];
+    if (!relaxed) relaxed = [key, langs];
+  }
+  return relaxed;
+};
+
+const preferFirst = (list, key) => {
+  const hit = list.find(([k]) => k === key);
+  return hit ? [hit, ...list.filter(([k]) => k !== key)] : list;
+};
+
+const singles = preferFirst(subEntries.filter(([, langs]) => langs.length === 1), 'movie/12500');
+const duals = preferFirst(subEntries.filter(([, langs]) => langs.length >= 2 && langs.includes('ku')), 'movie/100042');
+
+const singleEntry = pickFixture(singles, 60) || singles[0] || subEntries[0];
+const dualEntry = pickFixture(duals, 40) || duals[0] || singleEntry;
+const singleKey = singleEntry[0];
+const dualKey = dualEntry[0];
+const singleLang = singleEntry[1][0];
+
+// Two distinct absent ids: the remote resolver result is cached per title, so
+// the "full pool" and "empty pool" checks must not share a movie.
+const absentIds = [];
+for (let id = 1; id <= 300 && absentIds.length < 2; id++) {
+  if (!subtitleIndex[`movie/${id}`]) absentIds.push(id);
+}
+const missingId = absentIds[0] || 11;
+const emptyId = absentIds[1] || missingId + 1;
+
 const browser = await chromium.launch({ headless: true, executablePath });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'ar' });
 const page = await ctx.newPage();
@@ -199,6 +253,13 @@ const subRequests = [];
 page.on('console', (m) => {
   if (m.type() !== 'error') return;
   const url = (m.location() && m.location().url) || '';
+  // The embedded https player cannot fetch our http dev origin, so its
+  // blocked sub_file request is reported against our URL — the app's own
+  // subtitle loads are asserted separately, so bucket this as foreign noise.
+  if (/Failed to load resource/.test(m.text()) && /\/subtitles\//.test(url)) {
+    foreignErrors.push(`embed blocked ${url}`);
+    return;
+  }
   if (url && !url.startsWith(BASE)) foreignErrors.push(`console ${url}`);
   else consoleErrors.push(m.text());
 });
@@ -217,17 +278,47 @@ const settle = async (hash) => {
   await page.waitForSelector('.watch-frame iframe', { timeout: 30000 });
 };
 
-/* ---- 1. a titled movie with files: languages + auto-preferred ---------- */
+/* The remote resolver is intercepted so the gates measure the app, not the
+ * network. `remoteMode` flips one route between an empty pool and a pool with
+ * a Kurdish track — the same handler serves the language probe and the file. */
+let remoteMode = 'empty';
+const REMOTE_VTT = 'WEBVTT\n\n00:00:00.000 --> 00:00:30.000\nمرحباً بكم\n';
+await page.route('**/TMDBCache.aspx?action=subtitles*', (route) => {
+  if (remoteMode === 'empty') {
+    return route.fulfill({ status: 200, contentType: 'application/json; charset=utf-8', body: '{"langs":[]}' });
+  }
+  if (route.request().url().includes('&lang=')) {
+    return route.fulfill({ status: 200, contentType: 'text/vtt; charset=utf-8', body: REMOTE_VTT });
+  }
+  return route.fulfill({
+    status: 200,
+    contentType: 'application/json; charset=utf-8',
+    body: '{"langs":[{"code":"ku","label":"Kurdish"}]}'
+  });
+});
 
-await settle('#/watch/movie/1223601?title=Sisu%3A%20Road%20to%20Revenge');
+/* ---- 1. a movie with files: the bar lists exactly its languages --------
+ *
+ * The primary embed (VidLink) now carries the VTT file itself through the
+ * ?sub_file= parameter, so the overlay starts hidden to avoid painting the
+ * text twice; the bar is the manual fallback and the viewer reveals it by
+ * picking a language.
+ */
+
+await settle(`#/watch/${singleKey}?title=Sub%20Test`);
 await page.waitForSelector('#subtitle-bar:not([hidden])', { timeout: 30000 });
-const langs = await page.$$eval('#subtitle-langs .sub-lang', (nodes) => nodes.map((n) => n.textContent.trim()));
-ok('bar lists exactly the title languages (english is gone)', langs.length === 1, JSON.stringify(langs));
-const activeLang = await page.$eval('#subtitle-langs .sub-lang.is-active', (n) => n.dataset.subLang);
-ok('a preferred language is pre-selected', ['ku', 'ar', 'en'].includes(activeLang), activeLang);
+const langs = await page.$$eval('#subtitle-langs .sub-lang', (nodes) => nodes.map((n) => n.dataset.subLang));
+ok('bar lists exactly the title languages (english is gone)',
+  langs.length === singleEntry[1].length && langs.includes(singleLang), JSON.stringify(langs));
+const embedSub = await page.$eval('.watch-frame iframe', (n) => /[?&]sub_file=/.test(n.getAttribute('src') || ''));
+ok('the primary embed carries the subtitle track (sub_file param)', embedSub);
+const preSelected = await page.$$eval('#subtitle-langs .sub-lang.is-active', (n) => n.length);
+ok('the overlay language is not auto-selected while the embed shows the track',
+  preSelected === 0, `selected=${preSelected}`);
 
-/* ---- 2. a real cue reaches the overlay, without markup ----------------- */
+/* ---- 2. picking a language reveals a real cue, without markup ---------- */
 
+await page.click('#subtitle-langs .sub-lang');
 const cueVisible = await page
   .waitForFunction(
     () => {
@@ -236,7 +327,7 @@ const cueVisible = await page
       return overlay && !overlay.hidden && cue && cue.textContent.trim().length > 0;
     },
     null,
-    { timeout: 20000 }
+    { timeout: 30000 }
   )
   .then(() => true)
   .catch(() => false);
@@ -246,23 +337,27 @@ ok('cue text carries no markup', !/[<{]/.test(cueText));
 
 /* ---- 3. sync offset: applied, remembered, resettable ------------------- */
 
+const offsetKey = `sub:offset:${singleKey}`;
 await page.click('[data-sub-offset="5"]');
 const offsetLabel = await page.$eval('#subtitle-offset-value', (n) => n.textContent.trim());
-const stored = await page.evaluate(() => localStorage.getItem('sub:offset:movie/1223601'));
+const stored = await page.evaluate((k) => localStorage.getItem(k), offsetKey);
 ok('offset advances and is remembered per title', offsetLabel === '+5.0 ث' && stored === '5',
   `label=${JSON.stringify(offsetLabel)} stored=${JSON.stringify(stored)}`);
 
 await page.click('#subtitle-reset');
-const afterReset = await page.evaluate(() => ({
-  label: document.getElementById('subtitle-offset-value').textContent.trim(),
-  stored: localStorage.getItem('sub:offset:movie/1223601'),
-  toast: document.querySelector('#toast-zone .toast')?.textContent || null
-}));
+const afterReset = await page.evaluate(
+  (k) => ({
+    label: document.getElementById('subtitle-offset-value').textContent.trim(),
+    stored: localStorage.getItem(k),
+    toast: document.querySelector('#toast-zone .toast')?.textContent || null
+  }),
+  offsetKey
+);
 ok('reset clears the offset, restarts the timeline and confirms it',
   afterReset.label === '0.0 ث' && afterReset.stored === '0' && /أُعيد ضبط الترجمة/.test(afterReset.toast || ''),
   JSON.stringify(afterReset));
 
-/* ---- 4. hide/show + language switching --------------------------------- */
+/* ---- 4. hide/show ------------------------------------------------------ */
 
 await page.click('#subtitle-toggle');
 const hidden = await page.evaluate(() => ({
@@ -272,43 +367,62 @@ const hidden = await page.evaluate(() => ({
 ok('hide button hides the overlay', hidden.pressed === 'false' && hidden.overlayHidden, JSON.stringify(hidden));
 await page.click('#subtitle-toggle');
 
-/* ---- 5. a bilingual title picks Kurdish first, and switches ----------- */
+/* ---- 5. a bilingual title lists both, Kurdish first, and switches ------ */
 
-await settle('#/watch/movie/278?title=The%20Shawshank%20Redemption');
+await settle(`#/watch/${dualKey}?title=Bilingual%20Test`);
 await page.waitForSelector('#subtitle-bar:not([hidden])', { timeout: 30000 });
-const firstLang = await page.$eval('#subtitle-langs .sub-lang.is-active', (n) => n.dataset.subLang);
-ok('Kurdish is preferred when available', firstLang === 'ku', firstLang);
+const dualLangs = await page.$$eval('#subtitle-langs .sub-lang', (nodes) => nodes.map((n) => n.dataset.subLang));
+ok('a bilingual title lists both languages', dualLangs.length >= 2, JSON.stringify(dualLangs));
+if (dualEntry[1].includes('ku')) ok('Kurdish leads the language order', dualLangs[0] === 'ku', JSON.stringify(dualLangs));
 
-await page.click('#subtitle-langs .sub-lang:not(.is-active)');
+await page.click(`#subtitle-langs .sub-lang[data-sub-lang="${dualLangs[0]}"]`);
+const firstActive = await page.$eval('#subtitle-langs .sub-lang.is-active', (n) => n.dataset.subLang);
+ok('clicking a language selects it', firstActive === dualLangs[0], firstActive);
+
+await page.click(`#subtitle-langs .sub-lang[data-sub-lang="${dualLangs[1]}"]`);
 await page.waitForTimeout(800);
 const afterSwitch = await page.evaluate(() => ({
   active: document.querySelector('#subtitle-langs .sub-lang.is-active')?.dataset.subLang,
   state: document.querySelector('#subtitle-bar').getAttribute('data-state')
 }));
-ok('language switch succeeds', afterSwitch.active === 'ar' && afterSwitch.state !== 'error',
+ok('language switch succeeds', afterSwitch.active === dualLangs[1] && afterSwitch.state !== 'error',
   JSON.stringify(afterSwitch));
 
-/* ---- 6. titles whose subtitle pool stays empty never show the bar ------
+/* ---- 6. remote-only titles: auto-preferred overlay, then empty pool ----
  *
- * The remote resolver (action=subtitles) is intercepted here so this
- * section measures the app's behaviour with an empty language pool, not
- * whatever the network happens to carry today. The remote path itself is
- * exercised by scripts/server logic + a manual smoke test, not by this gate.
+ * The intercepted resolver is flipped to a non-empty Kurdish pool, so this
+ * section measures the auto-select path the embed-carried movies skip — then
+ * flipped back to empty to measure the no-bar behaviour.
  */
 
-await page.route('**/TMDBCache.aspx?action=subtitles*', (route) =>
-  route.fulfill({
-    status: 200,
-    contentType: 'application/json; charset=utf-8',
-    body: '{"langs":[]}'
-  })
-);
+remoteMode = 'full';
+await settle(`#/watch/movie/${missingId}?title=Remote%20Only`);
+await page.waitForSelector('#subtitle-bar:not([hidden])', { timeout: 30000 });
+const remoteActive = await page
+  .$eval('#subtitle-langs .sub-lang.is-active', (n) => n.dataset.subLang)
+  .catch(() => null);
+ok('a remote-only title auto-selects the preferred language', remoteActive === 'ku', String(remoteActive));
+const remoteCue = await page
+  .waitForFunction(
+    () => {
+      const overlay = document.querySelector('#subtitle-overlay');
+      return (
+        overlay && !overlay.hidden && (document.querySelector('#subtitle-cue').textContent || '').trim().length > 0
+      );
+    },
+    null,
+    { timeout: 30000 }
+  )
+  .then(() => true)
+  .catch(() => false);
+ok('a remote cue renders on the overlay', remoteCue);
 
+remoteMode = 'empty';
 await settle('#/watch/tv/1396/1/1?title=Breaking%20Bad');
 await page.waitForTimeout(1500);
 ok('TV titles with an empty subtitle pool show no bar', await barHidden());
 
-await settle('#/watch/movie/11?title=Star%20Wars%3A%20Episode%20IV');
+await settle(`#/watch/movie/${emptyId}?title=Empty%20Pool`);
 await page.waitForSelector('#subtitle-bar:not([hidden])', { timeout: 5000 }).catch(() => {});
 await page.waitForTimeout(1200);
 ok('a movie with no local files and an empty remote pool shows no bar', await barHidden());

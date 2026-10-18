@@ -10,7 +10,8 @@
     "check": "node scripts/check.js",
     "check:smoke": "node scripts/check.js --smoke",
     "qa": "node scripts/qa.mjs",
-    "qa:subs": "node scripts/qa-subtitles.mjs"
+    "qa:subs": "node scripts/qa-subtitles.mjs",
+    "subs:index": "node scripts/build-subtitles-index.mjs"
   },
   "engines": {
     "node": ">=18"

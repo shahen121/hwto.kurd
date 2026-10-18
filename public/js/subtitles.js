@@ -1,11 +1,16 @@
 /**
  * subtitles.js — local WebVTT playback on the watch screen.
  *
- * The player is a cross-origin <iframe> (vidcore.io): a native <track> cannot
- * be attached to a video we do not own, and the frame's currentTime is not
- * readable. So we render our own cue overlay driven by a wall clock that
- * starts when the frame loads, plus a per-title sync offset the viewer can
- * adjust (and that is remembered in localStorage).
+ * The default player is a cross-origin <iframe> (vidlink.pro): a native
+ * <track> cannot be attached to a video we do not own, and the frame's
+ * currentTime is not readable. There we render our own cue overlay driven by
+ * a wall clock that starts when the frame loads, plus a per-title sync offset
+ * the viewer can adjust (and that is remembered in localStorage).
+ *
+ * The internal clean player (the Fastvid path) swaps the iframe for a <video>
+ * we DO own — there real <track> elements are attached per language, the
+ * browser keeps them in sync, they survive fullscreen, and the overlay is
+ * switched off so the two never paint at once.
  *
  * Nothing here performs network I/O — every request in the app goes through
  * the api service layer.
@@ -148,7 +153,7 @@ function writeOffset(type, id, value) {
  * Wire the subtitle bar + overlay inside `root` (the watch view).
  * Returns { destroy() } — the ticker also self-stops if the view is detached.
  */
-export function attachSubtitles(root, { type = 'movie', id, season, episode, signal } = {}) {
+export function attachSubtitles(root, { type = 'movie', id, season, episode, signal, embedSubtitles = false } = {}) {
   const bar = root.querySelector('#subtitle-bar');
   const overlay = root.querySelector('#subtitle-overlay');
   const cueEl = root.querySelector('#subtitle-cue');
@@ -178,6 +183,103 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
   let loadCtrl = null;
   let fontScale = readFontScale();
 
+  /* ---- native <video> (the internal clean player) ----------------------
+   * On the Fastvid path we own the <video>, so a real <track> is attached
+   * per language: the browser keeps it in sync, it survives fullscreen, and
+   * the wall-clock overlay is switched off entirely.
+   */
+  let langConfigs = [];
+  const nativeTracks = new Map(); // code -> <track>
+  let nativeVideoEl = null;
+  let cueStyleEl = null;
+  let nativeAutoDone = false;
+  const appliedOffsets = new WeakMap(); // <track> -> offset already applied
+
+  const nativeVideo = () => {
+    const video = root.querySelector('.watch-frame video');
+    return video && !video.hidden && video.style.display !== 'none' ? video : null;
+  };
+
+  const applyCueOffset = (el, value) => {
+    const track = el && el.track;
+    if (!track || !track.cues) return;
+    const delta = value - (appliedOffsets.get(el) || 0);
+    if (!delta) return;
+    for (const cue of track.cues) {
+      cue.startTime += delta;
+      cue.endTime += delta;
+    }
+    appliedOffsets.set(el, value);
+  };
+
+  const applyCueStyle = () => {
+    if (!cueStyleEl) {
+      cueStyleEl = document.createElement('style');
+      cueStyleEl.id = 'subtitle-cue-style';
+      document.head.appendChild(cueStyleEl);
+    }
+    cueStyleEl.textContent = `.watch-frame video::cue { font-size: ${Math.round(fontScale * 100)}%; }`;
+  };
+
+  const syncNativeTracks = () => {
+    const video = nativeVideo();
+    if (!video) return false;
+    if (nativeVideoEl !== video) {
+      for (const el of nativeTracks.values()) el.remove();
+      nativeTracks.clear();
+      nativeVideoEl = video;
+    }
+    const wanted = new Set(langConfigs.map((c) => c.code));
+    for (const [code, el] of nativeTracks) {
+      if (wanted.has(code)) continue;
+      el.remove();
+      nativeTracks.delete(code);
+    }
+    for (const cfg of langConfigs) {
+      if (nativeTracks.has(cfg.code)) continue;
+      const el = document.createElement('track');
+      el.kind = 'subtitles';
+      el.srclang = cfg.code;
+      el.label = cfg.label || LANG_LABELS[cfg.code] || cfg.code.toUpperCase();
+      el.src = api.subtitleVttUrl({ type, id, lang: cfg.code, source: cfg.source, season, episode });
+      el.addEventListener('load', () => applyCueOffset(el, offset));
+      video.appendChild(el);
+      el.track.mode = 'disabled';
+      nativeTracks.set(cfg.code, el);
+    }
+    applyCueStyle();
+    enforceNativeModes();
+    return nativeTracks.size > 0;
+  };
+
+  /**
+   * Exactly one native track may be active, and the active one is the
+   * language the bar shows — enforced every tick, because a track element can
+   * flip itself to 'showing' while its resource loads (which would paint two
+   * languages over the video at once).
+   */
+  const enforceNativeModes = () => {
+    const activeBtn = langsEl.querySelector('.sub-lang.is-active');
+    if (!activeBtn || !nativeTracks.size) return;
+    const want = activeBtn.getAttribute('data-sub-lang');
+    const mode = visible ? 'showing' : 'hidden';
+    for (const [code, el] of nativeTracks) {
+      const target = code === want ? mode : 'disabled';
+      if (el.track.mode !== target) el.track.mode = target;
+    }
+  };
+
+  /** Render `lang` from the native tracks; false when not on the native player. */
+  const selectNativeLanguage = (lang) => {
+    if (!syncNativeTracks()) return false;
+    if (!nativeTracks.has(lang)) return false;
+    enforceNativeModes();
+    applyCueOffset(nativeTracks.get(lang), offset);
+    cueEl.textContent = '';
+    overlay.hidden = true;
+    return true;
+  };
+
   const renderOffset = () => {
     if (offsetEl) offsetEl.textContent = `${offset > 0 ? '+' : ''}${offset.toFixed(1)} ث`;
   };
@@ -188,6 +290,11 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
 
   const renderCue = () => {
     if (destroyed) return;
+    // The native player renders its own <track> — the overlay must stay out.
+    if (nativeVideo()) {
+      overlay.hidden = true;
+      return;
+    }
     if (!visible || !cues.length || origin === null) {
       overlay.hidden = true;
       return;
@@ -207,6 +314,15 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
       if (!root.isConnected) {
         destroy();
         return;
+      }
+      if (nativeVideo()) {
+        syncNativeTracks();
+        if (!nativeAutoDone && langConfigs.length) {
+          nativeAutoDone = true;
+          // Route through selectLanguage so the bar reflects the choice too.
+          const first = langConfigs[0];
+          selectLanguage(first.code, first.source);
+        }
       }
       renderCue();
     }, 200);
@@ -229,6 +345,11 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
       btn.classList.toggle('is-active', active);
       btn.setAttribute('aria-pressed', String(active));
     });
+
+    // The internal player owns real <track> elements — switch those instead
+    // of fetching the text into the overlay.
+    if (selectNativeLanguage(lang)) return;
+
     cueEl.textContent = '';
     overlay.hidden = true;
 
@@ -276,6 +397,7 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
       offset = clampOffset(Math.round((offset + delta) * 10) / 10);
       writeOffset(type, id, offset);
       renderOffset();
+      if (nativeVideo()) for (const el of nativeTracks.values()) applyCueOffset(el, offset);
       renderCue();
     });
   });
@@ -287,6 +409,7 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
       fontScale = Math.min(FONT_MAX, Math.max(FONT_MIN, Math.round((fontScale + dir * FONT_STEP) * 10) / 10));
       writeFontScale(fontScale);
       applyFontScale(root, fontScale);
+      if (nativeVideo()) applyCueStyle();
       renderFont();
     });
   });
@@ -302,6 +425,7 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
       writeOffset(type, id, 0);
       origin = performance.now();
       renderOffset();
+      if (nativeVideo()) for (const el of nativeTracks.values()) applyCueOffset(el, 0);
       renderCue();
       showToast('أُعيد ضبط الترجمة إلى البداية (00:00)');
     });
@@ -312,6 +436,7 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
       visible = !visible;
       toggleEl.setAttribute('aria-pressed', String(visible));
       toggleEl.textContent = visible ? 'إخفاء الترجمة' : 'إظهار الترجمة';
+      enforceNativeModes();
       renderCue();
     });
   }
@@ -369,8 +494,12 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
   const reveal = (configs) => {
     if (destroyed || discovered || !configs.length) return;
     discovered = true;
+    langConfigs = configs;
     renderLangButtons(configs);
     bar.hidden = false;
+    // VidLink already renders our track on the embed — do not paint the same
+    // text twice. The bar stays and the viewer can switch/hide either one.
+    if (embedSubtitles) return;
     const preferred = configs[0];
     if (preferred) selectLanguage(preferred.code, preferred.source);
   };
@@ -412,6 +541,9 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
     ticker = null;
     if (loadCtrl) loadCtrl.abort();
     if (frame) frame.removeEventListener('load', onFrameLoad);
+    for (const el of nativeTracks.values()) el.remove();
+    nativeTracks.clear();
+    if (cueStyleEl) cueStyleEl.remove();
     overlay.hidden = true;
   }
 

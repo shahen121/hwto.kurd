@@ -276,15 +276,16 @@ export const KNOWN_TV_SERIES = {
 };
 
 /**
- * Primary embed streaming provider (VidCore) using TMDB IDs.
+ * Primary embed streaming provider (VidLink) using TMDB IDs. VidLink also
+ * accepts one external WebVTT track via ?sub_file=&sub_label= (see watch.js).
  */
 export const PLAYER_SERVERS = [
   {
-    id: 'vidcore',
-    name: 'سيرفر VidCore (الأساسي)',
+    id: 'vidlink',
+    name: 'سيرفر VidLink (الأساسي)',
     badge: 'الأساسي',
-    movieUrl: (id) => `https://vidcore.io/movie/${id}`,
-    tvUrl: (id, s, e) => `https://vidcore.io/tv/${id}/${s}/${e}`
+    movieUrl: (id) => `https://vidlink.pro/movie/${id}`,
+    tvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}`
   }
 ];
 

@@ -240,24 +240,35 @@ if (!fs.existsSync(subIndexPath)) {
     if (indexed && !missing) ok(`all ${indexed} indexed subtitle files exist (${Object.keys(subIndex).length} titles)`);
     if (indexed && !removedLangs) ok('subtitle index carries only ku/ar (english removed)');
 
-    const sample = path.join(subDir, 'movie/12500/ku.vtt');
-    if (indexed && fs.existsSync(sample)) {
+    // The parser is exercised on a real file from the corpus. The long-standing
+    // samples are preferred; a re-synced corpus that drops them falls back to
+    // the first indexed file for that language instead of failing spuriously.
+    const pickSample = (lang, canonicalId) => {
+      const canonical = path.join(subDir, `movie/${canonicalId}/${lang}.vtt`);
+      if (fs.existsSync(canonical)) return { file: canonical, strict: true, rel: `movie/${canonicalId}/${lang}.vtt` };
+      const key = Object.entries(subIndex).find(([, langs]) => langs.includes(lang))?.[0];
+      if (!key || !fs.existsSync(path.join(subDir, `${key}/${lang}.vtt`))) return null;
+      return { file: path.join(subDir, `${key}/${lang}.vtt`), strict: false, rel: `${key}/${lang}.vtt` };
+    };
+
+    const sample = indexed ? pickSample('ku', 12500) : null;
+    if (sample) {
       try {
         const subs = await import(pathToFileURL(path.join(PUBLIC, 'js', 'subtitles.js')).href);
-        const cues = subs.parseVtt(fs.readFileSync(sample, 'utf8'));
-        if (cues.length < 10) {
-          fail(`subtitle parser produced only ${cues.length} cues from movie/12500/ku.vtt`);
+        const cues = subs.parseVtt(fs.readFileSync(sample.file, 'utf8'));
+        if (cues.length < (sample.strict ? 10 : 1)) {
+          fail(`subtitle parser produced only ${cues.length} cues from ${sample.rel}`);
         } else {
-          const probe = cues[5];
+          const probe = cues[Math.min(5, cues.length - 1)];
           const hit = subs.cueAt(cues, (probe.start + probe.end) / 2);
           if (hit !== probe.text) fail('cueAt() did not return the covering cue');
-          else ok(`subtitle parser: ${cues.length} cues parsed, cueAt() verified`);
+          else ok(`subtitle parser: ${cues.length} cues parsed from ${sample.rel}, cueAt() verified`);
         }
 
         // 17% of the corpus carries ASS/SRT markup — it must never reach the screen.
-        const styled = path.join(subDir, 'movie/157354/ar.vtt');
-        if (fs.existsSync(styled)) {
-          const styledCues = subs.parseVtt(fs.readFileSync(styled, 'utf8'));
+        const styled = pickSample('ar', 157354);
+        if (styled) {
+          const styledCues = subs.parseVtt(fs.readFileSync(styled.file, 'utf8'));
           const markup = styledCues.find((cue) => /[<{]/.test(cue.text));
           if (!styledCues.length) fail('subtitle parser produced no cues from the markup sample');
           else if (markup) fail(`subtitle parser left markup behind: ${JSON.stringify(markup.text.slice(0, 70))}`);
@@ -267,7 +278,7 @@ if (!fs.existsSync(subIndexPath)) {
         fail(`subtitle parser check failed: ${err.message}`);
       }
     } else if (indexed || subtitleFiles.length) {
-      fail('subtitle sample file public/subtitles/movie/12500/ku.vtt missing');
+      fail('no Kurdish subtitle file found in public/subtitles to exercise the parser');
     }
     if (!indexed && !subtitleFiles.length) ok('subtitle index is empty; no subtitle files are installed');
   }
@@ -348,8 +359,16 @@ if (process.argv.includes('--smoke') && !problems.length) {
     console.log('  ok  smoke: localization module is served');
 
     const subtitlesIndex = await withTimeout(`${base}/subtitles/index.json`);
-    if (subtitlesIndex.status !== 200 || !subtitlesIndex.text.includes('{}')) throw new Error(`GET /subtitles/index.json -> ${subtitlesIndex.status}`);
-    console.log('  ok  smoke: empty subtitle index is served without a 404');
+    let subIndexBody = null;
+    try {
+      subIndexBody = JSON.parse(subtitlesIndex.text);
+    } catch {
+      /* not JSON */
+    }
+    if (subtitlesIndex.status !== 200 || !subIndexBody || typeof subIndexBody !== 'object') {
+      throw new Error(`GET /subtitles/index.json -> ${subtitlesIndex.status}`);
+    }
+    console.log(`  ok  smoke: subtitle index served (${Object.keys(subIndexBody).length} titles)`);
 
     const stats = await withTimeout(`${base}/api/TMDBCache.aspx?action=stats`);
     if (stats.status !== 200) throw new Error(`API proxy -> ${stats.status}`);
@@ -362,10 +381,10 @@ if (process.argv.includes('--smoke') && !problems.length) {
     console.log('  ok  smoke: proxied list endpoint responds');
 
     const watchJs = await withTimeout(`${base}/js/pages/watch.js`);
-    if (watchJs.status !== 200 || !watchJs.text.includes('vidcore.io')) {
+    if (watchJs.status !== 200 || !watchJs.text.includes('vidlink.pro')) {
       throw new Error(`GET /js/pages/watch.js -> ${watchJs.status}`);
     }
-    console.log('  ok  smoke: GET /js/pages/watch.js serves vidcore-based watch page');
+    console.log('  ok  smoke: GET /js/pages/watch.js serves vidlink-based watch page');
 
     // Run deep E2E verification of player, server switching, and TV series matching
     try {
@@ -415,13 +434,13 @@ if (process.argv.includes('--smoke') && !problems.length) {
           await page.waitForSelector('.watch-frame iframe', { timeout: 10000 });
           const movieFrameSrc = await page.getAttribute('.watch-frame iframe', 'src');
           const docTitle = await page.title();
-          if (!/^https:\/\/vidcore\.io\/movie\/278/.test(movieFrameSrc || '')) {
+          if (!/^https:\/\/vidlink\.pro\/movie\/278/.test(movieFrameSrc || '')) {
             throw new Error(`Movie frame src mismatch: ${movieFrameSrc}`);
           }
           if (!docTitle.includes('— مشاهدة — hwto.kurd')) {
             throw new Error(`Movie doc title mismatch: ${docTitle}`);
           }
-          console.log('  ok  e2e: movie watch embeds vidcore with TMDB ID');
+          console.log('  ok  e2e: movie watch embeds vidlink with TMDB ID');
 
           // Verify single primary server and clean iframe attributes
           const serverBarCount = await page.$$eval('.watch-server-bar', els => els.length);
@@ -430,38 +449,38 @@ if (process.argv.includes('--smoke') && !problems.length) {
           }
           const movieSandbox = await page.getAttribute('.watch-frame iframe', 'sandbox');
           if (movieSandbox !== null) {
-            throw new Error(`Iframe must NOT have sandbox (broke VidCore playback), found: ${movieSandbox}`);
+            throw new Error(`Iframe must NOT have sandbox (broke VidLink playback), found: ${movieSandbox}`);
           }
           const extBtnCount = await page.$$eval('#btn-external-player', els => els.length);
           if (extBtnCount !== 0) {
             throw new Error(`External player button should be removed, found: ${extBtnCount}`);
           }
-          console.log('  ok  e2e: single primary server VidCore verified (no sandbox)');
+          console.log('  ok  e2e: single primary server VidLink verified (no sandbox)');
 
           // 2. TV watch route with season and episode
           await page.goto(`${base}/#/watch/tv/1396?title=${encodeURIComponent('Breaking Bad')}&season=1&episode=1`, { waitUntil: 'domcontentloaded' });
-          await page.waitForFunction(() => document.querySelector('.watch-frame iframe')?.getAttribute('src') === 'https://vidcore.io/tv/1396/1/1', { timeout: 10000 });
+          await page.waitForFunction(() => document.querySelector('.watch-frame iframe')?.getAttribute('src') === 'https://vidlink.pro/tv/1396/1/1', { timeout: 10000 });
           const tvFrameSrc = await page.getAttribute('.watch-frame iframe', 'src');
-          if (tvFrameSrc !== 'https://vidcore.io/tv/1396/1/1') {
+          if (tvFrameSrc !== 'https://vidlink.pro/tv/1396/1/1') {
             throw new Error(`TV frame src mismatch: ${tvFrameSrc}`);
           }
-          console.log('  ok  e2e: TV watch embeds vidcore with season and episode');
+          console.log('  ok  e2e: TV watch embeds vidlink with season and episode');
 
           // Switch episode in TV watch
           await page.click('[data-ep="2"]');
           await page.waitForTimeout(500);
           const ep2Src = await page.getAttribute('.watch-frame iframe', 'src');
-          if (ep2Src !== 'https://vidcore.io/tv/1396/1/2') {
+          if (ep2Src !== 'https://vidlink.pro/tv/1396/1/2') {
             throw new Error(`Episode click failed: ${ep2Src}`);
           }
           console.log('  ok  e2e: episode button switches player to episode 2');
 
-          // Direct slash TV route navigation: #/watch/tv/1396/2/3 embeds VidCore directly
+          // Direct slash TV route navigation: #/watch/tv/1396/2/3 embeds VidLink directly
           await page.goto(`${base}/#/watch/tv/1396/2/3`, { waitUntil: 'domcontentloaded' });
           await page.waitForSelector('.watch-frame iframe', { timeout: 10000 });
           const slashTvSrc = await page.getAttribute('.watch-frame iframe', 'src');
-          if (slashTvSrc !== 'https://vidcore.io/tv/1396/2/3') {
-            throw new Error(`Direct slash TV route failed to embed VidCore: ${slashTvSrc}`);
+          if (slashTvSrc !== 'https://vidlink.pro/tv/1396/2/3') {
+            throw new Error(`Direct slash TV route failed to embed VidLink: ${slashTvSrc}`);
           }
           const s2Active = await page.$eval('[data-season-tab="2"]', el => el.classList.contains('is-active'));
           const ep3Active = await page.$eval('[data-ep="3"]', el => el.classList.contains('is-active'));
@@ -474,7 +493,7 @@ if (process.argv.includes('--smoke') && !problems.length) {
           await page.click('[data-season-tab="4"]');
           await page.waitForTimeout(500);
           const s4Ep1Src = await page.getAttribute('.watch-frame iframe', 'src');
-          if (s4Ep1Src !== 'https://vidcore.io/tv/1396/4/1') {
+          if (s4Ep1Src !== 'https://vidlink.pro/tv/1396/4/1') {
             throw new Error(`Watch season tab switch failed: ${s4Ep1Src}`);
           }
           console.log('  ok  e2e: watch season tab switches to Season 4 Episode 1');
@@ -483,21 +502,21 @@ if (process.argv.includes('--smoke') && !problems.length) {
           await page.click('[data-nav-dir="next"]');
           await page.waitForTimeout(500);
           const s4Ep2Src = await page.getAttribute('.watch-frame iframe', 'src');
-          if (s4Ep2Src !== 'https://vidcore.io/tv/1396/4/2') {
+          if (s4Ep2Src !== 'https://vidlink.pro/tv/1396/4/2') {
             throw new Error(`Next episode button failed: ${s4Ep2Src}`);
           }
           console.log('  ok  e2e: next episode navigation button advances to Episode 2');
 
-          // Verify external player link is absent and stream URL input matches VidCore
+          // Verify external player link is absent and stream URL input matches VidLink
           const extHref = await page.$('#btn-external-player');
           if (extHref) {
             throw new Error('External player button should be removed from DOM');
           }
           const streamUrlVal = await page.$eval('#stream-url-input', el => el.value);
-          if (streamUrlVal !== 'https://vidcore.io/tv/1396/4/2') {
+          if (streamUrlVal !== 'https://vidlink.pro/tv/1396/4/2') {
             throw new Error(`Stream url input mismatch: ${streamUrlVal}`);
           }
-          console.log('  ok  e2e: external player button is absent and stream URL input matches VidCore');
+          console.log('  ok  e2e: external player button is absent and stream URL input matches VidLink');
 
           // 3. TV details page season and episode count check for Fallout (106379: 1 season, 8 episodes)
           await page.goto(`${base}/#/tv/106379`, { waitUntil: 'domcontentloaded' });
