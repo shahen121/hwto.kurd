@@ -1111,6 +1111,32 @@
   color: #fff;
 }
 
+/* In-flight hint shown while the language group is being fetched. */
+.server-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.server-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  border-top-color: var(--brand);
+  animation: spin 0.85s linear infinite;
+}
+
+.server-empty {
+  font-size: 0.8rem;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
 @media (max-width: 560px) {
   .server-bar {
     gap: 8px;
@@ -1130,6 +1156,11 @@
   .server-lang-btn {
     font-size: 0.74rem;
     padding: 5px 8px;
+  }
+
+  .server-loading,
+  .server-empty {
+    font-size: 0.74rem;
   }
 }
 /* ------------------------------- list sort --------------------------- */

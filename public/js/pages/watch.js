@@ -237,13 +237,22 @@ function serverUrl(entry, params, media) {
   return entry.url;
 }
 
-function renderServerBar(list, servers, selectedKey) {
-  list.innerHTML = servers
+function renderServerBar(list, servers, selectedKey, state = {}) {
+  const buttons = servers
     .map((srv, i) => {
       const active = srv.key === selectedKey || (!selectedKey && i === 0);
       return `<button type="button" class="server-btn${active ? ' is-active' : ''}" data-server-key="${attr(srv.key)}" title="${attr(srv.label)}"${active ? ' aria-current="true"' : ''}>${i + 1}</button>`;
     })
     .join('');
+
+  let tail = '';
+  if (state.loading) {
+    tail = '<span class="server-loading" role="status"><span class="server-spinner" aria-hidden="true"></span>جاري تحميل السيرفرات…</span>';
+  } else if (state.empty) {
+    tail = '<span class="server-empty">لا توجد سيرفرات بديلة</span>';
+  }
+
+  list.innerHTML = buttons + tail;
 }
 
 /** Site UI language → server language group ('ar' Arabic, else 'ku' Kurdish). */
@@ -274,9 +283,10 @@ async function refreshServerBar(root, params, media) {
   bar.hidden = false;
 
   // VidCore renders instantly — the alternates stream in afterwards, so a
-  // slow upstream never blocks the primary player.
+  // slow upstream never blocks the primary player. A inline spinner shows
+  // that the language group is still being fetched.
   if (ctx) ctx.servers = [PRIMARY];
-  renderServerBar(list, [PRIMARY], 'vidcore');
+  renderServerBar(list, [PRIMARY], 'vidcore', { loading: true });
   updateServerLangToggle(root);
 
   // One token per refresh: a language toggle issued while a fetch is in
@@ -302,6 +312,12 @@ async function refreshServerBar(root, params, media) {
   }
   if (root !== (ctx && ctx.view) || token !== (ctx && ctx.serversToken)) return;
 
+  // جدار حماية صارم للخيارات: سيرفرات شاهد فور يو (ترجمة عربية) تظهر فقط
+  // في الخيار العربي، وسيرفرات beenar/kurdcinama فقط في الخيار الكردي —
+  // حتى لو عاد الـ API بقائمة مختلطة لأي سبب (كاش قديم مثلاً).
+  const lang = (ctx && ctx.serverLang) || siteServerLang();
+  alternates = alternates.filter((s) => (lang === 'ar' ? s.source === 'shahid4u' : s.source !== 'shahid4u'));
+
   // الحفاظ على فرادة مفاتيح السيرفرات وإلغاء الزر الوهمي الثابت
   const seenKeys = new Map();
   const servers = [
@@ -320,7 +336,7 @@ async function refreshServerBar(root, params, media) {
   }
 
   if (ctx) ctx.servers = servers;
-  renderServerBar(list, servers, (ctx && ctx.selectedServerKey) || 'vidcore');
+  renderServerBar(list, servers, (ctx && ctx.selectedServerKey) || 'vidcore', { empty: alternates.length === 0 });
 }
 
 function pickServer(root, params, media, key) {
