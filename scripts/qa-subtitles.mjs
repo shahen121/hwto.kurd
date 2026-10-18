@@ -13,9 +13,9 @@
  *      markup ({\an8} / <font> style leftovers),
  *   3. the sync offset (+5s / reset) is applied and remembered per title,
  *   4. hide/show and language switching work without errors,
- *   5. a remote-only title auto-selects the preferred language (the resolver
- *      is intercepted to a Kurdish track), while TV titles and movies with an
- *      empty pool never show the bar,
+ *   5. a remote-only title offers only Kurdish and Arabic (the resolver is
+ *      intercepted returning several languages), auto-selecting the preferred
+ *      one, while TV titles and movies with an empty pool never show the bar,
  *   6. every /subtitles/ request is 200, no console errors, no failed
  *      responses — the embedded player's own noise is bucketed separately,
  *      exactly like scripts/qa.mjs does.
@@ -293,7 +293,7 @@ await page.route('**/TMDBCache.aspx?action=subtitles*', (route) => {
   return route.fulfill({
     status: 200,
     contentType: 'application/json; charset=utf-8',
-    body: '{"langs":[{"code":"ku","label":"Kurdish"}]}'
+    body: '{"langs":[{"code":"en","label":"English"},{"code":"ku","label":"Kurdish"},{"code":"fr"},{"code":"ar"}]}'
   });
 });
 
@@ -398,6 +398,9 @@ ok('language switch succeeds', afterSwitch.active === dualLangs[1] && afterSwitc
 remoteMode = 'full';
 await settle(`#/watch/movie/${missingId}?title=Remote%20Only`);
 await page.waitForSelector('#subtitle-bar:not([hidden])', { timeout: 30000 });
+const remoteLangs = await page.$$eval('#subtitle-langs .sub-lang', (nodes) => nodes.map((n) => n.dataset.subLang));
+ok('only Kurdish and Arabic are offered, whatever the resolver returns',
+  JSON.stringify(remoteLangs) === '["ku","ar"]', JSON.stringify(remoteLangs));
 const remoteActive = await page
   .$eval('#subtitle-langs .sub-lang.is-active', (n) => n.dataset.subLang)
   .catch(() => null);

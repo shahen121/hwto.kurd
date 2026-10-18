@@ -48,8 +48,9 @@ async function applyEmbedSubtitle(root, { type, id }, signal) {
   if (!langs.length || !ctx || root !== ctx.view || (signal && signal.aborted)) return false;
   if (ctx.selectedServerKey && ctx.selectedServerKey !== PRIMARY.key) return false;
 
-  const preferred = siteServerLang();
-  const lang = langs.includes(preferred) ? preferred : langs[0];
+  // The embed must carry the same language the subtitle bar leads with
+  // (Kurdish, then Arabic) so the two never disagree.
+  const lang = ['ku', 'ar'].find((code) => langs.includes(code)) || langs[0];
   const subFile = `${location.origin}/subtitles/${encodeURIComponent(type)}/${encodeURIComponent(id)}/${encodeURIComponent(lang)}.vtt`;
 
   const url = new URL(playerUrl({ type, id }));
@@ -261,6 +262,9 @@ export async function mount(params, view, { signal }) {
   wireDownloadAndCopy(view, url);
   if (media === 'tv') wireTvControls(view, params);
   wireServerBar(view, params, media);
+  // The title lands with the first paint; the subtitle lookup below is async
+  // and must not delay it (the router set a bare "watch" title meanwhile).
+  updateDocTitle(title, media, currentSeason, currentEpisode);
 
   // Automatic subtitles (local corpus + the remote resolver) — both handle
   // movies and TV; TV keys off the current season/episode. The embed hint is
@@ -277,8 +281,6 @@ export async function mount(params, view, { signal }) {
     signal,
     embedSubtitles
   });
-
-  updateDocTitle(title, media, currentSeason, currentEpisode);
 }
 
 /* ------------------------------------------------------------------ *

@@ -89,10 +89,11 @@ export function cueAt(cues, time) {
 
 /* ------------------------------- offsets ------------------------------- */
 
-// Kurdish and Arabic first (this site's audience); English is the remote
-// fallback — the local corpus no longer ships English files.
-const LANG_ORDER = ['ku', 'ar', 'en'];
-const LANG_LABELS = { ku: 'كردية', ar: 'العربية', en: 'English' };
+// This site serves exactly two subtitle languages: Kurdish and Arabic. The
+// remote resolver can return a dozen (English, French, Turkish…); they are all
+// dropped so the bar only ever offers these two.
+const SERVED_LANGS = ['ku', 'ar'];
+const LANG_LABELS = { ku: 'كردية', ar: 'العربية' };
 
 /** A remote row may label things slightly differently; normalise once. */
 const CODE_OVERRIDES = { 'pt-br': 'pt', 'zh-tw': 'zh' };
@@ -450,9 +451,8 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
   /* Auto-fit: the ticker self-destroys once the watch view unmounts. */
 
   // The local corpus may lag behind the remote resolver; merge both language
-  // pools (local wins on clash) and keep one of each entry in a stable order:
-  // Kurdish, Arabic, English first — RTL/native-audience first — then the rest
-  // of the remote catalogue alphabetical.
+  // pools (local wins on clash) but keep only the two languages this site
+  // serves — Kurdish first, then Arabic.
   /* Track the local index result so the remote merge keeps it. */
   let localLangs = [];
   const localLangsSnapshot = () => localLangs;
@@ -464,16 +464,16 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
     const local = new Set((localLangs || []).map((c) => String(c).toLowerCase()));
     const remote = new Map();
     for (const entry of remoteLangs || []) {
-      let code = String(entry && entry.code || '').toLowerCase();
+      let code = String((entry && entry.code) || '').toLowerCase();
       code = code.split('-')[0]; // "pt-BR" -> "pt", "zh-TW" -> "zh"
-      if (!/^[a-z]{2,5}$/.test(code)) continue;
+      if (!SERVED_LANGS.includes(code)) continue; // Kurdish and Arabic only
       const label =
         entry && typeof entry.label === 'string' && entry.label.trim()
           ? entry.label.trim()
           : LANG_LABELS[code] || code.toUpperCase();
       remote.set(code, label);
     }
-    for (const code of LANG_ORDER) {
+    for (const code of SERVED_LANGS) {
       if (local.has(code)) {
         langSource.set(code, 'local');
         configs.push({ code, source: 'local', label: LANG_LABELS[code] });
@@ -482,14 +482,8 @@ export function attachSubtitles(root, { type = 'movie', id, season, episode, sig
         configs.push({ code, source: 'remote', label: remote.get(code) });
       }
     }
-    const rest = [...remote.keys()].filter((c) => !LANG_ORDER.includes(c) && !seen(configs, c)).sort();
-    for (const code of rest) {
-      langSource.set(code, 'remote');
-      configs.push({ code, source: 'remote', label: remote.get(code) });
-    }
     return configs;
   };
-  const seen = (configs, code) => configs.some((c) => c.code === code);
 
   const reveal = (configs) => {
     if (destroyed || discovered || !configs.length) return;

@@ -174,6 +174,13 @@ page.on('console', (m) => {
     navNoise.push(text);
     return;
   }
+  // VidLink (https) fetches our VTT file itself; a blocked load of our own
+  // /subtitles/ URL is that embed's request, not our load path — and the
+  // subtitle gate asserts those responses independently.
+  if (/Failed to load resource/.test(text) && /\/subtitles\//.test(url)) {
+    foreignErrors.push(`embed blocked ${url}`);
+    return;
+  }
   if (url && !url.startsWith(BASE)) foreignErrors.push(`console ${url}`);
   else consoleErrors.push(url ? `${text} @ ${url}` : text);
 });
@@ -691,6 +698,14 @@ if (hasWatchBtn > 0) {
 }
 
 await settle('#/watch/tv/1396?title=' + encodeURIComponent('Breaking Bad') + '&season=1&episode=1');
+// The TV route resolves its data before mounting, so the frame may still be
+// the previous view's; wait for the TV embed itself before asserting it.
+await page
+  .waitForFunction(
+    () => /\/(tv|movie)\/1396\/1\/1/.test((document.querySelector('.watch-frame iframe') || {}).src || ''),
+    { timeout: 15000 }
+  )
+  .catch(() => {});
 const tvFrameSrc = await page.locator('.watch-frame iframe').getAttribute('src');
 ok('watch: TV route embeds vidlink.pro with season/episode',
   tvFrameSrc === 'https://vidlink.pro/tv/1396/1/1', tvFrameSrc || 'no src');
