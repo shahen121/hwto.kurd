@@ -804,16 +804,19 @@ ok('watch: TV route embeds vidlink.pro with season/episode',
 const htmlRes = await fetch(BASE + '/', { headers: { 'accept-encoding': 'gzip' } });
 const htmlBody = await htmlRes.text();
 const csp = htmlRes.headers.get('content-security-policy') || '';
-// The policy was deliberately widened (script-src 'unsafe-inline'/'unsafe-eval'
-// blob:, an open https: connect-src) so the embedded players can run — assert
-// the hard directives survive and VidLink stays reachable either explicitly
-// or through the https: wildcard.
-const connectSrc = (csp.match(/connect-src ([^;]+)/) || [])[1] || '';
-const vidlinkAllowed = connectSrc.includes('https://vidlink.pro') || /\bhttps:/.test(connectSrc);
+// MD-3: the policy is narrow again — no 'unsafe-eval' anywhere, connect-src is
+// same-origin, and no plaintext frames. VidLink is loaded as a *frame*
+// (frame-src https:), never as a browser fetch, so connect-src stays closed.
+const frameSrc = (csp.match(/frame-src ([^;]+)/) || [])[1] || '';
 ok('html ships a CSP with the hard directives',
-  csp.includes("default-src 'self'") && csp.includes('frame-ancestors') && csp.includes("connect-src 'self'")
-  && vidlinkAllowed,
+  csp.includes("default-src 'self'") && csp.includes("frame-ancestors 'none'")
+  && csp.includes("object-src 'none'") && csp.includes("base-uri 'self'")
+  && csp.includes("form-action 'self'"),
   JSON.stringify(csp.slice(0, 90)));
+ok('csp keeps vidlink frameable without opening connect-src',
+  /\bhttps:/.test(frameSrc) && !/frame-src[^;]*http:/.test(csp)
+  && /connect-src 'self' blob:;/.test(csp) && !/unsafe-eval/.test(csp),
+  `frame-src=${frameSrc}`);
 ok('html carries the hardening headers',
   htmlRes.headers.get('x-content-type-options') === 'nosniff'
     && htmlRes.headers.get('x-frame-options') === 'DENY'

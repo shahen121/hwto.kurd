@@ -6,6 +6,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { collectServers } from './lib/servers.mjs';
 import { listSubtitles, getSubtitleVtt } from './lib/subtitles.mjs';
+import * as SECURITY_POLICY from './lib/security-policy.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -59,36 +60,15 @@ const rateLimitMap = new Map();
 const serverlessRateMap = new Map();
 
 /* Response hardening + compression -------------------------------------- */
-const SECURITY_HEADERS = {
-  'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'X-Frame-Options': 'DENY',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
-  'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Resource-Policy': 'same-origin'
-};
+const SECURITY_HEADERS = SECURITY_POLICY.SECURITY_HEADERS;
 
 const HSTS_HEADER = process.env.NODE_ENV === 'production'
-  ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' }
+  ? { 'Strict-Transport-Security': SECURITY_POLICY.HSTS }
   : {};
 
-const CSP = [
-  "default-src 'self' https: data: blob:",
-  "base-uri 'self'",
-  "object-src 'none'",
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  "script-src 'self' 'unsafe-inline' blob:",
-  "worker-src 'self' blob:",
-  "child-src 'self' blob:",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob: https:",
-  "font-src 'self' https://fonts.gstatic.com data:",
-  "frame-src 'self' https: http:",
-  "connect-src 'self' https: blob:",
-  "media-src 'self' blob: https:",
-  "manifest-src 'self'"
-].join('; ');
+// MD-3: the policy lives in lib/security-policy.mjs so the dev server and the
+// vercel.json mirror (checked in scripts/check.js) can never drift apart.
+const CSP = SECURITY_POLICY.CSP;
 
 const COMPRESSIBLE = new Set(['.html', '.css', '.js', '.mjs', '.json', '.svg', '.txt', '.vtt']);
 const MIN_COMPRESS_BYTES = 1024;
@@ -243,7 +223,7 @@ async function proxyApi(req, res, reqUrl, isHead = false) {
     try {
       const result = await collectServers({ ...params, signal: AbortSignal.timeout(SERVERS_BUDGET_MS) });
       // A title that is simply absent upstream is a valid answer, not an error:
-      // the VidCore player keeps working with no alternates at all.
+      // the VidLink player keeps working with no alternates at all.
       sendJson(req, res, 200, result, {
         'Cache-Control': result.servers.length
           ? 'public, max-age=1800, stale-while-revalidate=60'
@@ -290,7 +270,8 @@ async function proxyApi(req, res, reqUrl, isHead = false) {
           {
             'Content-Type': 'text/vtt; charset=utf-8',
             'Cache-Control': 'public, max-age=21600, stale-while-revalidate=86400',
-            'X-Subtitle-Source': hit.source
+            'X-Subtitle-Source': hit.source,
+            ...SECURITY_POLICY.SUBTITLE_CORS_HEADERS
           },
           { compress: true }
         );
@@ -410,7 +391,10 @@ function serveFile(req, res, filePath, isHead = false) {
       data,
       {
         'Content-Type': MIME[ext] || 'application/octet-stream',
-        'Cache-Control': 'no-cache, must-revalidate'
+        'Cache-Control': 'no-cache, must-revalidate',
+        // The embed player reads our sub_file from its own origin, so VTT files
+        // must be readable cross-origin (in production vercel.json mirrors this).
+        ...(ext === '.vtt' ? SECURITY_POLICY.SUBTITLE_CORS_HEADERS : {})
       },
       { compress: COMPRESSIBLE.has(ext), csp: ext === '.html', noBody: isHead }
     );

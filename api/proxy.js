@@ -15,6 +15,7 @@
 
 import { collectServers } from '../lib/servers.mjs';
 import { listSubtitles, getSubtitleVtt } from '../lib/subtitles.mjs';
+import { SUBTITLE_CORS_HEADERS } from '../lib/security-policy.mjs';
 
 const BASE = 'https://api.themoviedb.org/3';
 const LANGUAGE = process.env.TMDB_LANGUAGE || 'en-US';
@@ -399,6 +400,7 @@ export default async function handler(req, res) {
           res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
           res.setHeader('Cache-Control', 's-maxage=21600, stale-while-revalidate=86400');
           res.setHeader('X-Subtitle-Source', hit.source);
+          for (const [k, v] of Object.entries(SUBTITLE_CORS_HEADERS)) res.setHeader(k, v);
           res.status(200).send(hit.vtt);
           return;
         }
@@ -409,8 +411,6 @@ export default async function handler(req, res) {
             ? 's-maxage=1800, stale-while-revalidate=300'
             : 's-maxage=60, stale-while-revalidate=60'
         );
-        res.status(200).json({ langs });
-        return;
         res.status(200).json({ langs });
         return;
       }

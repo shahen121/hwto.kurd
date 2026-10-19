@@ -57,9 +57,10 @@
  *        Alternate playback servers resolved server-side by our own proxy:
  *        Beenar (movies + series) merged with the kurdcinama.com player page
  *        (movies only), health-checked (dead links dropped), then ordered
- *        VidCore-family first. Needs `title` (plus `year` to sharpen the
- *        match) or `movieid`. Empty `servers` is a valid answer — the VidCore
- *        player keeps working, so callers must treat failures as "no alternates".
+ *        best-family first (vidmoly, fastvid, wish…). Needs `title` (plus
+ *        `year` to sharpen the match) or `movieid`. Empty `servers` is a valid
+ *        answer — the VidLink player keeps working, so callers must treat
+ *        failures as "no alternates".
  *
  *   ?action=subtitles&id=<tmdb>&type=movie|tv[&season=][&episode=]
  *     -> {langs:[{code,label}]}
@@ -579,7 +580,8 @@ export async function getDetail(mediaType, id, { signal } = {}) {
 /* Alternate playback servers — resolved and health-checked server-side by
  * our own proxy (lib/servers.mjs via server.js / api/proxy.js). Merges
  * Beenar (movies + series) with the kurdcinama.com player page (movies),
- * drops dead links, orders VidCore-family first. No API key involved.
+ * drops dead links, orders best-family first (vidmoly, fastvid, wish…).
+ * No API key involved.
  *
  * params: { title, type: 'movie'|'tv', year?, season?, episode?,
  *           tmdbid?, movieid?, serverLang?: 'ar'|'ku' }

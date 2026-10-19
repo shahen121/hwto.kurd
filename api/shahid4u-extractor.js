@@ -28,17 +28,14 @@ function allowedHosts() {
   return fromEnv.length ? fromEnv : DEFAULT_ALLOW;
 }
 
-/** Return the hardened URL object, or null when the host is not allowed. */
-export function safeTargetUrl(raw) {
-  let url;
-  try {
-    url = new URL(String(raw || '').trim());
-  } catch {
-    return null;
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-  if (!hostOnAllowlist(url.hostname, allowedHosts())) return null;
-  return url;
+/** Return the hardened URL object, or null when the host is not allowed.
+ *  Async because the shared guard resolves the hostname first (an allowlisted
+ *  name pointing at a private address still dies here). */
+export async function safeTargetUrl(raw) {
+  const url = await safeRemoteUrl(raw);
+  if (!url) return null;
+  // hostOnAllowlist keeps the internal-host backstop even for allowlisted names.
+  return hostOnAllowlist(url.hostname, allowedHosts()) ? url : null;
 }
 
 /* ---------------------------------------------------------------------- *
@@ -243,7 +240,7 @@ export default async function handler(req, res) {
 
   const raw = Array.isArray(req.query?.url) ? req.query.url[0] : req.query?.url;
 
-  const targetUrl = safeTargetUrl(raw);
+  const targetUrl = await safeTargetUrl(raw);
   if (!targetUrl) {
     return res.status(400).json({ error: 'Missing or invalid url (only the configured embed hosts are allowed)' });
   }

@@ -85,7 +85,7 @@ export async function mount(params, view, { signal }) {
 
   if (signal.aborted) return;
 
-  // Watch button uses the TMDB id directly — vidcore.io accepts it as-is.
+  // Watch button uses the TMDB id directly — vidlink.pro accepts it as-is.
   const year = yearOf(item.releaseDate);
   const watchLink = watchHref(type, id, item.title, year);
 

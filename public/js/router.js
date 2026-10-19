@@ -15,8 +15,8 @@
  *   #/watch/movie/278?title=..&year=1994 -> { name: 'watch', type: 'movie', id: 278, title, year }
  *   #/watch/tv/1396?title=..&season=1&episode=1  -> TV with season/episode
  *
- * `watch.id` is the TMDB id — the same id used by the API. vidcore.io uses
- * this id directly: https://vidcore.io/movie/{id} or /tv/{id}/{season}/{ep}.
+ * `watch.id` is the TMDB id — the same id used by the API. vidlink.pro takes
+ * this id directly: https://vidlink.pro/movie/{id} or /tv/{id}/{season}/{ep}.
  * `year` is passed only to sharpen the Beenar title match for alternate servers.
  */
 

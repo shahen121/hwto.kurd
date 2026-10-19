@@ -132,6 +132,8 @@ const expected = [
   'README.md',
   'server.js',
   'lib/servers.mjs',
+  'lib/net-guard.mjs',
+  'lib/security-policy.mjs',
   'package.json',
   'scripts/check.js',
   'scripts/qa.mjs',
@@ -300,6 +302,132 @@ if (!fs.existsSync(subIndexPath)) {
   }
 }
 
+/* 9. Security contract: HA-1 (SSRF guard), HA-2 (no code execution) ----- */
+
+/* Production parity: Vercel serves /public statically, so server.js never ships
+   the HTML there — vercel.json must mirror the same policy or production would
+   silently run without CSP. One source of truth: lib/security-policy.mjs. */
+{
+  const policy = await import(pathToFileURL(path.join(ROOT, 'lib', 'security-policy.mjs')).href);
+  let vjson = null;
+  try {
+    vjson = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
+  } catch (err) {
+    fail(`vercel.json is not valid JSON: ${err.message}`);
+  }
+  if (vjson) {
+    const rules = Array.isArray(vjson.headers) ? vjson.headers : [];
+    const headerValue = (source, key) => {
+      for (const rule of rules) {
+        if (rule.source !== source) continue;
+        const hit = (rule.headers || []).find((h) => h.key.toLowerCase() === key.toLowerCase());
+        if (hit) return hit.value;
+      }
+      return null;
+    };
+    const drifted = [];
+    // CORP is deliberately not mirrored on every route in production: the
+    // subtitles rule sets it to cross-origin instead, so the embed can read the
+    // VTT. Everything else must match byte-for-byte.
+    for (const [key, value] of Object.entries(policy.SECURITY_HEADERS)) {
+      if (key === 'Cross-Origin-Resource-Policy') continue;
+      const mirrored = headerValue('/(.*)', key);
+      if (mirrored === null) drifted.push(`${key} missing`);
+      else if (mirrored !== value) drifted.push(`${key} differs`);
+    }
+    const csp = headerValue('/(.*)', 'Content-Security-Policy');
+    if (!csp) drifted.push('Content-Security-Policy missing');
+    else if (csp !== policy.CSP) drifted.push('Content-Security-Policy differs from lib/security-policy.mjs');
+    const subOrigin = headerValue('/subtitles/(.*)', 'Access-Control-Allow-Origin');
+    if (subOrigin !== '*') drifted.push('subtitles Access-Control-Allow-Origin missing');
+    const subCorp = headerValue('/subtitles/(.*)', 'Cross-Origin-Resource-Policy');
+    if (subCorp !== policy.SUBTITLE_CORS_HEADERS['Cross-Origin-Resource-Policy']) {
+      drifted.push('subtitles Cross-Origin-Resource-Policy missing');
+    }
+    if (drifted.length) drifted.forEach((d) => fail(`PARITY vercel.json: ${d}`));
+    else ok('vercel.json mirrors the server security policy (CSP + headers + subtitle CORS)');
+
+    // Every serverless function the repo ships must declare a runtime budget;
+    // the default would kill the 10s+ upstreams mid-fetch.
+    const fnEntries = Object.keys(vjson.functions || {});
+    for (const file of walk(path.join(ROOT, 'api')).filter((f) => f.endsWith('.js'))) {
+      const rel = path.relative(ROOT, file).split(path.sep).join('/');
+      if (!fnEntries.includes(rel)) fail(`vercel.json has no maxDuration for ${rel}`);
+    }
+    if (fnEntries.every((f) => fs.existsSync(path.join(ROOT, f)))) {
+      ok(`vercel.json pins a maxDuration for all ${fnEntries.length} serverless functions`);
+    }
+  }
+}
+
+const SERVER_FILES = [
+  path.join(ROOT, 'server.js'),
+  ...walk(path.join(ROOT, 'api')).filter((f) => f.endsWith('.js')),
+  ...walk(path.join(ROOT, 'lib')).filter((f) => f.endsWith('.mjs'))
+];
+
+{
+  // HA-2: no dynamic code execution anywhere on the server. Comments and the
+  // unpacker's *text* markers are allowed; a real call is not.
+  const callRe = /\beval\s*\(/;
+  const allowedContext = /includes\(|indexOf\(|\.indexOf|split\(|match\(|['"`]eval\(function\(p,a,c,k/;
+  const bad = [];
+  for (const file of SERVER_FILES) {
+    const rel = path.relative(ROOT, file);
+    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    lines.forEach((line, i) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('/*')) return;
+      if (/\bnew\s+Function\s*\(/.test(line)) bad.push(`${rel}:${i + 1} new Function(`);
+      if (/\bnew\s+AsyncFunction\s*\(/.test(line)) bad.push(`${rel}:${i + 1} new AsyncFunction(`);
+      if (/\bvm\b.*\.runIn|require\(['"]node:vm/.test(line)) bad.push(`${rel}:${i + 1} node:vm`);
+      if (callRe.test(line) && !allowedContext.test(line)) bad.push(`${rel}:${i + 1} eval(`);
+    });
+  }
+  if (bad.length) bad.forEach(fail);
+  else ok('HA-2: no eval/new Function/node:vm in any server module');
+
+  // HA-1: every endpoint that reads a caller-supplied URL must route it through
+  // the shared guard (lib/net-guard.mjs) before fetching it.
+  const urlEntrances = [];
+  for (const file of SERVER_FILES) {
+    const rel = path.relative(ROOT, file);
+    const src = fs.readFileSync(file, 'utf8');
+    if (!/req\.query/.test(src)) continue;
+    if (!/['"`]?url['"`]?\s*\]|\burl\b/.test(src)) continue;
+    const readsUrl = /req\.query.{0,12}\burl\b|req\.query\?\.url|q\.url\b|req\.query\?\.\s*url/.test(src);
+    if (!readsUrl) continue;
+    const guarded = /safeRemoteUrl|safeTargetUrl|hostOnAllowlist|isBlockedHost/.test(src);
+    urlEntrances.push({ rel, guarded });
+    if (!guarded) fail(`HA-1: ${rel} reads req.query.url but never calls the net-guard`);
+  }
+  if (urlEntrances.length && !problems.length) {
+    ok(`HA-1: ${urlEntrances.length} url-taking endpoint(s) route through lib/net-guard.mjs`);
+  }
+  if (!urlEntrances.length) fail('HA-1: no url-taking endpoint found — the guard would be untested');
+
+  // HA-2 behaviour: the packer payload is decoded as TEXT. The sample unpacks to
+  // a call plus an obvious side effect; only the text must ever exist.
+  try {
+    const s4u = await import(pathToFileURL(path.join(ROOT, 'api', 'shahid4u-extractor.js')).href);
+    const packed =
+      "eval(function(p,a,c,k,e,d){e=function(c){return c};return p}" +
+      "('0(\\'1\\')',10,2,'sayHi|__PWN__'.split('|'),0,{}))";
+    const unpacked = s4u.unpackDeanEdwards(packed);
+    if (!unpacked || !unpacked.includes("sayHi('__PWN__')")) {
+      fail(`HA-2: packer sample did not decode to text: ${JSON.stringify(unpacked)}`);
+    } else if (globalThis.__PWN__ !== undefined) {
+      fail('HA-2: the packed payload was executed instead of decoded');
+    } else if (s4u.unpackDeanEdwards('eval(function(p,a,c,k,e,d){unbalanced') !== null) {
+      fail('HA-2: malformed input should decode to null, not throw or execute');
+    } else {
+      ok('HA-2: packer decodes to text with zero execution (side-effect probe stayed undefined)');
+    }
+  } catch (err) {
+    fail(`HA-2: extractor module check failed: ${err.message}`);
+  }
+}
+
 /* ------------------------------------------------------------------------ */
 
 function report() {
@@ -320,7 +448,17 @@ if (process.argv.includes('--smoke') && !problems.length) {
   const PORT = Number(process.env.SMOKE_PORT) || 4177;
   const server = spawn(process.execPath, ['server.js'], {
     cwd: ROOT,
-    env: { ...process.env, PORT: String(PORT), HOST: '127.0.0.1' },
+    // The operator allowlists are deliberately pointed at the loopback address:
+    // the guard must refuse it anyway (HA-1). If the allowlist could "win", the
+    // SSRF assertions below would fail loudly.
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      HOST: '127.0.0.1',
+      SCRAPER_ALLOW_HOSTS: '127.0.0.1',
+      SHAHID4U_ALLOW_HOSTS: '127.0.0.1,localhost',
+      FASTVID_ALLOW_HOSTS: '127.0.0.1'
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -336,7 +474,7 @@ if (process.argv.includes('--smoke') && !problems.length) {
     try {
       const res = await fetch(url, { signal: ctrl.signal });
       const text = await res.text();
-      return { status: res.status, text };
+      return { status: res.status, text, headers: res.headers };
     } finally {
       clearTimeout(t);
     }
@@ -395,6 +533,84 @@ if (process.argv.includes('--smoke') && !problems.length) {
     const detail = await withTimeout(`${base}/api/TMDBCache.aspx?action=toprated&type=movie&limit=5`);
     if (detail.status !== 200) throw new Error(`toprated -> ${detail.status}`);
     console.log('  ok  smoke: proxied list endpoint responds');
+
+    /* HA-1: the fetch proxies must refuse internal targets, even when the
+       operator allowlist names them, and must reject non-http schemes. */
+    const ssrfTargets = [
+      ['loopback v4', `http://127.0.0.1:${PORT}/`],
+      ['metadata', 'http://169.254.169.254/latest/meta-data/'],
+      ['private A', 'http://10.0.0.1/admin'],
+      ['private B', 'http://192.168.1.1/'],
+      ['private C', 'http://172.20.1.1/'],
+      ['cgnat', 'http://100.64.0.1/'],
+      ['benchmark net', 'http://198.18.0.1/'],
+      ['loopback v6', 'http://[::1]:8080/'],
+      ['ipv4-mapped v6', 'http://[::ffff:127.0.0.1]/'],
+      ['hex loopback', 'http://0x7f000001/'],
+      ['decimal loopback', 'http://2130706433/'],
+      ['file scheme', 'file:///etc/passwd'],
+      ['localhost name', 'http://localhost/'],
+      ['internal tld', 'http://metadata.google.internal/']
+    ];
+    const ssrfFailures = [];
+    for (const endpoint of ['/api/fastvid', '/api/scraper', '/api/shahid4u-extractor']) {
+      for (const [label, target] of ssrfTargets) {
+        const probe = await withTimeout(`${base}${endpoint}?url=${encodeURIComponent(target)}`);
+        if (probe.status !== 400) ssrfFailures.push(`${endpoint} ${label} -> ${probe.status}`);
+      }
+    }
+    if (ssrfFailures.length) {
+      ssrfFailures.forEach((f) => console.log(`     ✗ ${f}`));
+      throw new Error(`${ssrfFailures.length} SSRF target(s) were not rejected`);
+    }
+    console.log(`  ok  smoke: HA-1 rejects ${ssrfTargets.length} internal/non-http targets on 3 endpoints (allowlist cannot unblock them)`);
+
+    // Allowlisted-host policy still applies to *public* hosts: a random public
+    // host is not pinned by the allowlist and must be refused too.
+    const offList = await withTimeout(`${base}/api/scraper?url=${encodeURIComponent('https://example.com/')}`);
+    if (offList.status !== 400) throw new Error(`scraper accepted a non-allowlisted host -> ${offList.status}`);
+    const noUrl = await withTimeout(`${base}/api/fastvid`);
+    if (noUrl.status !== 400) throw new Error(`fastvid without url -> ${noUrl.status}`);
+    console.log('  ok  smoke: HA-1 keeps the allowlist closed for unlisted public hosts');
+
+    // The embed player fetches our sub_file from vidlink.pro's origin, so the
+    // VTT must be CORS-open (production mirrors this in vercel.json).
+    const subIndex = JSON.parse(subtitlesIndex.text);
+    const sampleKey = Object.keys(subIndex)[0];
+    const sampleLang = (subIndex[sampleKey] || [])[0];
+    if (sampleKey && sampleLang) {
+      const vtt = await withTimeout(`${base}/subtitles/${sampleKey}/${sampleLang}.vtt`);
+      const acao = vtt.headers.get('access-control-allow-origin');
+      if (vtt.status !== 200 || acao !== '*') {
+        throw new Error(`subtitle VTT CORS -> ${vtt.status} acao=${acao}`);
+      }
+      console.log('  ok  smoke: subtitle VTT is served CORS-open for the embed player');
+    }
+
+    /* MD-3: the CSP served with the app must stay narrow. */
+    const csp = home.headers.get('content-security-policy') || '';
+    const cspChecks = {
+      "has a policy at all": Boolean(csp),
+      "no 'unsafe-eval'": !/unsafe-eval/.test(csp),
+      "no wildcard source": !/(^|[;\s])\*([;\s]|$)/.test(csp),
+      "connect-src is same-origin": /connect-src 'self' blob:;/.test(csp),
+      "frame-src has no plaintext http": !/frame-src[^;]*http:/.test(csp),
+      "object-src 'none'": /object-src 'none'/.test(csp),
+      "frame-ancestors 'none'": /frame-ancestors 'none'/.test(csp),
+      "base-uri 'self'": /base-uri 'self'/.test(csp),
+      "form-action 'self'": /form-action 'self'/.test(csp),
+      "default-src is 'self' only": /default-src 'self';/.test(csp)
+    };
+    const cspBad = Object.entries(cspChecks).filter(([, v]) => !v).map(([k]) => k);
+    if (cspBad.length) throw new Error(`CSP weak: ${cspBad.join(', ')} — ${csp}`);
+    console.log(`  ok  smoke: MD-3 CSP stays narrow (${Object.keys(cspChecks).length} assertions)`);
+
+    const nosniff = home.headers.get('x-content-type-options');
+    const xfo = home.headers.get('x-frame-options');
+    if (nosniff !== 'nosniff' || xfo !== 'DENY') {
+      throw new Error(`security headers missing: nosniff=${nosniff} x-frame-options=${xfo}`);
+    }
+    console.log('  ok  smoke: nosniff + X-Frame-Options DENY are present');
 
     const watchJs = await withTimeout(`${base}/js/pages/watch.js`);
     if (watchJs.status !== 200 || !watchJs.text.includes('vidlink.pro')) {

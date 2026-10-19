@@ -10,11 +10,17 @@
  * Hardening vs the original snippet:
  *   - Host allowlist (shaheid4u.name + subdomains) — an unrestricted `url`
  *     param would turn this into an open SSRF proxy.
+ *   - The shared guard in lib/net-guard.mjs is the single source of truth:
+ *     http(s) only, no credentials in the URL, internal/private/metadata hosts
+ *     rejected (literals AND DNS answers), and a blocked host can never be
+ *     unblocked by the operator allowlist.
  *   - Regex is multiline-safe and accepts let/const/var with ' or " quotes.
  *   - Lenient JSON fallback (strips trailing commas, unquoted keys) because
  *     these arrays are hand-written JS, not guaranteed strict JSON.
  *   - Fetch deadline + per-instance cache so one title isn't re-scraped.
  */
+
+import { safeRemoteUrl, hostOnAllowlist } from '../lib/net-guard.mjs';
 
 const DEFAULT_ALLOW = ['shaheid4u.name'];
 const FETCH_TIMEOUT_MS = 10000;
@@ -22,9 +28,6 @@ const FETCH_TIMEOUT_MS = 10000;
 const ERROR_DETAIL_CHARS = 200;
 const CACHE_TTL_MS = Number(process.env.SCRAPER_CACHE_TTL_MS) || 5 * 60 * 1000;
 const cache = new Map();
-
-const BLOCKED_HOST_RE =
-  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.|\[?::1\]?)/i;
 
 function allowedHosts() {
   const fromEnv = (process.env.SCRAPER_ALLOW_HOSTS || '')
@@ -34,22 +37,16 @@ function allowedHosts() {
   return fromEnv.length ? fromEnv : DEFAULT_ALLOW;
 }
 
-/** Return a hardened URL object, or null if it is not an allowed target. */
-export function safeTargetUrl(raw) {
-  let url;
-  try {
-    url = new URL(String(raw || ''));
-  } catch {
-    return null;
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-  const host = url.hostname.toLowerCase();
-  const allowlisted = allowedHosts().some((h) => host === h || host.endsWith('.' + h));
-  // An explicit operator allowlist (SCRAPER_ALLOW_HOSTS) wins over the loopback
-  // guard — that is how local fixtures/tests reach the handler.
-  if (allowlisted) return url;
-  if (BLOCKED_HOST_RE.test(host)) return null;
-  return null;
+/**
+ * Return the hardened URL object, or null if it is not an allowed target.
+ * Async because the shared guard resolves the hostname first: an allowlisted
+ * name that points at a private address still dies here.
+ */
+export async function safeTargetUrl(raw) {
+  const url = await safeRemoteUrl(raw);
+  if (!url) return null;
+  // hostOnAllowlist keeps the internal-host backstop even for allowlisted names.
+  return hostOnAllowlist(url.hostname, allowedHosts()) ? url : null;
 }
 
 /**
@@ -148,7 +145,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const url = safeTargetUrl(req.query && req.query.url);
+  const url = await safeTargetUrl(req.query && req.query.url);
   if (!url) {
     return res.status(400).json({ error: 'Missing or invalid url (only shaheid4u.name is allowed)' });
   }
