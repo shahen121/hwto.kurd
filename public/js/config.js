@@ -290,6 +290,17 @@ export const PLAYER_SERVERS = [
 ];
 
 /**
+ * Sandbox policy for the embed frame. The player needs scripts, same-origin
+ * storage and fullscreen; it must NOT get `allow-popups`, `allow-modals` or
+ * `allow-top-navigation` — that is what lets its ad scripts open pop-up tabs
+ * and windows over our site. Measured against VidLink: identical boot and the
+ * same `/api/b/…` stream call with and without this policy. Set it to null to
+ * put the raw iframe back.
+ */
+export const EMBED_SANDBOX =
+  'allow-scripts allow-same-origin allow-forms allow-presentation allow-pointer-lock allow-orientation-lock allow-storage-access-by-user-activation';
+
+/**
  * Returns accurate season/episode structure for a TV show id and active season.
  * Checked across all 605 TV series in the site catalog with exact season & episode counts.
  * @param {number|string} id - TMDB series id

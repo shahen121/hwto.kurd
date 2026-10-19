@@ -7,7 +7,7 @@
 import * as ui from '../ui.js';
 import { navigate, previousHash, buildHash } from '../router.js';
 import { escapeHtml, attr, mediaLabel, mediaPlural } from '../utils.js';
-import { getTvSeriesStructure, PLAYER_SERVERS } from '../config.js';
+import { getTvSeriesStructure, PLAYER_SERVERS, EMBED_SANDBOX } from '../config.js';
 import { api } from '../api.js';
 import { attachSubtitles } from '../subtitles.js';
 import { attachHls } from '../hls.js';
@@ -184,6 +184,7 @@ export async function mount(params, view, { signal }) {
           <iframe
             src="${attr(url)}"
             title="مشغّل ${attr(title || 'الفيديو')}"
+            ${EMBED_SANDBOX ? `sandbox="${attr(EMBED_SANDBOX)}"` : ''}
             allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope; clipboard-write; web-share"
             referrerpolicy="origin-when-cross-origin"></iframe>
           <div class="subtitle-overlay" id="subtitle-overlay" hidden>

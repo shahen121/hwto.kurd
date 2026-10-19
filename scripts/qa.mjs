@@ -684,18 +684,107 @@ if (hasWatchBtn > 0) {
     const frameSrc = await page.locator('.watch-frame iframe').getAttribute('src');
     const sandbox = await page.locator('.watch-frame iframe').getAttribute('sandbox');
     const extBtnCount = await page.locator('#btn-external-player').count();
-    const serverBarCount = await page.locator('.watch-server-bar').count();
+    const serverBarCount = await page.locator('.server-bar').count();
+    const primaryBtn = await page.locator('#server-bar-list .server-btn').count();
+    const langBtns = await page.$$eval('#server-lang .server-lang-btn', (els) => els.map((b) => b.dataset.serverLang));
     const title = await page.evaluate(() => document.title);
     ok('watch: embeds vidlink.pro player with TMDB ID',
       /^https:\/\/vidlink\.pro\/movie\/278/.test(frameSrc || ''), frameSrc || 'no src');
-    ok('watch: iframe has NO sandbox (VidLink playback requires it removed)',
-      sandbox === null,
-      sandbox ? `unexpected sandbox: ${sandbox}` : 'correctly absent');
+    ok('watch: iframe is sandboxed without popups (blocks ad pop-ups)',
+      /allow-scripts/.test(sandbox || '') &&
+        /allow-same-origin/.test(sandbox || '') &&
+        !/allow-popups|allow-top-navigation|allow-modals/.test(sandbox || ''),
+      sandbox || 'no sandbox attribute');
     ok('watch: external player button is removed', extBtnCount === 0, `btnCount=${extBtnCount}`);
-    ok('watch: server switcher bar is removed', serverBarCount === 0, `barCount=${serverBarCount}`);
+    ok('watch: server bar shows the primary server instantly',
+      serverBarCount === 1 && primaryBtn >= 1, `bars=${serverBarCount} buttons=${primaryBtn}`);
+    ok('watch: language buttons offer exactly arabic and kurdish',
+      JSON.stringify(langBtns) === '["ar","ku"]', JSON.stringify(langBtns));
     ok('watch: document title carries the title', title.includes('— مشاهدة — hwto.kurd'), title);
   }
 }
+
+/* ---------- 12b. watch: server bar loading + language groups ------------ */
+/* Covered with a held response so the spinner and the per-language filter are
+   deterministic: shared + arabic-only + kurdish-only entries in the fixture. */
+
+const SERVERS_FIXTURE = {
+  servers: [
+    { key: 'vidmoly', label: 'Vidmoly', source: 'vidmoly', url: 'https://vidmoly.to/embed-abc' },
+    { key: 'shahid4u', label: 'شاهد فور يو', source: 'shahid4u', url: 'https://shahid4u.example/embed' },
+    { key: 'cybervynx', label: 'Cybervynx', source: 'cybervynx', url: 'https://cybervynx.example/embed' }
+  ]
+};
+let releaseServers = () => {};
+const serversGate = new Promise((resolve) => {
+  releaseServers = resolve;
+});
+const serversHandler = async (route) => {
+  if (!/action=servers/.test(route.request().url())) return route.continue();
+  await serversGate;
+  return route.fulfill({
+    status: 200,
+    contentType: 'application/json; charset=utf-8',
+    body: JSON.stringify(SERVERS_FIXTURE)
+  });
+};
+await page.route('**/api/TMDBCache.aspx*', serversHandler);
+// A different id than section 12 on purpose: re-navigating to the *same* hash
+// would not remount the view, so the held fetch could never be observed.
+await page.goto(`${BASE}/#/watch/movie/550?title=${encodeURIComponent('Fight Club')}`, {
+  waitUntil: 'domcontentloaded'
+});
+await page.waitForSelector('#server-bar:not([hidden])', { timeout: 30000 });
+
+const early = await page.evaluate(() => ({
+  keys: [...document.querySelectorAll('#server-bar-list .server-btn')].map((b) => b.dataset.serverKey),
+  active: document.querySelector('#server-bar-list .server-btn.is-active')?.dataset.serverKey || null,
+  spinner: !!document.querySelector('#server-bar-list .server-loading .server-spinner')
+}));
+ok('watch: primary server renders before the alternates arrive',
+  JSON.stringify(early.keys) === '["vidlink"]' && early.active === 'vidlink', JSON.stringify(early));
+ok('watch: alternates show a spinner while the group loads', early.spinner, JSON.stringify(early));
+
+releaseServers();
+await page
+  .waitForFunction(() => /شاهد|Vidmoly/.test(document.querySelector('#server-bar-list')?.innerText || ''), null, { timeout: 15000 })
+  .catch(() => {});
+const arGroup = await page.evaluate(() => ({
+  titles: [...document.querySelectorAll('#server-bar-list .server-btn')].map((b) => b.getAttribute('title')),
+  activeLang: document.querySelector('#server-lang .server-lang-btn.is-active')?.dataset.serverLang || null,
+  spinner: !!document.querySelector('#server-bar-list .server-loading')
+}));
+ok('watch: arabic group lists shahid4u and drops the kurdish-only server',
+  arGroup.activeLang === 'ar' &&
+    arGroup.titles.some((t) => /شاهد/.test(t)) &&
+    !arGroup.titles.some((t) => /Cybervynx/.test(t)) &&
+    !arGroup.spinner,
+  JSON.stringify(arGroup));
+
+await page.click('#server-lang .server-lang-btn[data-server-lang="ku"]');
+await page
+  .waitForFunction(() => /Cybervynx/.test(document.querySelector('#server-bar-list')?.innerText || ''), null, { timeout: 15000 })
+  .catch(() => {});
+const kuGroup = await page.evaluate(() => ({
+  titles: [...document.querySelectorAll('#server-bar-list .server-btn')].map((b) => b.getAttribute('title')),
+  activeLang: document.querySelector('#server-lang .server-lang-btn.is-active')?.dataset.serverLang || null
+}));
+ok('watch: kurdish group drops shahid4u and keeps the kurdish server',
+  kuGroup.activeLang === 'ku' &&
+    kuGroup.titles.some((t) => /Cybervynx/.test(t)) &&
+    !kuGroup.titles.some((t) => /شاهد/.test(t)),
+  JSON.stringify(kuGroup));
+
+await page.click('#server-bar-list .server-btn[data-server-key="cybervynx"]');
+const switched = await page.evaluate(() => ({
+  active: document.querySelector('#server-bar-list .server-btn.is-active')?.dataset.serverKey || null,
+  src: document.querySelector('.watch-frame iframe')?.getAttribute('src') || '',
+  stream: document.querySelector('#stream-url-input')?.value || ''
+}));
+ok('watch: picking an alternate swaps the frame and the stream URL',
+  switched.active === 'cybervynx' && /cybervynx\.example/.test(switched.src) && switched.src === switched.stream,
+  JSON.stringify(switched));
+await page.unroute('**/api/TMDBCache.aspx*', serversHandler);
 
 await settle('#/watch/tv/1396?title=' + encodeURIComponent('Breaking Bad') + '&season=1&episode=1');
 // The TV route resolves its data before mounting, so the frame may still be

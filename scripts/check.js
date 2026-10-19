@@ -12,6 +12,7 @@ import { spawnSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { decodeVtt, isServable } from './subtitle-corpus.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -135,6 +136,9 @@ const expected = [
   'scripts/check.js',
   'scripts/qa.mjs',
   'scripts/qa-subtitles.mjs',
+  'scripts/subtitle-corpus.mjs',
+  'scripts/normalize-subtitles.mjs',
+  'scripts/build-subtitles-index.mjs',
   'public/index.html',
   'public/favicon.svg',
   'public/logo.svg',
@@ -219,6 +223,7 @@ if (!fs.existsSync(subIndexPath)) {
     let indexed = 0;
     let missing = 0;
     let removedLangs = 0;
+    let unservable = 0;
     for (const [key, langs] of Object.entries(subIndex)) {
       if (!Array.isArray(langs)) {
         fail(`subtitle entry ${key} is not an array of languages`);
@@ -230,15 +235,26 @@ if (!fs.existsSync(subIndexPath)) {
           if (removedLangs <= 5) fail(`subtitle entry ${key} still lists removed language "${lang}"`);
         }
         indexed += 1;
-        if (!fs.existsSync(path.join(subDir, `${key}/${lang}.vtt`))) {
+        const file = path.join(subDir, `${key}/${lang}.vtt`);
+        if (!fs.existsSync(file)) {
           missing += 1;
           if (missing <= 5) fail(`subtitle file missing: public/subtitles/${key}/${lang}.vtt`);
+          continue;
+        }
+        // A mojibake, empty or foreign-language file must never be reachable
+        // through the index (build-subtitles-index.mjs filters the same way).
+        const verdict = isServable(decodeVtt(fs.readFileSync(file)).text);
+        if (!verdict.ok) {
+          unservable += 1;
+          if (unservable <= 5) fail(`indexed subtitle is unusable (${verdict.reason}): public/subtitles/${key}/${lang}.vtt`);
         }
       }
     }
     if (missing > 5) fail(`…and ${missing - 5} more missing subtitle files`);
+    if (unservable > 5) fail(`…and ${unservable - 5} more unusable indexed subtitles`);
     if (indexed && !missing) ok(`all ${indexed} indexed subtitle files exist (${Object.keys(subIndex).length} titles)`);
     if (indexed && !removedLangs) ok('subtitle index carries only ku/ar (english removed)');
+    if (indexed && !missing && !unservable) ok(`every indexed subtitle is clean utf-8 kurdish/arabic text (${indexed} files audited)`);
 
     // The parser is exercised on a real file from the corpus. The long-standing
     // samples are preferred; a re-synced corpus that drops them falls back to
@@ -442,20 +458,32 @@ if (process.argv.includes('--smoke') && !problems.length) {
           }
           console.log('  ok  e2e: movie watch embeds vidlink with TMDB ID');
 
-          // Verify single primary server and clean iframe attributes
-          const serverBarCount = await page.$$eval('.watch-server-bar', els => els.length);
-          if (serverBarCount !== 0) {
-            throw new Error(`Server switcher bar should be removed, found: ${serverBarCount}`);
+          // Verify the server bar renders its primary entry instantly and
+          // offers exactly the two supported language groups.
+          const serverBar = await page.$$eval('.server-bar:not([hidden])', els => els.length);
+          if (serverBar !== 1) {
+            throw new Error(`Server bar should be visible, found: ${serverBar}`);
+          }
+          const primaryServer = await page.$$eval('#server-bar-list .server-btn[data-server-key="vidlink"]', els => els.length);
+          if (primaryServer !== 1) {
+            throw new Error(`Primary server button missing, found: ${primaryServer}`);
+          }
+          const langBtns = await page.$$eval('#server-lang .server-lang-btn', els => els.map(b => b.dataset.serverLang));
+          if (JSON.stringify(langBtns) !== '["ar","ku"]') {
+            throw new Error(`Language buttons should be ar+ku, found: ${JSON.stringify(langBtns)}`);
           }
           const movieSandbox = await page.getAttribute('.watch-frame iframe', 'sandbox');
-          if (movieSandbox !== null) {
-            throw new Error(`Iframe must NOT have sandbox (broke VidLink playback), found: ${movieSandbox}`);
+          if (!movieSandbox || !movieSandbox.includes('allow-scripts') || !movieSandbox.includes('allow-same-origin')) {
+            throw new Error(`Iframe must be sandboxed with scripts + same-origin so VidLink plays: ${movieSandbox}`);
+          }
+          if (movieSandbox.includes('allow-popups') || movieSandbox.includes('allow-top-navigation') || movieSandbox.includes('allow-modals')) {
+            throw new Error(`Iframe sandbox must not allow popups/top-navigation/modals: ${movieSandbox}`);
           }
           const extBtnCount = await page.$$eval('#btn-external-player', els => els.length);
           if (extBtnCount !== 0) {
             throw new Error(`External player button should be removed, found: ${extBtnCount}`);
           }
-          console.log('  ok  e2e: single primary server VidLink verified (no sandbox)');
+          console.log('  ok  e2e: single primary server VidLink verified (sandboxed, no popups)');
 
           // 2. TV watch route with season and episode
           await page.goto(`${base}/#/watch/tv/1396?title=${encodeURIComponent('Breaking Bad')}&season=1&episode=1`, { waitUntil: 'domcontentloaded' });
