@@ -2246,7 +2246,6 @@ export default function TVPage({
                         activeSub?.url || null,
                       ) || "about:blank"
                     }
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
                     allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                     allowFullScreen
                     referrerPolicy="origin"

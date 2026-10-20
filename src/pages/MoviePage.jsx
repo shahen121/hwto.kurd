@@ -1154,7 +1154,6 @@ export default function MoviePage({
                   activeSub?.lang || playerSubLang,
                   activeSub?.url || null,
                 )}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
                 allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                 allowFullScreen
                 referrerPolicy="origin"
