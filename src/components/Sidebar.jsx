@@ -13,6 +13,7 @@ import {
   DownloadsQueueIcon,
   QuitIcon,
   BackIcon,
+  SportIcon,
 } from "./Icons";
 
 export default function Sidebar({
@@ -129,6 +130,13 @@ export default function Sidebar({
         icon={<HistoryIcon />}
         label={t("library")}
       />
+      <SideBtn
+        className="sport-sidebar-btn"
+        active={page === "sport"}
+        onClick={() => onNavigate("sport")}
+        icon={<SportIcon />}
+        label={t("sport")}
+      />
       {isElectron && (
         <SideBtn
           active={page === "downloads"}
@@ -241,10 +249,10 @@ export default function Sidebar({
   );
 }
 
-function SideBtn({ active, onClick, icon, label, badge }) {
+function SideBtn({ className = "", active, onClick, icon, label, badge }) {
   return (
     <button
-      className={`sidebar-btn ${active ? "active" : ""}`}
+      className={`sidebar-btn ${className} ${active ? "active" : ""}`}
       onClick={onClick}
       style={{ position: "relative" }}
     >

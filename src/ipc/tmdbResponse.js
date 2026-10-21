@@ -12,12 +12,6 @@ function restoreEnglishMetadata(
       if (!englishItem) return;
       if (englishItem.title) item.title = englishItem.title;
       if (englishItem.name) item.name = englishItem.name;
-      if (englishItem.overview) {
-        item.overview_en = englishItem.overview;
-        if (includeOverview || !item.overview || !item.overview.trim()) {
-          item.overview = englishItem.overview;
-        }
-      }
     });
   };
 
@@ -29,8 +23,9 @@ function restoreEnglishMetadata(
     if (englishBody.title) body.title = englishBody.title;
     if (englishBody.name) body.name = englishBody.name;
     if (englishBody.overview) {
-      body.overview_en = englishBody.overview;
-      if (includeOverview || !body.overview || !body.overview.trim()) {
+      if (includeOverview) {
+        body.overview_en = englishBody.overview;
+      } else if (!body.overview || !body.overview.trim()) {
         body.overview = englishBody.overview;
       }
     }

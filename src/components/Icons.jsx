@@ -367,3 +367,24 @@ export const PopOutIcon = ({ size = 16 }) => (
     <path d="M10 14L21 3" />
   </svg>
 );
+
+export const SportIcon = ({ size = 20 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <path d="m4.93 4.93 4.24 4.24" />
+    <path d="m14.83 9.17 4.24-4.24" />
+    <path d="m14.83 14.83 4.24 4.24" />
+    <path d="m9.17 14.83-4.24 4.24" />
+    <polygon points="12,8 14.5,10 13.5,13 10.5,13 9.5,10" fill="currentColor" fillOpacity="0.3" />
+  </svg>
+);
+

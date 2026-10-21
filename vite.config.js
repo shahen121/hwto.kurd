@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import fs from "fs";
 import path from "path";
 import handler from "./api/tmdb.js";
+import footballHandler from "./api/football.js";
 
 function parseFirebaseTxt() {
   try {
@@ -62,6 +63,38 @@ function localTmdbProxyPlugin(env) {
   };
 }
 
+function localFootballProxyPlugin(env) {
+  const attachMiddleware = (server) => {
+    server.middlewares.use("/api/football", async (req, res) => {
+      if (!process.env.API_FOOTBALL_KEY && env.API_FOOTBALL_KEY) {
+        process.env.API_FOOTBALL_KEY = env.API_FOOTBALL_KEY;
+      }
+      const urlObj = new URL(req.url || "", "http://localhost");
+      req.query = Object.fromEntries(urlObj.searchParams.entries());
+      res.status = (code) => {
+        res.statusCode = code;
+        return res;
+      };
+      res.json = (obj) => {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.end(JSON.stringify(obj));
+        return res;
+      };
+      await footballHandler(req, res);
+    });
+  };
+
+  return {
+    name: "local-api-football-proxy",
+    configureServer(server) {
+      attachMiddleware(server);
+    },
+    configurePreviewServer(server) {
+      attachMiddleware(server);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const fbFromTxt = parseFirebaseTxt();
@@ -89,7 +122,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [react(), localTmdbProxyPlugin(env)],
+    plugins: [react(), localTmdbProxyPlugin(env), localFootballProxyPlugin(env)],
     base: "./",
     define: defineEnv,
     build: {
@@ -109,6 +142,7 @@ export default defineConfig(({ mode }) => {
             movie: ["./src/pages/MoviePage"],
             tv: ["./src/pages/TVPage"],
             downloads: ["./src/pages/DownloadsPage"],
+            sport: ["./src/pages/HwtoSportPage"],
           },
         },
       },

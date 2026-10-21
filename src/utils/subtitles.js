@@ -63,17 +63,17 @@ let _indexPromise = null;
 let _indexData = null;
 
 async function getSubtitlesIndex() {
-  if (_indexData) return _indexData;
+  if (_indexData !== null) return _indexData;
   if (!_indexPromise) {
     _indexPromise = fetch(`${SUBTITLES_BASE_URL}/index.json`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        _indexData = data || {};
+        _indexData = data || null;
         return _indexData;
       })
       .catch(() => {
-        _indexData = {};
-        return _indexData;
+        _indexData = null;
+        return null;
       });
   }
   return _indexPromise;
@@ -111,37 +111,44 @@ export async function resolveGithubSubtitle({
   // 1. Fast path: check index.json if available
   try {
     const index = await getSubtitlesIndex();
-    if (index && index[itemPath] && Array.isArray(index[itemPath])) {
-      const availableLangs = index[itemPath];
-      const available = [];
-      if (availableLangs.includes("ku")) {
-        available.push({
-          ...SUB_META.ku,
-          url: `${basePath}/ku.vtt`,
-        });
+    if (index && Object.keys(index).length > 0) {
+      if (index[itemPath] && Array.isArray(index[itemPath])) {
+        const availableLangs = index[itemPath];
+        const available = [];
+        if (availableLangs.includes("ku")) {
+          available.push({
+            ...SUB_META.ku,
+            url: `${basePath}/ku.vtt`,
+          });
+        }
+        if (availableLangs.includes("ar")) {
+          available.push({
+            ...SUB_META.ar,
+            url: `${basePath}/ar.vtt`,
+          });
+        }
+        if (available.length > 0) {
+          const defaultChoice =
+            available.find(
+              (s) => s.lang === (normalizedPreferred === "ar" ? "ar" : "ku"),
+            ) || available[0];
+          const found = {
+            url: defaultChoice.url,
+            lang: defaultChoice.lang,
+            available,
+          };
+          _subCheckCache.set(cacheKey, found);
+          return found;
+        }
       }
-      if (availableLangs.includes("ar")) {
-        available.push({
-          ...SUB_META.ar,
-          url: `${basePath}/ar.vtt`,
-        });
-      }
-      if (available.length > 0) {
-        const defaultChoice =
-          available.find(
-            (s) => s.lang === (normalizedPreferred === "ar" ? "ar" : "ku"),
-          ) || available[0];
-        const found = {
-          url: defaultChoice.url,
-          lang: defaultChoice.lang,
-          available,
-        };
-        _subCheckCache.set(cacheKey, found);
-        return found;
-      }
+      // Index is loaded and valid, but itemPath was not found:
+      // Subtitle does not exist in the repo for this item -> return null immediately.
+      // Do NOT fall through to network HEAD requests which cause 404 console errors.
+      _subCheckCache.set(cacheKey, null);
+      return null;
     }
   } catch {
-    // Fall back to direct network check
+    // Fall back to direct network check only if index failed to load
   }
 
   // 2. Direct network check (HEAD request fallback)

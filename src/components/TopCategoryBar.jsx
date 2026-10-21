@@ -21,6 +21,12 @@ export const TOP_CATEGORIES = [
     defaultMediaType: "tv",
   },
   {
+    id: "sport",
+    labelKey: "sport",
+    badgeKey: "sportLiveNow",
+    isSport: true,
+  },
+  {
     id: "new",
     labelKey: "trending",
     subtitleKey: "categoryTrendingDescription",
@@ -81,11 +87,24 @@ export default function TopCategoryBar({
               <button
                 key={cat.id}
                 type="button"
-                className={`top-cat-pill ${isActive ? "active" : ""}`}
+                className={`top-cat-pill ${cat.isSport ? "top-cat-sport-pill" : ""} ${isActive ? "active" : ""}`}
                 onClick={() => onSelectCategory(cat.id)}
               >
+                {cat.isSport && <span style={{ marginRight: 4, marginLeft: 4 }}>⚽</span>}
                 <span className="top-cat-label">{label}</span>
-                {cat.badgeKey && (
+                {cat.isSport && (
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      backgroundColor: "#00e676",
+                      boxShadow: "0 0 8px #00e676",
+                      display: "inline-block",
+                    }}
+                  />
+                )}
+                {!cat.isSport && cat.badgeKey && (
                   <span className="top-cat-badge">{t(cat.badgeKey)}</span>
                 )}
               </button>

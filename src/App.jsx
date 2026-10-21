@@ -67,6 +67,7 @@ const TVPage = lazy(() => import("./pages/TVPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const DownloadsPage = lazy(() => import("./pages/DownloadsPage"));
+const HwtoSportPage = lazy(() => import("./pages/HwtoSportPage"));
 import {
   checkForUpdatesWithFallback,
   DEFAULT_UPDATE_SOURCE,
@@ -78,7 +79,13 @@ export default function App() {
   const apiKeyLoaded = true;
   const [authUser, setAuthUser] = useState(() => getCachedAuthUser());
   const [apiKeyStatus, setApiKeyStatus] = useState("ok"); // 'ok' | 'unreachable'
-  const [page, setPage] = useState(() => storage.get("startPage") || "home");
+  const [page, setPage] = useState(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.toLowerCase();
+      if (hash === "#sport" || hash === "#/sport") return "sport";
+    }
+    return storage.get("startPage") || "home";
+  });
   const [selected, setSelected] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
   const [dlSearchOpen, setDlSearchOpen] = useState(false);
@@ -98,6 +105,17 @@ export default function App() {
       document.documentElement.lang = newLang;
       document.documentElement.dir = isRTL(newLang) ? "rtl" : "ltr";
     });
+  }, []);
+
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.toLowerCase();
+      if (hash === "#sport" || hash === "#/sport") {
+        setPage("sport");
+      }
+    };
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
   // Navigation history stack for Ctrl+Z back navigation
@@ -746,6 +764,17 @@ export default function App() {
       const last = prev[prev.length - 1];
       setPage(last.page);
       setSelected(last.selected);
+      if (
+        typeof window !== "undefined" &&
+        (window.location.hash === "#sport" ||
+          window.location.hash === "#/sport")
+      ) {
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search,
+        );
+      }
       if (typeof gc === "function") {
         requestIdleCallback(() => gc(), { timeout: 2000 });
       }
@@ -761,6 +790,20 @@ export default function App() {
     setSelected(data);
     setPage(pg);
     setShowSearch(false);
+    if (typeof window !== "undefined") {
+      if (pg === "sport") {
+        if (window.location.hash !== "#sport") window.location.hash = "#sport";
+      } else if (
+        window.location.hash === "#sport" ||
+        window.location.hash === "#/sport"
+      ) {
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search,
+        );
+      }
+    }
     // After navigating away, the previous page's component unmounts
     if (typeof gc === "function") {
       requestIdleCallback(() => gc(), { timeout: 2000 });
@@ -853,6 +896,8 @@ export default function App() {
     (categoryId) => {
       if (categoryId === "home") {
         navigate("home");
+      } else if (categoryId === "sport") {
+        navigate("sport");
       } else {
         navigate("category", { categoryId });
       }
@@ -1066,66 +1111,91 @@ export default function App() {
 
   const hasCustomTitlebar = platform === "win32" || platform === "linux";
   const activeTopCategory =
-    page === "category"
-      ? selected?.categoryId || "movies"
-      : page === "home"
-        ? "home"
-        : null;
+    page === "sport"
+      ? "sport"
+      : page === "category"
+        ? selected?.categoryId || "movies"
+        : page === "home"
+          ? "home"
+          : null;
+  const transitionGroup =
+    page === "sport"
+      ? "sport"
+      : page === "movie" ||
+          (page === "category" &&
+            (selected?.categoryId || "movies") === "movies")
+        ? "movies"
+        : page;
+  const isSportOrMoviesTransition = ["sport", "movies"].includes(
+    transitionGroup,
+  );
 
   return (
     <ErrorBoundary>
       {hasCustomTitlebar && <WindowTitlebar />}
       <div>
-        <Sidebar
-          page={page}
-          onNavigate={navigate}
-          onSearch={() => setShowSearch(true)}
-          savedList={savedList}
-          activeDownloads={activeDownloadCount}
-          onReorderSaved={handleReorderSaved}
-          onRemoveSaved={toggleSave}
-          canGoBack={navStack.length > 0}
-          onBack={navigateBack}
-        />
-
-        <div className="main">
-          <TopCategoryBar
-            activeCategory={activeTopCategory}
-            onSelectCategory={handleSelectCategory}
-            onOpenSearch={() => setShowSearch(true)}
-            authUser={authUser}
-            onSignOut={handleSignOut}
+        {page !== "sport" && (
+          <Sidebar
+            page={page}
+            onNavigate={navigate}
+            onSearch={() => setShowSearch(true)}
+            savedList={savedList}
+            activeDownloads={activeDownloadCount}
+            onReorderSaved={handleReorderSaved}
+            onRemoveSaved={toggleSave}
+            canGoBack={navStack.length > 0}
+            onBack={navigateBack}
           />
+        )}
 
-          {apiKeyStatus === "unreachable" && (
-            <div className="api-status-banner api-status-warn">
-              <span>
-                ⚠ {t("apiUnavailable")}
-              </span>
-              <button
-                className="api-status-btn"
-                onClick={() =>
-                  setApiKeyStatus("ok") || window.location.reload()
-                }
-              >
-                {t("retry")}
-              </button>
-            </div>
-          )}
-          <Suspense
-            fallback={
-              <div
-                style={{
-                  color: "var(--text2)",
-                  padding: 48,
-                  textAlign: "center",
-                  fontSize: 15,
-                }}
-              >
-                {t("loading")}
-              </div>
+        <div className={`main ${page === "sport" ? "main-sport" : ""}`}>
+          <div
+            key={transitionGroup}
+            className={
+              isSportOrMoviesTransition
+                ? `app-page-transition app-page-transition--${transitionGroup}`
+                : undefined
             }
           >
+            {page !== "sport" && (
+              <TopCategoryBar
+                activeCategory={activeTopCategory}
+                onSelectCategory={handleSelectCategory}
+                onOpenSearch={() => setShowSearch(true)}
+                authUser={authUser}
+                onSignOut={handleSignOut}
+              />
+            )}
+
+            {apiKeyStatus === "unreachable" && (
+              <div className="api-status-banner api-status-warn">
+                <span>
+                  ⚠ {t("apiUnavailable")}
+                </span>
+                <button
+                  className="api-status-btn"
+                  onClick={() =>
+                    setApiKeyStatus("ok") || window.location.reload()
+                  }
+                >
+                  {t("retry")}
+                </button>
+              </div>
+            )}
+            <Suspense
+              fallback={
+                <div
+                  style={{
+                    color: "var(--text2)",
+                    padding: 48,
+                    textAlign: "center",
+                    fontSize: 15,
+                  }}
+                >
+                  {t("loading")}
+                </div>
+              }
+            >
             {page === "home" && (
               <HomePage
                 trending={trending}
@@ -1247,7 +1317,15 @@ export default function App() {
                 }
               />
             )}
-          </Suspense>
+              {page === "sport" && (
+                <HwtoSportPage
+                  onBack={() =>
+                    navStack.length > 0 ? navigateBack() : navigate("home")
+                  }
+                />
+              )}
+            </Suspense>
+          </div>
         </div>
 
         {showSearch && (
