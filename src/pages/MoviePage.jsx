@@ -45,6 +45,8 @@ import TrailerModal from "../components/TrailerModal";
 import BlockedStatsModal from "../components/BlockedStatsModal";
 import { useBlockedStats } from "../utils/useBlockedStats";
 import MediaCard from "../components/MediaCard";
+import HlsPlayer from "../components/HlsPlayer";
+import { fetchAuthorizedHlsStream } from "../utils/hlsClient";
 import {
   storage,
   STORAGE_KEYS,
@@ -391,10 +393,36 @@ export default function MoviePage({
     resolvingUrlRef.current = true;
     setResolvingUrl(true);
     setResolveError(null);
-    const startTime = storage.get("dlTime_" + progressKey) || 0;
     let mounted = true;
+
+    if (playerSource === "authorized_hls") {
+      fetchAuthorizedHlsStream({ type: "movie", id: item.id })
+        .then((res) => {
+          if (!mounted) return;
+          if (res.ok && res.streamUrl) {
+            resolvedPlayerUrlRef.current = res.streamUrl;
+            setResolvedPlayerUrl(res.streamUrl);
+            setM3u8Url(res.streamUrl);
+          } else {
+            setResolveError(res.error || t("errorLoading"));
+          }
+        })
+        .catch((e) => {
+          if (mounted) setResolveError(e.message || t("errorLoading"));
+        })
+        .finally(() => {
+          if (mounted) {
+            resolvingUrlRef.current = false;
+            setResolvingUrl(false);
+            setWebviewLoading(false);
+          }
+        });
+      return;
+    }
+
+    const startTime = storage.get("dlTime_" + progressKey) || 0;
     window.electron
-      .resolveAllManga({
+      ?.resolveAllManga?.({
         title,
         seasonNumber: 1,
         episodeNumber: 1,
@@ -1104,7 +1132,28 @@ export default function MoviePage({
                 </button>
               </div>
             )}
-            {isElectron ? (
+            {playerSource === "authorized_hls" && resolvedPlayerUrl ? (
+              <HlsPlayer
+                streamUrl={resolvedPlayerUrl}
+                subtitles={
+                  githubSub?.available?.length
+                    ? githubSub.available
+                    : activeSub
+                      ? [activeSub]
+                      : []
+                }
+                initialTime={storage.get("dlTime_" + progressKey) || 0}
+                onProgress={(time, dur) => {
+                  setProgress(progressKey, time, dur);
+                }}
+                onBack={() => setPlaying(false)}
+                accentColor={playerAccentColor}
+                onTokenExpired={() => {
+                  resolvedPlayerUrlRef.current = null;
+                  setResolvedPlayerUrl(null);
+                }}
+              />
+            ) : isElectron ? (
               <webview
                 ref={webviewRef}
                 src={

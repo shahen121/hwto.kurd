@@ -50,6 +50,8 @@ import DownloadModal from "../components/DownloadModal";
 import SoraniOverview from "../components/SoraniOverview";
 import TrailerModal from "../components/TrailerModal";
 import BlockedStatsModal from "../components/BlockedStatsModal";
+import HlsPlayer from "../components/HlsPlayer";
+import { fetchAuthorizedHlsStream } from "../utils/hlsClient";
 import { useBlockedStats } from "../utils/useBlockedStats";
 import {
   storage,
@@ -803,11 +805,42 @@ export default function TVPage({
     resolvingUrlRef.current = true;
     setResolvingUrl(true);
     setResolveError(null);
+    let mounted = true;
+
+    if (playerSource === "authorized_hls") {
+      fetchAuthorizedHlsStream({
+        type: "tv",
+        id: item.id,
+        season: selectedSeason,
+        episode: epNum,
+      })
+        .then((res) => {
+          if (!mounted) return;
+          if (res.ok && res.streamUrl) {
+            resolvedPlayerUrlRef.current = res.streamUrl;
+            setResolvedPlayerUrl(res.streamUrl);
+            setM3u8Url(res.streamUrl);
+          } else {
+            setResolveError(res.error || t("errorLoading"));
+          }
+        })
+        .catch((e) => {
+          if (mounted) setResolveError(e.message || t("errorLoading"));
+        })
+        .finally(() => {
+          if (mounted) {
+            resolvingUrlRef.current = false;
+            setResolvingUrl(false);
+            setWebviewLoading(false);
+          }
+        });
+      return;
+    }
+
     const progressKey = `tv_${item.id}_s${selectedSeason}e${epNum}`;
     const startTime = storage.get("dlTime_" + progressKey) || 0;
-    let mounted = true;
     window.electron
-      .resolveAllManga({
+      ?.resolveAllManga?.({
         title,
         seasonNumber: selectedSeason,
         episodeNumber: epNum,
@@ -2191,7 +2224,33 @@ export default function TVPage({
                     </div>
                   </div>
                 )}
-                {isElectron ? (
+                {playerSource === "authorized_hls" && resolvedPlayerUrl ? (
+                  <HlsPlayer
+                    streamUrl={resolvedPlayerUrl}
+                    subtitles={
+                      githubSub?.available?.length
+                        ? githubSub.available
+                        : activeSub
+                          ? [activeSub]
+                          : []
+                    }
+                    initialTime={
+                      storage.get(
+                        `dlTime_tv_${item.id}_s${playerEp.season}e${playerEp.episode}`,
+                      ) || 0
+                    }
+                    onProgress={(time, dur) => {
+                      const pk = `tv_${item.id}_s${playerEp.season}e${playerEp.episode}`;
+                      setProgress(pk, time, dur);
+                    }}
+                    onBack={() => setPlaying(false)}
+                    accentColor={playerAccentColor}
+                    onTokenExpired={() => {
+                      resolvedPlayerUrlRef.current = null;
+                      setResolvedPlayerUrl(null);
+                    }}
+                  />
+                ) : isElectron ? (
                   <webview
                     ref={webviewRef}
                     src={

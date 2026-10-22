@@ -63,8 +63,13 @@ contextBridge.exposeInMainWorld("electron", {
   setPlayerVideo: (args) => ipcRenderer.invoke("set-player-video", args),
   debugAllManga: (args) => ipcRenderer.invoke("debug-allmanga", args),
 
+  // Authorized HLS stream resolver (main-process)
+  resolveHlsStream: (args) => ipcRenderer.invoke("resolve-hls-stream", args),
+
   // TMDB proxy for Electron desktop (bypasses file:// fetch limitations)
   tmdbProxy: (path) => ipcRenderer.invoke("tmdb-proxy", path),
+  animeRequest: (request) => ipcRenderer.invoke("anime-request", request),
+  clearAnimeCache: () => ipcRenderer.invoke("clear-anime-cache"),
 
   // App version (from package.json via Electron)
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),

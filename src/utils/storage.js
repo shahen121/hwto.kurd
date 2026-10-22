@@ -189,8 +189,10 @@ export async function clearAppCaches() {
   if (isElectron) {
     try {
       await window.electron.clearAppCache();
+      await window.electron.clearAnimeCache?.();
     } catch {}
   }
+  localStorage.removeItem("streambert_animeApiCache");
   localStorage.removeItem("streambert_anilistCache");
   localStorage.removeItem("streambert_episodeGroupCache");
   localStorage.removeItem("streambert_aniskipCache");

@@ -1,5 +1,5 @@
 // ── Age Rating Backend ────────────────────────────────────────────────────────
-import { tmdbFetch } from "./api";
+import { tmdbFetch } from "./api.js";
 
 export const RATING_COUNTRIES = [
   { code: "US", label: "United States (MPAA / TV Parental)" },
@@ -166,7 +166,9 @@ export async function fetchTVRating(tvId, apiKey, countryCode) {
 export function getAgeLimitSetting(storage) {
   const val = storage.get("ageLimit");
   if (val === null || val === undefined || val === "") return null;
-  return Number(val);
+  const limit = Number(val);
+  if (!Number.isInteger(limit) || limit < 0 || limit > 18) return null;
+  return limit;
 }
 
 export function getRatingCountry(storage) {

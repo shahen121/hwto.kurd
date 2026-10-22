@@ -44,6 +44,8 @@ const allmangaIpc = require("./src/ipc/allmanga");
 const playerIpc = require("./src/ipc/player");
 const discordRpc = require("./src/ipc/discordRpc");
 const tmdbIpc = require("./src/ipc/tmdb");
+const hlsIpc = require("./src/ipc/hls");
+const animeIpc = require("./src/ipc/anime");
 
 // -- Ad/tracker block list -----------------------------------------------------
 const BLOCKED_HOSTS = [
@@ -322,6 +324,8 @@ subtitlesIpc.register({
 });
 allmangaIpc.register();
 tmdbIpc.register();
+hlsIpc.register();
+animeIpc.register();
 playerIpc.register(getMainWindow, {
   writeSecretMigration: storageIpc.writeSecretMigration,
 });

@@ -236,6 +236,20 @@ const ALL_PLAYER_SOURCES = [
     movieUrl: (_id) => "https://allmanga.to",
     tvUrl: (_id, _season, _ep) => "https://allmanga.to",
   },
+  {
+    id: "authorized_hls",
+    label: "Authorized HLS",
+    tag: "DIRECT",
+    note: null,
+    supportsProgress: true,
+    isNativeHls: true,
+    async: true, // Uses asynchronous manifest resolution
+    colorParam: null,
+    langParam: null,
+    params: {},
+    movieUrl: (id) => `/api/hls?type=movie&id=${id}`,
+    tvUrl: (id, season, ep) => `/api/hls?type=tv&id=${id}&season=${season}&ep=${ep}`,
+  },
 ];
 
 // On the web, progress can't be read from a cross-origin iframe and
@@ -303,6 +317,9 @@ export const sourceProgressViaFrames = (sourceId) =>
 
 export const sourceIsAsync = (sourceId) =>
   PLAYER_SOURCES.find((s) => s.id === sourceId)?.async ?? false;
+
+export const sourceIsNativeHls = (sourceId) =>
+  PLAYER_SOURCES.find((s) => s.id === sourceId)?.isNativeHls ?? false;
 
 // Return the next non-async source after `currentId` in PLAYER_SOURCES order
 export const getNextNonAsyncSource = (currentId) => {

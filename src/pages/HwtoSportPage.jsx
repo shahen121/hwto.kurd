@@ -448,7 +448,6 @@ export default function HwtoSportPage({ onBack }) {
                 aria-current={activeTab === "scoreboard" ? "page" : undefined}
                 onClick={() => setActiveTab("scoreboard")}
               >
-                <span aria-hidden="true">◉</span>
                 <span>{t("sportScoreboard")}</span>
               </button>
               <button
@@ -457,7 +456,6 @@ export default function HwtoSportPage({ onBack }) {
                 aria-current={activeTab === "fixtures" ? "page" : undefined}
                 onClick={() => setActiveTab("fixtures")}
               >
-                <span aria-hidden="true">▦</span>
                 <span>{t("sportFixtures")}</span>
               </button>
               <button
@@ -466,7 +464,6 @@ export default function HwtoSportPage({ onBack }) {
                 aria-current={activeTab === "standings" ? "page" : undefined}
                 onClick={() => setActiveTab("standings")}
               >
-                <span aria-hidden="true">♜</span>
                 <span>{t("sportStandings")}</span>
               </button>
             </nav>
@@ -480,7 +477,6 @@ export default function HwtoSportPage({ onBack }) {
               aria-label={t("sportSettings")}
               title={t("sportSettings")}
             >
-              <span aria-hidden="true">⚙</span>
               <span>{t("sportSettings")}</span>
             </button>
 
@@ -506,19 +502,6 @@ export default function HwtoSportPage({ onBack }) {
                 onClick={onBack}
                 title={t("sportBackToMain")}
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="19" y1="12" x2="5" y2="12" />
-                  <polyline points="12 19 5 12 12 5" />
-                </svg>
                 <span>{t("sportBackToMain")}</span>
               </button>
             )}
@@ -536,22 +519,6 @@ export default function HwtoSportPage({ onBack }) {
               currentLang,
               leagues,
             );
-            const flag =
-              league.flag ||
-              (league.country?.toLowerCase().includes("spain")
-                ? "🇪🇸"
-                : league.country?.toLowerCase().includes("germany")
-                  ? "🇩🇪"
-                  : league.country?.toLowerCase().includes("italy")
-                    ? "🇮🇹"
-                    : league.country?.toLowerCase().includes("france")
-                      ? "🇫🇷"
-                      : league.country?.toLowerCase().includes("saudi")
-                        ? "🇸🇦"
-                        : league.country?.toLowerCase().includes("turkey")
-                          ? "🇹🇷"
-                          : "⚽");
-
             return (
               <button
                 key={league.slug}
@@ -562,7 +529,6 @@ export default function HwtoSportPage({ onBack }) {
                   setFixturesPage(1);
                 }}
               >
-                <span className="sport-league-flag">{flag}</span>
                 <span>{displayName}</span>
               </button>
             );
@@ -575,7 +541,6 @@ export default function HwtoSportPage({ onBack }) {
         <section className="sport-hero">
           <div className="sport-hero-copy">
             <span className="sport-eyebrow">
-              <span className="sport-hero-ball" aria-hidden="true">●</span>
               {t("hwtoSport")}
             </span>
             <h1>{t("sportTagline")}</h1>
@@ -583,7 +548,6 @@ export default function HwtoSportPage({ onBack }) {
           </div>
           <div className="sport-hero-overview">
             <div className="sport-overview-topline">
-              <span className="sport-overview-indicator" />
               <span>{t("sportSelectedLeague")}</span>
             </div>
             <strong>
@@ -607,7 +571,6 @@ export default function HwtoSportPage({ onBack }) {
               </div>
             </div>
           </div>
-          <div className="sport-hero-watermark" aria-hidden="true">⚽</div>
         </section>
 
         {/* Date Strip & Controls for Scoreboard */}
@@ -619,7 +582,7 @@ export default function HwtoSportPage({ onBack }) {
                 className={`sport-date-btn ${selectedDate === latestMatchday ? "active" : ""}`}
                 onClick={() => setSelectedDate(latestMatchday)}
               >
-                ⚽ {t("sportRecentMatchday")} ·{" "}
+                {t("sportRecentMatchday")} ·{" "}
                 {new Intl.DateTimeFormat(
                   currentLang === "ar"
                     ? "ar-SA"
@@ -666,19 +629,6 @@ export default function HwtoSportPage({ onBack }) {
                 onClick={() => loadData(true)}
                 title={t("sportRefresh")}
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
                 <span>{t("sportRefresh")}</span>
               </button>
 
@@ -795,19 +745,6 @@ export default function HwtoSportPage({ onBack }) {
               onClick={() => loadData(true)}
               title={t("sportRefresh")}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="23 4 23 10 17 10" />
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
               <span>{t("sportRefresh")}</span>
             </button>
           </div>
@@ -824,7 +761,6 @@ export default function HwtoSportPage({ onBack }) {
         {/* Error Box */}
         {error && !loading && (
           <div className="sport-state-box">
-            <span style={{ fontSize: 32 }}>⚠️</span>
             <p>{error}</p>
             <button
               type="button"
@@ -841,7 +777,6 @@ export default function HwtoSportPage({ onBack }) {
           <>
             {scoreboardData.length === 0 ? (
               <div className="sport-state-box">
-                <span style={{ fontSize: 40 }}>⚽</span>
                 <p>{t("sportNoMatches")}</p>
                 <button
                   type="button"
@@ -858,8 +793,6 @@ export default function HwtoSportPage({ onBack }) {
                   const statusInfo = getMatchStatusInfo(competition?.status);
                   const isLive = statusInfo.state === "live";
 
-                  const homeLogo = home?.team?.logo;
-                  const awayLogo = away?.team?.logo;
                   const homeName = home?.team?.displayName || home?.team?.name || t("home");
                   const awayName = away?.team?.displayName || away?.team?.name || t("sportAway");
                   const homeScore = home?.score ?? "-";
@@ -881,7 +814,6 @@ export default function HwtoSportPage({ onBack }) {
                     >
                       <div className="sport-card-header">
                         <span className="sport-card-league">
-                          <span>⚽</span>
                           <span>
                             {getLeagueDisplayName(
                               selectedLeague,
@@ -891,7 +823,6 @@ export default function HwtoSportPage({ onBack }) {
                           </span>
                         </span>
                         <span className={`sport-status-pill ${statusInfo.state}`}>
-                          {isLive && <span className="sport-live-dot" />}
                           {statusInfo.state === "live"
                             ? `${t("sportLiveNow")} ${statusInfo.display}`
                             : statusInfo.state === "ft"
@@ -908,20 +839,6 @@ export default function HwtoSportPage({ onBack }) {
                         {/* Home team */}
                         <div className="sport-team-row">
                           <div className="sport-team-info">
-                            {homeLogo ? (
-                              <img
-                                src={homeLogo}
-                                alt={homeName}
-                                className="sport-team-logo"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                }}
-                              />
-                            ) : (
-                              <div className="sport-team-logo-fallback">
-                                {homeName.slice(0, 2).toUpperCase()}
-                              </div>
-                            )}
                             <span
                               className={`sport-team-name ${home?.winner ? "winner" : ""}`}
                             >
@@ -938,20 +855,6 @@ export default function HwtoSportPage({ onBack }) {
                         {/* Away team */}
                         <div className="sport-team-row">
                           <div className="sport-team-info">
-                            {awayLogo ? (
-                              <img
-                                src={awayLogo}
-                                alt={awayName}
-                                className="sport-team-logo"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                }}
-                              />
-                            ) : (
-                              <div className="sport-team-logo-fallback">
-                                {awayName.slice(0, 2).toUpperCase()}
-                              </div>
-                            )}
                             <span
                               className={`sport-team-name ${away?.winner ? "winner" : ""}`}
                             >
@@ -968,11 +871,10 @@ export default function HwtoSportPage({ onBack }) {
 
                       <div className="sport-card-footer">
                         <span className="sport-venue-name" title={venueName}>
-                          {venueName ? `📍 ${venueName}` : `📍 ${t("sportVenue")}`}
+                          {venueName || t("sportVenue")}
                         </span>
                         <span className="sport-view-plays-cta">
                           <span>{t("sportMatchDetails")}</span>
-                          <span>→</span>
                         </span>
                       </div>
                     </div>
@@ -988,7 +890,6 @@ export default function HwtoSportPage({ onBack }) {
           <>
             {fixturesData.length === 0 ? (
               <div className="sport-state-box">
-                <span style={{ fontSize: 40 }}>📅</span>
                 <p>{t("sportNoFixtures")}</p>
               </div>
             ) : (
@@ -996,8 +897,6 @@ export default function HwtoSportPage({ onBack }) {
                 {fixturesData.map((event) => {
                   const { home, away, competition } = getCompetitors(event);
                   const statusInfo = getMatchStatusInfo(competition?.status);
-                  const homeLogo = home?.team?.logo;
-                  const awayLogo = away?.team?.logo;
                   const homeName = home?.team?.displayName || home?.team?.name || t("home");
                   const awayName = away?.team?.displayName || away?.team?.name || t("sportAway");
                   const homeScore = home?.score ?? "-";
@@ -1038,7 +937,6 @@ export default function HwtoSportPage({ onBack }) {
                     >
                       <div className="sport-card-header">
                         <span className="sport-card-league">
-                          <span>🗓️</span>
                           <span>{matchDateStr}</span>
                         </span>
                         <span className={`sport-status-pill ${statusInfo.state}`}>
@@ -1053,16 +951,6 @@ export default function HwtoSportPage({ onBack }) {
                       <div className="sport-teams-box">
                         <div className="sport-team-row">
                           <div className="sport-team-info">
-                            {homeLogo && (
-                              <img
-                                src={homeLogo}
-                                alt={homeName}
-                                className="sport-team-logo"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                }}
-                              />
-                            )}
                             <span className="sport-team-name">{homeName}</span>
                           </div>
                           <span className="sport-team-score">
@@ -1072,16 +960,6 @@ export default function HwtoSportPage({ onBack }) {
 
                         <div className="sport-team-row">
                           <div className="sport-team-info">
-                            {awayLogo && (
-                              <img
-                                src={awayLogo}
-                                alt={awayName}
-                                className="sport-team-logo"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                }}
-                              />
-                            )}
                             <span className="sport-team-name">{awayName}</span>
                           </div>
                           <span className="sport-team-score">
@@ -1096,7 +974,6 @@ export default function HwtoSportPage({ onBack }) {
                         </span>
                         <span className="sport-view-plays-cta">
                           <span>{t("sportMatchDetails")}</span>
-                          <span>→</span>
                         </span>
                       </div>
                     </div>
@@ -1151,7 +1028,6 @@ export default function HwtoSportPage({ onBack }) {
           <div className="sport-standings-card">
             {standingsEntries.length === 0 ? (
               <div className="sport-state-box">
-                <span style={{ fontSize: 40 }}>🏆</span>
                 <p>{t("sportNoStandings")}</p>
               </div>
             ) : (
@@ -1182,8 +1058,6 @@ export default function HwtoSportPage({ onBack }) {
                         entry.team?.displayName ||
                         entry.team?.name ||
                         t("sportClub");
-                      const logo = entry.team?.logo;
-
                       // Zone styling
                       const isUCL = rank <= 4;
                       const isUEL = rank === 5 || rank === 6;
@@ -1220,35 +1094,6 @@ export default function HwtoSportPage({ onBack }) {
                           </td>
                           <td>
                             <div className="sport-team-cell">
-                              {logo ? (
-                                <img
-                                  src={logo}
-                                  alt={teamName}
-                                  style={{
-                                    width: 24,
-                                    height: 24,
-                                    objectFit: "contain",
-                                  }}
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none";
-                                  }}
-                                />
-                              ) : (
-                                <div
-                                  style={{
-                                    width: 24,
-                                    height: 24,
-                                    borderRadius: 4,
-                                    background: "var(--sport-surface3)",
-                                    textAlign: "center",
-                                    lineHeight: "24px",
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  {teamName.slice(0, 2).toUpperCase()}
-                                </div>
-                              )}
                               <span>{teamName}</span>
                             </div>
                           </td>
@@ -1397,7 +1242,6 @@ export default function HwtoSportPage({ onBack }) {
             {/* Modal Top Bar */}
             <div className="sport-modal-topbar">
               <div className="sport-modal-title">
-                <span>⚽</span>
                 <span>{t("sportMatchDetails")}</span>
               </div>
               <button
@@ -1413,16 +1257,6 @@ export default function HwtoSportPage({ onBack }) {
             {/* Scoreboard Hero Header */}
             <div className="sport-modal-hero">
               <div className="sport-modal-team">
-                {selectedEvent.homeTeam?.team?.logo && (
-                  <img
-                    src={selectedEvent.homeTeam.team.logo}
-                    alt={selectedEvent.homeTeam.team.displayName}
-                    className="sport-modal-team-logo"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                )}
                 <span className="sport-modal-team-name">
                   {selectedEvent.homeTeam?.team?.displayName ||
                     selectedEvent.homeTeam?.team?.name ||
@@ -1441,22 +1275,12 @@ export default function HwtoSportPage({ onBack }) {
                 </span>
                 {selectedEvent.competition?.venue?.fullName && (
                   <span style={{ fontSize: 11, color: "var(--sport-text-dim)" }}>
-                    📍 {selectedEvent.competition.venue.fullName}
+                    {selectedEvent.competition.venue.fullName}
                   </span>
                 )}
               </div>
 
               <div className="sport-modal-team">
-                {selectedEvent.awayTeam?.team?.logo && (
-                  <img
-                    src={selectedEvent.awayTeam.team.logo}
-                    alt={selectedEvent.awayTeam.team.displayName}
-                    className="sport-modal-team-logo"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                )}
                 <span className="sport-modal-team-name">
                   {selectedEvent.awayTeam?.team?.displayName ||
                     selectedEvent.awayTeam?.team?.name ||
@@ -1506,7 +1330,6 @@ export default function HwtoSportPage({ onBack }) {
                 </div>
               ) : eventError ? (
                 <div className="sport-state-box">
-                  <span style={{ fontSize: 32 }}>⚠️</span>
                   <p>{eventError}</p>
                 </div>
               ) : (
@@ -1539,15 +1362,6 @@ export default function HwtoSportPage({ onBack }) {
                             >
                               <span className="sport-timeline-time">
                                 {item.clock?.displayValue || `${item.clock?.value || idx}'`}
-                              </span>
-                              <span className="sport-timeline-icon">
-                                {isGoal
-                                  ? "⚽"
-                                  : isRed
-                                    ? "🟥"
-                                    : isYellow
-                                      ? "🟨"
-                                      : "⚡"}
                               </span>
                               <div className="sport-timeline-desc">
                                 <strong>
@@ -1620,19 +1434,6 @@ export default function HwtoSportPage({ onBack }) {
                               <span className="sport-timeline-time">
                                 {play.clock?.displayValue || `${play.period?.number || 1}H`}
                               </span>
-                              <span className="sport-timeline-icon">
-                                {isGoal
-                                  ? "⚽"
-                                  : isRed
-                                    ? "🟥"
-                                    : isYellow
-                                      ? "🟨"
-                                      : isSub
-                                        ? "🔁"
-                                        : isGoalKick
-                                          ? "🥅"
-                                          : "📌"}
-                              </span>
                               <div className="sport-timeline-desc">
                                 {isGoal && (
                                   <strong style={{ color: "var(--sport-green)", marginInlineEnd: 6 }}>
@@ -1700,7 +1501,6 @@ export default function HwtoSportPage({ onBack }) {
                     if (!homeStats.length && !awayStats.length) {
                       return (
                         <div className="sport-state-box">
-                          <span style={{ fontSize: 32 }}>📊</span>
                           <p>{t("sportNoStats")}</p>
                         </div>
                       );

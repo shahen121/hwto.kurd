@@ -13,6 +13,7 @@
     "dev": "vite",
     "dev:electron": "vite build --watch",
     "build": "vite build",
+    "test:hls": "node api/hls.test.js",
     "preview": "vite preview",
     "start": "vite build && electron .",
     "dist": "cross-env ELECTRON_DIST=1 vite build && npm run dist:linux && npm run dist:win && npm run dist:mac",
@@ -27,6 +28,7 @@
   "dependencies": {
     "approve": "^0.0.12",
     "firebase": "^13.0.0",
+    "hls.js": "^1.7.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "scripts": "^0.1.0"

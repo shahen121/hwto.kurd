@@ -14,6 +14,7 @@ import {
   QuitIcon,
   BackIcon,
   SportIcon,
+  AnimeIcon,
 } from "./Icons";
 
 export default function Sidebar({
@@ -136,6 +137,12 @@ export default function Sidebar({
         onClick={() => onNavigate("sport")}
         icon={<SportIcon />}
         label={t("sport")}
+      />
+      <SideBtn
+        active={page === "anime"}
+        onClick={() => onNavigate("anime")}
+        icon={<AnimeIcon />}
+        label={t("anime")}
       />
       {isElectron && (
         <SideBtn

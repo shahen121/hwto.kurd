@@ -68,6 +68,7 @@ const LibraryPage = lazy(() => import("./pages/LibraryPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const DownloadsPage = lazy(() => import("./pages/DownloadsPage"));
 const HwtoSportPage = lazy(() => import("./pages/HwtoSportPage"));
+const AnimePage = lazy(() => import("./pages/AnimePage"));
 import {
   checkForUpdatesWithFallback,
   DEFAULT_UPDATE_SOURCE,
@@ -83,6 +84,7 @@ export default function App() {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.toLowerCase();
       if (hash === "#sport" || hash === "#/sport") return "sport";
+      if (hash === "#anime" || hash === "#/anime") return "anime";
     }
     return storage.get("startPage") || "home";
   });
@@ -112,6 +114,8 @@ export default function App() {
       const hash = window.location.hash.toLowerCase();
       if (hash === "#sport" || hash === "#/sport") {
         setPage("sport");
+      } else if (hash === "#anime" || hash === "#/anime") {
+        setPage("anime");
       }
     };
     window.addEventListener("hashchange", handleHash);
@@ -766,8 +770,9 @@ export default function App() {
       setSelected(last.selected);
       if (
         typeof window !== "undefined" &&
-        (window.location.hash === "#sport" ||
-          window.location.hash === "#/sport")
+        ["#sport", "#/sport", "#anime", "#/anime"].includes(
+          window.location.hash,
+        )
       ) {
         window.history.replaceState(
           null,
@@ -791,11 +796,13 @@ export default function App() {
     setPage(pg);
     setShowSearch(false);
     if (typeof window !== "undefined") {
-      if (pg === "sport") {
-        if (window.location.hash !== "#sport") window.location.hash = "#sport";
+      if (pg === "sport" || pg === "anime") {
+        const hash = `#${pg}`;
+        if (window.location.hash !== hash) window.location.hash = hash;
       } else if (
-        window.location.hash === "#sport" ||
-        window.location.hash === "#/sport"
+        ["#sport", "#/sport", "#anime", "#/anime"].includes(
+          window.location.hash,
+        )
       ) {
         window.history.replaceState(
           null,
@@ -1111,22 +1118,22 @@ export default function App() {
 
   const hasCustomTitlebar = platform === "win32" || platform === "linux";
   const activeTopCategory =
-    page === "sport"
-      ? "sport"
+    page === "sport" || page === "anime"
+      ? page
       : page === "category"
         ? selected?.categoryId || "movies"
         : page === "home"
           ? "home"
           : null;
   const transitionGroup =
-    page === "sport"
-      ? "sport"
+    page === "sport" || page === "anime"
+      ? page
       : page === "movie" ||
           (page === "category" &&
             (selected?.categoryId || "movies") === "movies")
         ? "movies"
         : page;
-  const isSportOrMoviesTransition = ["sport", "movies"].includes(
+  const isDedicatedPageTransition = ["sport", "anime", "movies"].includes(
     transitionGroup,
   );
 
@@ -1134,7 +1141,7 @@ export default function App() {
     <ErrorBoundary>
       {hasCustomTitlebar && <WindowTitlebar />}
       <div>
-        {page !== "sport" && (
+        {page !== "sport" && page !== "anime" && (
           <Sidebar
             page={page}
             onNavigate={navigate}
@@ -1148,16 +1155,24 @@ export default function App() {
           />
         )}
 
-        <div className={`main ${page === "sport" ? "main-sport" : ""}`}>
+        <div
+          className={`main ${
+            page === "sport"
+              ? "main-sport"
+              : page === "anime"
+                ? "main-anime"
+                : ""
+          }`}
+        >
           <div
             key={transitionGroup}
             className={
-              isSportOrMoviesTransition
+              isDedicatedPageTransition
                 ? `app-page-transition app-page-transition--${transitionGroup}`
                 : undefined
             }
           >
-            {page !== "sport" && (
+            {page !== "sport" && page !== "anime" && (
               <TopCategoryBar
                 activeCategory={activeTopCategory}
                 onSelectCategory={handleSelectCategory}
@@ -1319,6 +1334,13 @@ export default function App() {
             )}
               {page === "sport" && (
                 <HwtoSportPage
+                  onBack={() =>
+                    navStack.length > 0 ? navigateBack() : navigate("home")
+                  }
+                />
+              )}
+              {page === "anime" && (
+                <AnimePage
                   onBack={() =>
                     navStack.length > 0 ? navigateBack() : navigate("home")
                   }

@@ -299,7 +299,8 @@ body,
     overflow-x: hidden;
 }
 
-.main.main-sport {
+.main.main-sport,
+.main.main-anime {
     margin-left: 0 !important;
     margin-right: 0 !important;
     width: 100% !important;
@@ -307,6 +308,10 @@ body,
 }
 
 .app-page-transition--sport {
+    animation: pageArriveFromEnd 320ms cubic-bezier(0.2, 0.7, 0.25, 1);
+}
+
+.app-page-transition--anime {
     animation: pageArriveFromEnd 320ms cubic-bezier(0.2, 0.7, 0.25, 1);
 }
 
@@ -340,18 +345,24 @@ html[dir="rtl"] .app-page-transition--sport {
     animation-name: pageArriveFromStart;
 }
 
+html[dir="rtl"] .app-page-transition--anime {
+    animation-name: pageArriveFromStart;
+}
+
 html[dir="rtl"] .app-page-transition--movies {
     animation-name: pageArriveFromEnd;
 }
 
 @media (prefers-reduced-motion: reduce) {
     .app-page-transition--sport,
+    .app-page-transition--anime,
     .app-page-transition--movies {
         animation: none;
     }
 }
 
-html[dir="rtl"] .main.main-sport {
+html[dir="rtl"] .main.main-sport,
+html[dir="rtl"] .main.main-anime {
     margin-left: 0 !important;
     margin-right: 0 !important;
 }

@@ -19,6 +19,11 @@ import {
   SUPPORTED_LANGUAGES,
   isRTL,
 } from "../utils/i18n";
+import {
+  getAgeLimitSetting,
+  getRatingCountry,
+  RATING_COUNTRIES,
+} from "../utils/ageRating";
 
 export default function SettingsPage({ onTriggerLanguageChange }) {
   const currentLang = getCurrentLanguage();
@@ -52,6 +57,10 @@ export default function SettingsPage({ onTriggerLanguageChange }) {
   );
   const [watchedThreshold, setWatchedThreshold] = useState(
     () => storage.get(STORAGE_KEYS.WATCHED_THRESHOLD) || 90,
+  );
+  const [ageLimit, setAgeLimit] = useState(() => getAgeLimitSetting(storage));
+  const [ratingCountry, setRatingCountry] = useState(() =>
+    getRatingCountry(storage),
   );
 
   // Status flashes
@@ -361,6 +370,67 @@ export default function SettingsPage({ onTriggerLanguageChange }) {
         subtitle={t("groupPlaybackSub")}
         icon="▶"
       >
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+            {t("ageLimit")}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 10 }}>
+            {t("ageLimitDesc")}
+          </div>
+          <select
+            value={ageLimit === null ? "none" : String(ageLimit)}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === "none") {
+                storage.remove(STORAGE_KEYS.AGE_LIMIT);
+                setAgeLimit(null);
+              } else {
+                const nextLimit = Number(value);
+                storage.set(STORAGE_KEYS.AGE_LIMIT, nextLimit);
+                setAgeLimit(nextLimit);
+              }
+              flash();
+            }}
+            style={selectStyle}
+          >
+            <option value="none">{t("noAgeLimit")}</option>
+            {Array.from({ length: 19 }, (_, age) => age).map((age) => (
+              <option key={age} value={age}>
+                {age === 0 ? t("allAges") : `${age}+`}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ height: 1, background: "var(--border)", margin: "20px 0" }} />
+
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+            {t("ratingCountry")}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 10 }}>
+            {t("ratingCountryDesc")}
+          </div>
+          <select
+            value={ratingCountry}
+            onChange={(e) => {
+              const value = e.target.value;
+              setRatingCountry(value);
+              storage.set(STORAGE_KEYS.RATING_COUNTRY, value);
+              flash();
+            }}
+            style={selectStyle}
+          >
+            {RATING_COUNTRIES.map((country) => (
+              <option key={country.code} value={country.code}>
+                {country.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ height: 1, background: "var(--border)", margin: "20px 0" }} />
+
         {/* Autoplay next episode */}
         <div
           style={{
