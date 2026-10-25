@@ -98,9 +98,12 @@ export default function MoviePage({
   const [m3u8Url, setM3u8Url] = useState(null);
   const [interceptedSubs, setInterceptedSubs] = useState([]);
   const [githubSub, setGithubSub] = useState(null);
-  const [playerSource, setPlayerSource] = useState(
-    () => storage.get("playerSource") || NON_ANIME_DEFAULT_SOURCE,
-  );
+  const [playerSource, setPlayerSource] = useState(() => {
+    const saved = storage.get("playerSource");
+    return PLAYER_SOURCES.some((s) => s.id === saved)
+      ? saved
+      : NON_ANIME_DEFAULT_SOURCE;
+  });
 
   // Accent colour + subtitle lang come from App-level state (via props),
   // so they are always fresh after Settings save without any extra storage reads.
@@ -118,10 +121,6 @@ export default function MoviePage({
     }).then((found) => {
       if (!mounted) return;
       setGithubSub(found);
-      if (found) {
-        // Switch to VidSrc automatically so sub_url is injected into the player
-        setPlayerSource("vidsrc");
-      }
     });
     return () => {
       mounted = false;
@@ -492,6 +491,19 @@ export default function MoviePage({
     });
     return () => window.electron.offM3u8Found(handler);
   }, []);
+
+  // Auto-failover from Vidcore to Vidlink if all Vidcore sub-servers report 404
+  useEffect(() => {
+    if (!playing || playerSource !== "vidcore") return;
+    const onMessage = (e) => {
+      if (e.data && e.data.event === "status" && e.data.data === 404) {
+        setFailoverSource(`movie_${item.id}`, "vidlink");
+        setPlayerSource("vidlink");
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [playing, playerSource, item.id]);
 
   // Close source dropdown on scroll or click-outside
   useEffect(() => {
@@ -1234,7 +1246,7 @@ export default function MoviePage({
                 {PLAYER_SOURCES.find((s) => s.id === playerSource)?.label ??
                   t("source")}
               </button>
-              {githubSub && playerSource === "vidsrc" && (
+              {githubSub && (
                 <button
                   ref={subRef}
                   className="player-overlay-btn"

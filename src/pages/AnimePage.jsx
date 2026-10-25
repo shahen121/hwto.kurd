@@ -643,9 +643,11 @@ export default function AnimePage({ onBack }) {
               {featuredAnime && (
                 <>
                   <div className="anime-featured-facts">
-                    <span><StarIcon size={14} /> {featuredAnime.averageScore ?? "—"}</span>
-                    <span>{featuredAnime.seasonYear || ""}</span>
-                    <span>{featuredAnime.format || "ANIME"}</span>
+                    {featuredAnime.averageScore != null && (
+                      <span><StarIcon size={14} /> {featuredAnime.averageScore}</span>
+                    )}
+                    {featuredAnime.seasonYear && <span>{featuredAnime.seasonYear}</span>}
+                    {featuredAnime.format && <span>{featuredAnime.format}</span>}
                   </div>
                   <p>{getDescriptionText(featuredAnime.description) || t("animeFeaturedDescription")}</p>
                   <button
@@ -744,7 +746,7 @@ export default function AnimePage({ onBack }) {
                           <small>
                             {[
                               entry.media.format || "ANIME",
-                              `${entry.media.averageScore ?? "—"}/100`,
+                              entry.media.averageScore != null ? `${entry.media.averageScore}/100` : null,
                               entry.media.seasonYear,
                               entry.media.episodes ? `${entry.media.episodes} ${t("animeEpisodes")}` : null,
                             ].filter(Boolean).join(" · ")}
@@ -898,7 +900,9 @@ export default function AnimePage({ onBack }) {
                     >
                       <span className="anime-card-image-wrap">
                         <img src={item.coverImage?.large || item.coverImage?.extraLarge} alt="" loading="lazy" />
-                        <span className="anime-card-score"><StarIcon size={13} /> {item.averageScore ?? "—"}</span>
+                        {item.averageScore != null && (
+                          <span className="anime-card-score"><StarIcon size={13} /> {item.averageScore}</span>
+                        )}
                         <span className="anime-card-format">{item.format || "ANIME"}</span>
                       </span>
                       <span className="anime-card-title">{getAnimeTitle(item)}</span>

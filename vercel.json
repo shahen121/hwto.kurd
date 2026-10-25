@@ -1,6 +1,22 @@
 {
   "rewrites": [
     {
+      "source": "/(vidcore|vidlink|movie|tv|embed|_next|stream-proxy|APA91ywF|wyzie|servers)/(.*)",
+      "destination": "/api/vidcore"
+    },
+    {
+      "source": "/(gtag-shield\\.js|script\\.js|fu\\.wasm|decrypter-worker\\.js|hls\\.worker\\.js)",
+      "destination": "/api/vidcore"
+    },
+    {
+      "source": "/api/b/(.*)",
+      "destination": "/api/vidcore"
+    },
+    {
+      "source": "/api/skip-events",
+      "destination": "/api/vidcore"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

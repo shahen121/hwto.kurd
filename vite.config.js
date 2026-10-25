@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import handler from "./api/tmdb.js";
 import footballHandler from "./api/football.js";
+import { handleVidcoreProxy } from "./api/vidcore.js";
 
 function parseFirebaseTxt() {
   try {
@@ -95,6 +96,60 @@ function localFootballProxyPlugin(env) {
   };
 }
 
+function localVidcoreProxyPlugin(env) {
+  const attachMiddleware = (server) => {
+    server.middlewares.use(async (req, res, next) => {
+      for (const key of [
+        "CF_WORKER_URL",
+        "SCRAPE_DO_TOKEN",
+        "SCRAPE_DO_TOKEN_1",
+        "SCRAPE_DO_TOKEN_2",
+        "SCRAPE_DO_TOKEN_3",
+      ]) {
+        if (!process.env[key] && env[key]) {
+          process.env[key] = env[key];
+        }
+      }
+      const urlObj = new URL(req.url || "/", "http://localhost");
+      const pathname = urlObj.pathname;
+      const isProxy =
+        pathname.startsWith("/vidcore/") ||
+        pathname.startsWith("/vidlink/") ||
+        pathname.startsWith("/movie/") ||
+        pathname.startsWith("/tv/") ||
+        pathname.startsWith("/embed/") ||
+        pathname.startsWith("/_next/") ||
+        pathname.startsWith("/stream-proxy/") ||
+        pathname.startsWith("/APA91ywF") ||
+        pathname.startsWith("/wyzie") ||
+        pathname.startsWith("/servers") ||
+        pathname.startsWith("/api/b/") ||
+        pathname === "/api/skip-events" ||
+        pathname === "/api/vidcore" ||
+        pathname === "/gtag-shield.js" ||
+        pathname === "/script.js" ||
+        pathname === "/fu.wasm" ||
+        pathname === "/decrypter-worker.js" ||
+        pathname === "/hls.worker.js";
+
+      if (isProxy) {
+        return handleVidcoreProxy(req, res);
+      }
+      next();
+    });
+  };
+
+  return {
+    name: "local-vidcore-proxy",
+    configureServer(server) {
+      attachMiddleware(server);
+    },
+    configurePreviewServer(server) {
+      attachMiddleware(server);
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const fbFromTxt = parseFirebaseTxt();
@@ -122,7 +177,12 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [react(), localTmdbProxyPlugin(env), localFootballProxyPlugin(env)],
+    plugins: [
+      react(),
+      localTmdbProxyPlugin(env),
+      localFootballProxyPlugin(env),
+      localVidcoreProxyPlugin(env),
+    ],
     base: "./",
     define: defineEnv,
     build: {

@@ -441,9 +441,12 @@ export default function TVPage({
   const [m3u8Url, setM3u8Url] = useState(null);
   const [interceptedSubs, setInterceptedSubs] = useState([]);
   const [githubSub, setGithubSub] = useState(null);
-  const [playerSource, setPlayerSource] = useState(
-    () => storage.get("playerSource") || NON_ANIME_DEFAULT_SOURCE,
-  );
+  const [playerSource, setPlayerSource] = useState(() => {
+    const saved = storage.get("playerSource");
+    return PLAYER_SOURCES.some((s) => s.id === saved)
+      ? saved
+      : NON_ANIME_DEFAULT_SOURCE;
+  });
   // Accent colour + subtitle lang come from App-level state (via props),
   // so they are always fresh after Settings save without any extra storage reads.
   const playerAccentColor = playerSettings?.accentColor ?? null;
@@ -911,6 +914,20 @@ export default function TVPage({
     return () => window.electron.offM3u8Found(handler);
   }, []);
 
+  // Auto-failover from Vidcore to Vidlink if all Vidcore sub-servers report 404
+  useEffect(() => {
+    if (!playing || playerSource !== "vidcore") return;
+    const onMessage = (e) => {
+      if (e.data && e.data.event === "status" && e.data.data === 404) {
+        const epKey = `tv_${item.id}_s${selectedSeason}_e${selectedEp?.episode_number ?? 1}`;
+        setFailoverSource(epKey, "vidlink");
+        setPlayerSource("vidlink");
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [playing, playerSource, item.id, selectedSeason, selectedEp]);
+
   // Close source dropdown on scroll or click-outside
   useEffect(() => {
     if (!showSourceMenu) return;
@@ -1080,9 +1097,6 @@ export default function TVPage({
     }).then((found) => {
       if (!mounted) return;
       setGithubSub(found);
-      if (found) {
-        setPlayerSource("vidsrc");
-      }
     });
     return () => {
       mounted = false;
@@ -2339,7 +2353,7 @@ export default function TVPage({
                     {PLAYER_SOURCES.find((s) => s.id === playerSource)?.label ??
                       t("source")}
                   </button>
-                  {githubSub && playerSource === "vidsrc" && (
+                  {githubSub && (
                     <button
                       ref={subRef}
                       className="player-overlay-btn"

@@ -178,77 +178,56 @@ export const tmdbFetch = async (path, _apiKey, options = {}) => {
 // subUrlParam: query param that accepts an external .srt/.vtt URL (CORS required)
 const IS_ELECTRON = typeof window !== "undefined" && !!window.electron;
 
+const PLAYER_PROXY_BASE =
+  (typeof import.meta !== "undefined" &&
+    import.meta.env?.VITE_PLAYER_PROXY_URL) ||
+  "";
+
+function resolvePlayerBaseUrl(relativePath) {
+  if (PLAYER_PROXY_BASE) {
+    return `${PLAYER_PROXY_BASE.replace(/\/+$/, "")}${relativePath}`;
+  }
+  if (typeof window !== "undefined" && window.location?.origin && window.location.protocol.startsWith("http")) {
+    return `${window.location.origin}${relativePath}`;
+  }
+  return `http://localhost:3000${relativePath}`;
+}
+
 const ALL_PLAYER_SOURCES = [
   {
-    id: "videasy",
-    label: "Videasy",
+    id: "vidcore",
+    label: "سيرفر 1: Vidcore الأساسي",
     tag: null,
     note: null,
     supportsProgress: true,
-    colorParam: "color", // hex without # → e.g. "e50914"
-    langParam: null, // no subtitle lang param
-    params: {
-      overlay: "true",
-    },
-    movieUrl: (id) => `https://player.videasy.to/movie/${id}`,
-    tvUrl: (id, season, ep) =>
-      `https://player.videasy.to/tv/${id}/${season}/${ep}`,
-  },
-  {
-    id: "vidsrc",
-    label: "VidSrc",
-    tag: null,
-    note: null,
-    supportsProgress: true,
-    progressViaFrames: true, // video is in a nested iframe, needs main-process frame query
-    colorParam: null, // vidsrc doesn't support color param
-    langParam: "ds_lang", // ISO 639-1 language code
-    subUrlParam: "sub_url", // external .srt/.vtt (documented VidSrc embed param)
-    params: {},
-    movieUrl: (id) => `https://vsembed.su/embed/movie/${id}`,
-    tvUrl: (id, season, ep) =>
-      `https://vsembed.su/embed/tv/${id}/${season}/${ep}`,
-  },
-  {
-    id: "vidking",
-    label: "Vidking",
-    tag: null,
-    note: null,
-    supportsProgress: true,
-    colorParam: "color", // hex without # → e.g. "e50914"
-    langParam: null,
+    colorParam: "theme", // hex without #
+    langParam: "sub", // ISO 639-1 language code
+    subUrlParam: "sub_url", // Injected into Vidcore's track list by our proxy
     params: {
       autoPlay: "true",
     },
-    movieUrl: (id) => `https://www.vidking.net/embed/movie/${id}`,
+    movieUrl: (id) => resolvePlayerBaseUrl(`/vidcore/movie/${id}`),
     tvUrl: (id, season, ep) =>
-      `https://www.vidking.net/embed/tv/${id}/${season}/${ep}`,
+      resolvePlayerBaseUrl(`/vidcore/tv/${id}/${season}/${ep}`),
   },
   {
-    id: "allmanga",
-    label: "AllManga",
-    tag: "ANIME",
+    id: "vidlink",
+    label: "سيرفر 2: Vidlink الاحتياطي",
+    tag: null,
     note: null,
     supportsProgress: true,
-    async: true,
-    electronOnly: true, // URL resolution runs in the Electron main process
-    params: {},
-    movieUrl: (_id) => "https://allmanga.to",
-    tvUrl: (_id, _season, _ep) => "https://allmanga.to",
-  },
-  {
-    id: "authorized_hls",
-    label: "Authorized HLS",
-    tag: "DIRECT",
-    note: null,
-    supportsProgress: true,
-    isNativeHls: true,
-    async: true, // Uses asynchronous manifest resolution
-    colorParam: null,
+    colorParam: "primaryColor", // hex without #
     langParam: null,
-    params: {},
-    movieUrl: (id) => `/api/hls?type=movie&id=${id}`,
-    tvUrl: (id, season, ep) => `/api/hls?type=tv&id=${id}&season=${season}&ep=${ep}`,
+    subUrlParam: "sub_file", // Documented Vidlink external VTT subtitle param
+    params: {
+      autoplay: "true",
+      title: "true",
+      poster: "true",
+      nextbutton: "true",
+    },
+    movieUrl: (id) => resolvePlayerBaseUrl(`/vidlink/movie/${id}`),
+    tvUrl: (id, season, ep) =>
+      resolvePlayerBaseUrl(`/vidlink/tv/${id}/${season}/${ep}`),
   },
 ];
 
@@ -258,7 +237,7 @@ export const PLAYER_SOURCES = IS_ELECTRON
   ? ALL_PLAYER_SOURCES
   : ALL_PLAYER_SOURCES.filter((s) => !s.electronOnly).map((s) => ({
       ...s,
-      supportsProgress: false,
+      supportsProgress: true,
     }));
 
 export const sourceSupportsExternalSubs = (sourceId) =>
@@ -298,6 +277,12 @@ export const getSourceUrl = (
 
   if (subtitleUrl && src.subUrlParam) {
     url.searchParams.set(src.subUrlParam, subtitleUrl);
+    if (src.id === "vidlink") {
+      url.searchParams.set(
+        "sub_label",
+        subtitleLang === "ar" ? "العربية" : "کوردی",
+      );
+    }
   }
 
   Object.entries(extraParams).forEach(([key, value]) => {
@@ -544,10 +529,8 @@ export const isAnimeContent = (item, details) => {
 };
 
 // Default sources
-export const NON_ANIME_DEFAULT_SOURCE = "vidking";
-export const ANIME_DEFAULT_SOURCE = IS_ELECTRON
-  ? "allmanga"
-  : NON_ANIME_DEFAULT_SOURCE;
+export const NON_ANIME_DEFAULT_SOURCE = "vidcore";
+export const ANIME_DEFAULT_SOURCE = "vidcore";
 
 // ── Episode Group fetch (localStorage + in-memory cache, 7-day TTL) ─────────
 // Episode groups almost never change -> cache aggressively across sessions.
