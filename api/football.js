@@ -191,7 +191,10 @@ async function handler(req, res) {
     return;
   }
 
-  const { path, ...query } = req.query || {};
+  const rawQueryObj = req.url
+    ? Object.fromEntries(new URL(req.url, "http://localhost").searchParams.entries())
+    : req.query || {};
+  const { path, ...query } = rawQueryObj;
   const { status, body } = await handleFootballRequest({
     method: req.method,
     path,

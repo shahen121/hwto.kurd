@@ -119,9 +119,12 @@ async function handler(req, res) {
     res.status(429).json({ error: "Too many requests" });
     return;
   }
+  const queryPath = req.url
+    ? new URL(req.url, "http://localhost").searchParams.get("path")
+    : req.query?.path;
   const { status, body } = await handleTmdbRequest({
     method: req.method,
-    path: req.query?.path,
+    path: queryPath,
     token: process.env.TMDB_TOKEN,
   });
   if (status === 200) {

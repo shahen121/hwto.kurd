@@ -1,7 +1,11 @@
 {
   "rewrites": [
     {
-      "source": "/(vidcore|vidlink|movie|tv|embed|_next|stream-proxy|APA91ywF|wyzie|servers)/(.*)",
+      "source": "/(vidcore|vidlink|movie|tv|embed|_next|stream-proxy)/(.*)",
+      "destination": "/api/vidcore"
+    },
+    {
+      "source": "/(APA91ywF.*|wyzie.*|servers.*)",
       "destination": "/api/vidcore"
     },
     {
@@ -14,6 +18,17 @@
     },
     {
       "source": "/api/skip-events",
+      "destination": "/api/vidcore"
+    },
+    {
+      "source": "/((?!api/tmdb|api/football|subtitles/|assets/).*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "referer",
+          "value": ".*(vidcore|vidlink).*"
+        }
+      ],
       "destination": "/api/vidcore"
     },
     {
