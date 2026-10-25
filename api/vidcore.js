@@ -26,21 +26,61 @@ function getScrapeDoTokens() {
   return [...new Set(rawTokens)];
 }
 
-function buildScrapeDoUrl(targetUrl, token) {
+function buildScrapeDoUrl(targetUrl, token, useExtraHeaders = false) {
   const api = new URL("https://api.scrape.do/");
   api.searchParams.set("token", token);
   api.searchParams.set("url", targetUrl);
+  if (useExtraHeaders) {
+    api.searchParams.set("extraHeaders", "true");
+  }
   return api.toString();
 }
 
 /**
  * Fetches `targetUrl` via Scrape.do using Round-Robin token selection
  * with automatic fallback across all configured tokens on quota/auth errors (401, 403, 429, 5xx) or network errors.
+ * Supports both GET and POST (with `extraHeaders=true` and `sd-` prefixed headers for VidCore/VidLink APIs).
  */
-async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch) {
+async function fetchViaScrapeDoWithRotation(
+  targetUrl,
+  fetchImpl = fetch,
+  options = {},
+) {
   const tokens = getScrapeDoTokens();
   if (tokens.length === 0) {
     throw new Error("No SCRAPE_DO_TOKEN configured in environment variables");
+  }
+
+  const reqMethod = options.method || "GET";
+  const rawHeaders = options.headers || {};
+  const sdHeaders = {};
+  let useExtraHeaders = reqMethod !== "GET";
+
+  for (const [k, v] of Object.entries(rawHeaders)) {
+    if (!v) continue;
+    const lower = k.toLowerCase();
+    if (
+      lower === "origin" ||
+      lower === "referer" ||
+      lower === "content-type" ||
+      lower.startsWith("x-")
+    ) {
+      sdHeaders[`sd-${k}`] = v;
+      if (lower.startsWith("x-")) {
+        useExtraHeaders = true;
+      }
+    }
+  }
+
+  const fetchOpts = { method: reqMethod };
+  if (useExtraHeaders) {
+    if (reqMethod === "POST" && (!options.body || options.body.length === 0)) {
+      sdHeaders["Content-Length"] = "0";
+      fetchOpts.body = "";
+    } else if (options.body && options.body.length > 0) {
+      fetchOpts.body = options.body;
+    }
+    fetchOpts.headers = sdHeaders;
   }
 
   const startIdx = _tokenRoundRobinIndex % tokens.length;
@@ -51,11 +91,16 @@ async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch) {
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[(startIdx + i) % tokens.length];
-    const scrapeUrl = buildScrapeDoUrl(targetUrl, token);
+    const scrapeUrl = buildScrapeDoUrl(targetUrl, token, useExtraHeaders);
     try {
-      const res = await fetchImpl(scrapeUrl, { method: "GET" });
+      const res = await fetchImpl(scrapeUrl, fetchOpts);
       // If token succeeded (or returned a normal upstream 404), return immediately
-      if (res.status !== 401 && res.status !== 403 && res.status !== 429 && res.status < 500) {
+      if (
+        res.status !== 401 &&
+        res.status !== 403 &&
+        res.status !== 429 &&
+        res.status < 500
+      ) {
         return res;
       }
       lastRes = res;
@@ -435,15 +480,20 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     targetPathAndQuery.startsWith("/tv/");
 
   const hasScrapeTokens = getScrapeDoTokens().length > 0;
+  const scrapeOptions = {
+    method,
+    headers: forwardHeaders,
+    body: bodyBuffer,
+  };
 
   if (
     useScrapeDoFallback &&
     config.mode === "scrape_do" &&
-    method === "GET" &&
+    (method === "GET" || method === "POST") &&
     isHtmlNavigation &&
     hasScrapeTokens
   ) {
-    return await fetchViaScrapeDoWithRotation(targetUrl);
+    return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
   }
 
   try {
@@ -469,10 +519,10 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
         directRes.status === 503 ||
         directRes.status === 429) &&
       config.mode !== "direct" &&
-      method === "GET" &&
+      (method === "GET" || method === "POST") &&
       hasScrapeTokens
     ) {
-      return await fetchViaScrapeDoWithRotation(targetUrl);
+      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
     }
 
     return directRes;
@@ -480,10 +530,10 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     if (
       useScrapeDoFallback &&
       config.mode !== "direct" &&
-      method === "GET" &&
+      (method === "GET" || method === "POST") &&
       hasScrapeTokens
     ) {
-      return await fetchViaScrapeDoWithRotation(targetUrl);
+      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
     }
     throw err;
   }

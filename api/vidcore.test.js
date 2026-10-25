@@ -45,19 +45,35 @@ test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", asy
       "token_gamma",
     ]);
 
-    // Next call starts from token_beta (Round-Robin)
+    // Next call starts from token_beta (Round-Robin) and supports POST with extraHeaders=true + sd-* headers
     const secondCallTokens = [];
+    let capturedUrl = "";
+    let capturedOpts = null;
     const res2 = await fetchViaScrapeDoWithRotation(
-      "https://vidcore.io/movie/550",
-      async (url) => {
+      "https://vidcore.io/APA91ywF/test",
+      async (url, opts) => {
+        capturedUrl = url;
+        capturedOpts = opts;
         const u = new URL(url);
         const tok = u.searchParams.get("token");
         secondCallTokens.push(tok);
         return { status: 200 };
       },
+      {
+        method: "POST",
+        headers: {
+          Origin: "https://vidcore.io",
+          Referer: "https://vidcore.io/",
+          "x-csrf-token": "test_csrf_123",
+        },
+      },
     );
     assert.equal(res2.status, 200);
     assert.deepEqual(secondCallTokens, ["token_beta"]);
+    assert.equal(capturedUrl.includes("extraHeaders=true"), true);
+    assert.equal(capturedOpts.method, "POST");
+    assert.equal(capturedOpts.headers["sd-x-csrf-token"], "test_csrf_123");
+    assert.equal(capturedOpts.headers["Content-Length"], "0");
   } finally {
     if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
     else delete process.env.SCRAPE_DO_TOKEN_1;
