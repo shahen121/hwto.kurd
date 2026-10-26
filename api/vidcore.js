@@ -199,6 +199,12 @@ const AD_SHIELD_JS = `(function() {
     return noopWindow;
   };
 
+  // Provide safe no-op global stubs for analytics/trackers so blocked scripts don't throw TypeErrors
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function() { window.dataLayer.push(arguments); };
+  window.clarity = window.clarity || function() {};
+  window.ym = window.ym || function() {};
+
   // 3. Block known ad/tracker domains from dynamic script/iframe injection
   var BLOCKED_PATTERNS = [
     /gogtib\\.com/i,
@@ -207,6 +213,7 @@ const AD_SHIELD_JS = `(function() {
     /googletagmanager\\.com/i,
     /google-analytics\\.com/i,
     /cloudflareinsights\\.com/i,
+    /clarity\\.ms/i,
     /doubleclick\\.net/i,
     /popads\\.net/i,
     /popcash\\.net/i,
@@ -375,21 +382,23 @@ const AD_SHIELD_JS = `(function() {
     }
   } catch (_e) {}
 
-  // 8. Clean up invalid <link rel="preload"> elements and block ad/tracker dynamic elements
+  // 8. Safely sanitize invalid <link rel="preload"> elements without deleting DOM nodes (preventing React hydration error #418)
   function cleanInvalidPreloads() {
     try {
+      var safeDataUri = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
       var links = document.querySelectorAll('link[rel="preload"]');
       for (var i = 0; i < links.length; i++) {
         var href = links[i].getAttribute("href");
         if (!href || !href.trim() || href === "null" || href === "undefined" || isBlockedUrl(href)) {
-          links[i].parentNode && links[i].parentNode.removeChild(links[i]);
+          links[i].setAttribute("href", safeDataUri);
         }
       }
     } catch (_e) {}
   }
-  cleanInvalidPreloads();
   if (typeof document !== "undefined" && document.addEventListener) {
     document.addEventListener("DOMContentLoaded", cleanInvalidPreloads);
+  } else {
+    setTimeout(cleanInvalidPreloads, 500);
   }
 
   var origCreateElement = Document.prototype.createElement;
@@ -447,14 +456,15 @@ const AD_SHIELD_JS = `(function() {
 })();\n`;
 
 function sanitizePreloadLinks(html) {
-  // Remove <link ... rel="preload" ...> tags that have missing, empty, whitespace, or blocked/invalid href values
+  // Replace invalid/empty/blocked hrefs with safe 1x1 transparent GIF data URI instead of deleting <link> tags (which causes React 18 hydration error #418)
+  const safeDataUri = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
   return html.replace(/<link\b[^>]*>/gi, (tag) => {
     if (!/\brel\s*=\s*(?:["']preload["']|preload\b)/i.test(tag)) {
       return tag;
     }
     const hrefMatch = tag.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i);
     if (!hrefMatch) {
-      return "";
+      return tag.replace(/<link\b/i, `<link href="${safeDataUri}" `);
     }
     const hrefVal = (hrefMatch[1] ?? hrefMatch[2] ?? hrefMatch[3] ?? "").trim();
     if (
@@ -465,7 +475,7 @@ function sanitizePreloadLinks(html) {
       /mc\.yandex\.ru/i.test(hrefVal) ||
       /\/\/wsrv\.nl\/\?url=https:\/\/image\.tmdb\.org\/t\/p\/w500(?:null|undefined)?(?:&|$)/i.test(hrefVal)
     ) {
-      return "";
+      return tag.replace(hrefMatch[0], `href="${safeDataUri}"`);
     }
     return tag;
   });
@@ -511,39 +521,45 @@ function sanitizeVidcoreHtml(html) {
 function sanitizeVidlinkHtml(html) {
   let out = html;
 
-  // Force limitAds to true in Next.js SSR flight payload so ad components are skipped
+  // 1. Strip Cloudflare edge-injected beacon script to prevent CORS failure
+  out = out.replace(
+    /<script[^>]*src="https:\/\/static\.cloudflareinsights\.com\/beacon\.min\.js[^"]*"[^>]*><\/script>/gi,
+    "",
+  );
+
+  // 2. Neutralize Google Tag Manager, Microsoft Clarity, and Yandex Metrika with local /gtag-shield.js
+  out = out.replace(
+    /https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi,
+    "/gtag-shield.js",
+  );
+  out = out.replace(/https:\/\/www\.clarity\.ms\/tag\/[a-zA-Z0-9_-]+/gi, "/gtag-shield.js");
+  out = out.replace(/https:\/\/www\.clarity\.ms\/tag\//gi, "/gtag-shield.js?c=");
+  out = out.replace(/https:\/\/mc\.yandex\.ru\/metrika\/tag\.js/gi, "/gtag-shield.js");
+  out = out.replace(
+    /https:\/\/mc\.yandex\.ru\/watch\/\d+/gi,
+    "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==",
+  );
+
+  // 3. Force limitAds to true in Next.js SSR flight payload so ad components are skipped
   out = out.replace(/\\"limitAds\\":false/g, '\\"limitAds\\":true');
   out = out.replace(/"limitAds":false/g, '"limitAds":true');
 
-  // Force referer to vidlink.pro
+  // 4. Force referer to vidlink.pro
   out = out.replace(
     /\\"referer\\":(null|\\"[^\\"]*\\")/g,
     '\\"referer\\":\\"https://vidlink.pro/\\"',
   );
 
-  // Replace Google Tag Manager with /gtag-shield.js
-  out = out.replace(
-    /https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi,
-    "/gtag-shield.js",
-  );
-
-  // Remove Yandex Metrika preload & noscript pixel cleanly without leaving empty href="" attributes
-  out = sanitizePreloadLinks(out);
-  out = out.replace(/<noscript>\s*<div>\s*<img[^>]*mc\.yandex\.ru[^>]*>\s*<\/div>\s*<\/noscript>/gi, "");
-  out = out.replace(
-    /https:\/\/mc\.yandex\.ru\/watch\/\d+/gi,
-    "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==",
-  );
+  // 4. Safely rewrite preload links (preserving DOM nodes for React hydration)
   out = sanitizePreloadLinks(out);
 
-  // Inject Client-side Interceptor (fetch + XHR monkey-patch) early in <head> and RTL / BiDi subtitle CSS fix
+  // 5. Inject Client-side Interceptor (fetch + XHR monkey-patch) and RTL / BiDi subtitle CSS fix before </head>
   const earlyInterceptor = `<script id="hwto-vidlink-interceptor">${AD_SHIELD_JS}</script>`;
   const subtitleCss = `<style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>`;
-  if (out.includes("<head>")) {
-    out = out.replace("<head>", `<head>${earlyInterceptor}`);
-  }
   if (out.includes("</head>")) {
-    out = out.replace("</head>", `${subtitleCss}</head>`);
+    out = out.replace("</head>", `${earlyInterceptor}${subtitleCss}</head>`);
+  } else if (out.includes("</body>")) {
+    out = out.replace("</body>", `${earlyInterceptor}${subtitleCss}</body>`);
   }
 
   return out;
