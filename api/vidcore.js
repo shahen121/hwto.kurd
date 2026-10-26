@@ -26,12 +26,12 @@ function getScrapeDoTokens() {
   return [...new Set(rawTokens)];
 }
 
-function buildScrapeDoUrl(targetUrl, token, useExtraHeaders = false) {
+function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true) {
   const api = new URL("https://api.scrape.do/");
   api.searchParams.set("token", token);
   api.searchParams.set("url", targetUrl);
-  if (useExtraHeaders) {
-    api.searchParams.set("extraHeaders", "true");
+  if (useCustomHeaders) {
+    api.searchParams.set("customHeaders", "true");
   }
   return api.toString();
 }
@@ -39,7 +39,7 @@ function buildScrapeDoUrl(targetUrl, token, useExtraHeaders = false) {
 /**
  * Fetches `targetUrl` via Scrape.do using Round-Robin token selection
  * with automatic fallback across all configured tokens on quota/auth errors (401, 403, 429, 5xx) or network errors.
- * Supports both GET and POST (with `extraHeaders=true` and `sd-` prefixed headers for VidCore/VidLink APIs).
+ * Supports both GET and POST with `customHeaders=true` preserving exact method, headers, and body.
  */
 async function fetchViaScrapeDoWithRotation(
   targetUrl,
@@ -53,34 +53,48 @@ async function fetchViaScrapeDoWithRotation(
 
   const reqMethod = options.method || "GET";
   const rawHeaders = options.headers || {};
-  const sdHeaders = {};
-  let useExtraHeaders = reqMethod !== "GET";
+  const forwardHeaders = {};
 
   for (const [k, v] of Object.entries(rawHeaders)) {
     if (!v) continue;
     const lower = k.toLowerCase();
+    // Do not forward host or hop-by-hop headers to Scrape.do proxy
     if (
-      lower === "origin" ||
-      lower === "referer" ||
-      lower === "content-type" ||
-      lower.startsWith("x-")
+      lower === "host" ||
+      lower === "connection" ||
+      lower === "content-length" ||
+      lower.startsWith("x-forwarded") ||
+      lower.startsWith("x-vercel")
     ) {
-      sdHeaders[`sd-${k}`] = v;
-      if (lower.startsWith("x-")) {
-        useExtraHeaders = true;
-      }
+      continue;
     }
+    forwardHeaders[k] = v;
   }
 
-  const fetchOpts = { method: reqMethod };
-  if (useExtraHeaders) {
-    if (reqMethod === "POST" && (!options.body || options.body.length === 0)) {
-      sdHeaders["Content-Length"] = "0";
-      fetchOpts.body = "";
-    } else if (options.body && options.body.length > 0) {
+  // Ensure VidCore required origin/referer/ua are explicitly set
+  if (!forwardHeaders["Origin"] && !forwardHeaders["origin"]) {
+    forwardHeaders["Origin"] = VIDCORE_ORIGIN;
+  }
+  if (!forwardHeaders["Referer"] && !forwardHeaders["referer"]) {
+    forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
+  }
+  if (!forwardHeaders["User-Agent"] && !forwardHeaders["user-agent"]) {
+    forwardHeaders["User-Agent"] = getCleanUserAgent();
+  }
+
+  const fetchOpts = {
+    method: reqMethod,
+    headers: forwardHeaders,
+  };
+
+  if (reqMethod !== "GET" && reqMethod !== "HEAD") {
+    if (options.body && options.body.length > 0) {
       fetchOpts.body = options.body;
+      forwardHeaders["Content-Length"] = String(options.body.length);
+    } else {
+      fetchOpts.body = "";
+      forwardHeaders["Content-Length"] = "0";
     }
-    fetchOpts.headers = sdHeaders;
   }
 
   const startIdx = _tokenRoundRobinIndex % tokens.length;
@@ -91,16 +105,25 @@ async function fetchViaScrapeDoWithRotation(
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[(startIdx + i) % tokens.length];
-    const scrapeUrl = buildScrapeDoUrl(targetUrl, token, useExtraHeaders);
+    const scrapeUrl = buildScrapeDoUrl(targetUrl, token, true);
     try {
       const res = await fetchImpl(scrapeUrl, fetchOpts);
-      // If token succeeded (or returned a normal upstream 404), return immediately
+      // Check if this Scrape.do response is an auth/quota failure (401, 403, 429) or proxy failure (>= 500)
+      const scrapeAuth = res.headers && typeof res.headers.get === "function" ? res.headers.get("scrape.do-auth") : null;
+      const initialStatus = res.headers && typeof res.headers.get === "function" ? res.headers.get("scrape.do-initial-status-code") : null;
+
+      // If Scrape.do returns 401, 403, 429 (quota or blocked token), try next token
       if (
-        res.status !== 401 &&
-        res.status !== 403 &&
-        res.status !== 429 &&
-        res.status < 500
+        (res.status === 401 || res.status === 403 || res.status === 429) &&
+        initialStatus !== "404" &&
+        initialStatus !== "200"
       ) {
+        lastRes = res;
+        continue;
+      }
+
+      // If token succeeded (including upstream 200, 404, etc.), return immediately
+      if (res.status < 500) {
         return res;
       }
       lastRes = res;
@@ -113,10 +136,15 @@ async function fetchViaScrapeDoWithRotation(
   throw lastErr || new Error("All Scrape.do tokens failed");
 }
 
-// Client-side Ad-Shield & Anti-Freeze Guard (served via /gtag-shield.js and prepended to webpack chunks)
+// Client-side Ad-Shield, Stream CORS Interceptor & Anti-Freeze Guard (served via /gtag-shield.js, injected in <head>, and prepended to webpack chunks)
 const AD_SHIELD_JS = `(function() {
   if (window.__vidcoreShieldInitialized) return;
   window.__vidcoreShieldInitialized = true;
+  var CF_WORKER = ${JSON.stringify(CF_WORKER_URL)};
+  var lastMpdOrigin = "https://surge.flooderrr.store";
+  var lastMpdBaseDir = "";
+  var lastMpdQuery = "";
+
   try {
     // 1. Lock internal VidCore ad flags to false permanently
     Object.defineProperty(window, "adce5c77-2808-4d01-877e-41167529529d", {
@@ -166,6 +194,176 @@ const AD_SHIELD_JS = `(function() {
     return BLOCKED_PATTERNS.some(function(re) { return re.test(url); });
   }
 
+  // 4. Stream URL Resolver & Rewriter for Vidlink (MPEG-DASH .mpd, .m4s, HLS .m3u8, .ts, .mp4, flooderrr.store, hakunaymatata.com, sacdn)
+  var SAFE_ASSET_RE = /(cdn\\.jsdelivr\\.net|cdn\\.jwplayer\\.com|wsrv\\.nl|image\\.tmdb\\.org|fonts\\.googleapis\\.com|fonts\\.gstatic\\.com|raw\\.githubusercontent\\.com)/i;
+  var STREAM_EXT_RE = /\\.(m3u8|mpd|m4s|ts|mp4|m4a|m4v|aac|key)(\\?|$|#)/i;
+  var STREAM_HOST_RE = /(flooderrr\\.store|hakunaymatata\\.com|sacdn|\\/sacdn\\/|\\/dash\\/|\\/proxy\\/|\\/mp\\/|orbitcache|premilkyway|sunnybreeze|frostywinds|cloudnestra|shadowlands|trueparadise)/i;
+
+  function resolveVidlinkStreamUrl(inputUrl) {
+    if (!inputUrl || typeof inputUrl !== "string") return null;
+    var rawUrl = inputUrl.trim();
+    if (!rawUrl || /^(blob:|data:|javascript:|about:)/i.test(rawUrl)) return null;
+
+    // Already routed through Cloudflare Worker proxy
+    if (
+      rawUrl.indexOf(CF_WORKER + "/?") === 0 ||
+      rawUrl.indexOf(CF_WORKER + "?") === 0 ||
+      rawUrl.indexOf("/stream-proxy/") !== -1
+    ) {
+      return null;
+    }
+
+    var locOrigin = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "";
+
+    // Handle root-relative or wrongly-resolved DASH/HLS paths (e.g. /sacdn/dash/... resolved against location.origin or CF_WORKER)
+    if (rawUrl.indexOf("/sacdn/") === 0 || rawUrl.indexOf("/dash/") === 0 || rawUrl.indexOf("/proxy/") === 0 || rawUrl.indexOf("/mp/") === 0) {
+      rawUrl = (lastMpdOrigin || "https://surge.flooderrr.store") + rawUrl;
+    } else if (rawUrl.indexOf(CF_WORKER + "/") === 0) {
+      var workerRel = rawUrl.slice(CF_WORKER.length);
+      if (workerRel.indexOf("/sacdn/") === 0 || workerRel.indexOf("/dash/") === 0 || workerRel.indexOf("/proxy/") === 0 || workerRel.indexOf("/mp/") === 0) {
+        rawUrl = (lastMpdOrigin || "https://surge.flooderrr.store") + workerRel;
+      } else if (STREAM_EXT_RE.test(workerRel) && lastMpdBaseDir) {
+        rawUrl = lastMpdBaseDir + workerRel.replace(/^\\/+/, "");
+      }
+    } else if (locOrigin && rawUrl.indexOf(locOrigin + "/") === 0) {
+      var pageRel = rawUrl.slice(locOrigin.length);
+      if (pageRel.indexOf("/sacdn/") === 0 || pageRel.indexOf("/dash/") === 0 || pageRel.indexOf("/proxy/") === 0 || pageRel.indexOf("/mp/") === 0) {
+        rawUrl = (lastMpdOrigin || "https://surge.flooderrr.store") + pageRel;
+      } else if (/\\.(m4s|mpd)(\\?|$)/i.test(pageRel) && lastMpdBaseDir) {
+        rawUrl = lastMpdBaseDir + pageRel.replace(/^\\/+/, "");
+      } else {
+        return null;
+      }
+    } else if (!/^https?:\\/\\//i.test(rawUrl)) {
+      if (/\\.(m4s|mpd)(\\?|$)/i.test(rawUrl) && lastMpdBaseDir) {
+        rawUrl = lastMpdBaseDir + rawUrl.replace(/^\\.?\\//, "");
+      } else {
+        return null;
+      }
+    }
+
+    if (!/^https?:\\/\\//i.test(rawUrl)) return null;
+    if (SAFE_ASSET_RE.test(rawUrl) || isBlockedUrl(rawUrl)) return null;
+
+    var isStream = STREAM_EXT_RE.test(rawUrl) || STREAM_HOST_RE.test(rawUrl);
+    if (!isStream) return null;
+
+    try {
+      var parsed = new URL(rawUrl);
+      if (/\\.mpd(\\?|$)/i.test(parsed.pathname)) {
+        lastMpdOrigin = parsed.origin;
+        var lastSlash = parsed.pathname.lastIndexOf("/");
+        lastMpdBaseDir = parsed.origin + (lastSlash >= 0 ? parsed.pathname.slice(0, lastSlash + 1) : "/");
+        lastMpdQuery = parsed.search ? parsed.search.slice(1) : "";
+      } else if (/\\.(m4s|mp4|m4a|m4v)(\\?|$)/i.test(parsed.pathname) && !parsed.search && lastMpdQuery && parsed.origin === lastMpdOrigin) {
+        rawUrl = rawUrl + "?" + lastMpdQuery;
+      }
+    } catch (_e) {}
+
+    return {
+      originalUrl: rawUrl,
+      proxiedUrl: CF_WORKER + "/?ref=vidlink&url=" + encodeURIComponent(rawUrl)
+    };
+  }
+
+  // 5. Monkey-patch window.fetch
+  if (typeof window.fetch === "function") {
+    var origFetch = window.fetch;
+    window.fetch = function(input, init) {
+      try {
+        var reqUrl = "";
+        if (typeof input === "string") {
+          reqUrl = input;
+        } else if (typeof URL !== "undefined" && input instanceof URL) {
+          reqUrl = input.toString();
+        } else if (input && typeof input === "object" && typeof input.url === "string") {
+          reqUrl = input.url;
+        }
+        var rw = resolveVidlinkStreamUrl(reqUrl);
+        if (rw) {
+          var newInput = rw.proxiedUrl;
+          if (typeof Request !== "undefined" && input instanceof Request) {
+            try {
+              newInput = new Request(rw.proxiedUrl, input);
+            } catch (_re) {
+              newInput = rw.proxiedUrl;
+            }
+          }
+          return origFetch.call(this, newInput, init).then(function(res) {
+            try {
+              Object.defineProperty(res, "url", {
+                get: function() { return rw.originalUrl; },
+                configurable: true
+              });
+            } catch (_e) {}
+            return res;
+          });
+        }
+      } catch (_err) {}
+      return origFetch.apply(this, arguments);
+    };
+  }
+
+  // 6. Monkey-patch XMLHttpRequest.prototype.open
+  if (typeof XMLHttpRequest !== "undefined" && XMLHttpRequest.prototype && XMLHttpRequest.prototype.open) {
+    var origXhrOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+      try {
+        var urlStr = (typeof URL !== "undefined" && url instanceof URL) ? url.toString() : String(url || "");
+        var rw = resolveVidlinkStreamUrl(urlStr);
+        if (rw) {
+          try {
+            Object.defineProperty(this, "responseURL", {
+              get: function() { return rw.originalUrl; },
+              configurable: true
+            });
+          } catch (_e) {}
+          var args = Array.prototype.slice.call(arguments);
+          args[1] = rw.proxiedUrl;
+          return origXhrOpen.apply(this, args);
+        }
+      } catch (_err) {}
+      return origXhrOpen.apply(this, arguments);
+    };
+  }
+
+  // 7. Intercept direct HTMLMediaElement.prototype.src assignment for external MP4/stream URLs
+  try {
+    if (typeof HTMLMediaElement !== "undefined" && HTMLMediaElement.prototype) {
+      var srcDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+      if (srcDesc && srcDesc.set && srcDesc.get) {
+        Object.defineProperty(HTMLMediaElement.prototype, "src", {
+          configurable: true,
+          enumerable: srcDesc.enumerable,
+          get: function() {
+            return srcDesc.get.call(this);
+          },
+          set: function(val) {
+            var rw = resolveVidlinkStreamUrl(String(val || ""));
+            return srcDesc.set.call(this, rw ? rw.proxiedUrl : val);
+          }
+        });
+      }
+    }
+  } catch (_e) {}
+
+  // 8. Clean up invalid <link rel="preload"> elements and block ad/tracker dynamic elements
+  function cleanInvalidPreloads() {
+    try {
+      var links = document.querySelectorAll('link[rel="preload"]');
+      for (var i = 0; i < links.length; i++) {
+        var href = links[i].getAttribute("href");
+        if (!href || !href.trim() || href === "null" || href === "undefined" || isBlockedUrl(href)) {
+          links[i].parentNode && links[i].parentNode.removeChild(links[i]);
+        }
+      }
+    } catch (_e) {}
+  }
+  cleanInvalidPreloads();
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("DOMContentLoaded", cleanInvalidPreloads);
+  }
+
   var origCreateElement = Document.prototype.createElement;
   Document.prototype.createElement = function(tagName) {
     var el = origCreateElement.apply(this, arguments);
@@ -181,6 +379,36 @@ const AD_SHIELD_JS = `(function() {
         }
         return origSetAttr.apply(this, arguments);
       };
+    } else if (tag === "link") {
+      var origLinkSetAttr = el.setAttribute;
+      el.setAttribute = function(name, value) {
+        var attrName = String(name).toLowerCase();
+        var attrVal = String(value == null ? "" : value).trim();
+        if (attrName === "href" && (!attrVal || attrVal === "null" || attrVal === "undefined" || isBlockedUrl(attrVal))) {
+          if (String(el.getAttribute("rel") || "").toLowerCase() === "preload") {
+            el.removeAttribute("rel");
+          }
+          return;
+        }
+        if (attrName === "rel" && attrVal.toLowerCase() === "preload") {
+          var curHref = el.getAttribute("href");
+          if (curHref !== null && (!curHref.trim() || curHref === "null" || curHref === "undefined" || isBlockedUrl(curHref))) {
+            return;
+          }
+        }
+        return origLinkSetAttr.apply(this, arguments);
+      };
+    } else if (tag === "video" || tag === "source") {
+      var origMediaSetAttr = el.setAttribute;
+      el.setAttribute = function(name, value) {
+        if (String(name).toLowerCase() === "src") {
+          var rw = resolveVidlinkStreamUrl(String(value || ""));
+          if (rw) {
+            return origMediaSetAttr.call(this, name, rw.proxiedUrl);
+          }
+        }
+        return origMediaSetAttr.apply(this, arguments);
+      };
     }
     return el;
   };
@@ -189,6 +417,31 @@ const AD_SHIELD_JS = `(function() {
     window.parent.postMessage({ type: "AD_SHIELD_READY", status: "active", timestamp: Date.now() }, "*");
   } catch (e) {}
 })();\n`;
+
+function sanitizePreloadLinks(html) {
+  // Remove <link ... rel="preload" ...> tags that have missing, empty, whitespace, or blocked/invalid href values
+  return html.replace(/<link\b[^>]*>/gi, (tag) => {
+    if (!/\brel\s*=\s*(?:["']preload["']|preload\b)/i.test(tag)) {
+      return tag;
+    }
+    const hrefMatch = tag.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i);
+    if (!hrefMatch) {
+      return "";
+    }
+    const hrefVal = (hrefMatch[1] ?? hrefMatch[2] ?? hrefMatch[3] ?? "").trim();
+    if (
+      !hrefVal ||
+      hrefVal === "null" ||
+      hrefVal === "undefined" ||
+      hrefVal === "about:blank" ||
+      /mc\.yandex\.ru/i.test(hrefVal) ||
+      /\/\/wsrv\.nl\/\?url=https:\/\/image\.tmdb\.org\/t\/p\/w500(?:null|undefined)?(?:&|$)/i.test(hrefVal)
+    ) {
+      return "";
+    }
+    return tag;
+  });
+}
 
 function sanitizeVidcoreHtml(html) {
   let out = html;
@@ -214,6 +467,8 @@ function sanitizeVidcoreHtml(html) {
     /<script[^>]*src="https:\/\/static\.cloudflareinsights\.com\/beacon\.min\.js[^"]*"[^>]*><\/script>/gi,
     "",
   );
+
+  out = sanitizePreloadLinks(out);
 
   // 5. Inject RTL / BiDi subtitle CSS fix so Kurdish & Arabic punctuation and wrapping display properly
   const subtitleCss = `<style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>`;
@@ -243,11 +498,21 @@ function sanitizeVidlinkHtml(html) {
     "/gtag-shield.js",
   );
 
-  // Remove Yandex Metrika tracking pixel
-  out = out.replace(/https:\/\/mc\.yandex\.ru\/watch\/\d+/gi, "");
+  // Remove Yandex Metrika preload & noscript pixel cleanly without leaving empty href="" attributes
+  out = sanitizePreloadLinks(out);
+  out = out.replace(/<noscript>\s*<div>\s*<img[^>]*mc\.yandex\.ru[^>]*>\s*<\/div>\s*<\/noscript>/gi, "");
+  out = out.replace(
+    /https:\/\/mc\.yandex\.ru\/watch\/\d+/gi,
+    "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==",
+  );
+  out = sanitizePreloadLinks(out);
 
-  // Inject RTL / BiDi subtitle CSS fix for Vidlink captions
+  // Inject Client-side Interceptor (fetch + XHR monkey-patch) early in <head> and RTL / BiDi subtitle CSS fix
+  const earlyInterceptor = `<script id="hwto-vidlink-interceptor">${AD_SHIELD_JS}</script>`;
   const subtitleCss = `<style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>`;
+  if (out.includes("<head>")) {
+    out = out.replace("<head>", `<head>${earlyInterceptor}`);
+  }
   if (out.includes("</head>")) {
     out = out.replace("</head>", `${subtitleCss}</head>`);
   }
@@ -479,12 +744,21 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     targetPathAndQuery.startsWith("/movie/") ||
     targetPathAndQuery.startsWith("/tv/");
 
+  const isDecryptionRoute =
+    targetPathAndQuery.startsWith("/APA91ywF") ||
+    targetPathAndQuery.startsWith("/servers");
+
   const hasScrapeTokens = getScrapeDoTokens().length > 0;
   const scrapeOptions = {
     method,
     headers: forwardHeaders,
     body: bodyBuffer,
   };
+
+  // Always route /APA91ywF decryption endpoints through Scrape.do to avoid AWS datacenter Cloudflare 403 blocks
+  if (useScrapeDoFallback && isDecryptionRoute && hasScrapeTokens) {
+    return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
+  }
 
   if (
     useScrapeDoFallback &&
@@ -698,8 +972,20 @@ async function handleVidcoreProxy(req, res) {
   }
 }
 
+// Vercel Serverless Function Configuration: Disable body parser to preserve raw/binary payloads
+const vercelConfig = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 module.exports = handleVidcoreProxy;
+module.exports.default = handleVidcoreProxy;
+module.exports.config = vercelConfig;
 module.exports.handleVidcoreProxy = handleVidcoreProxy;
 module.exports.CF_WORKER_URL = CF_WORKER_URL;
+module.exports.AD_SHIELD_JS = AD_SHIELD_JS;
+module.exports.sanitizeVidlinkHtml = sanitizeVidlinkHtml;
+module.exports.sanitizePreloadLinks = sanitizePreloadLinks;
 module.exports.getScrapeDoTokens = getScrapeDoTokens;
 module.exports.fetchViaScrapeDoWithRotation = fetchViaScrapeDoWithRotation;

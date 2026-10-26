@@ -1,10 +1,13 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const http = require("node:http");
+const vm = require("node:vm");
 const app = require("../server.js");
 const {
   getScrapeDoTokens,
   fetchViaScrapeDoWithRotation,
+  AD_SHIELD_JS,
+  sanitizeVidlinkHtml,
 } = require("./vidcore.js");
 
 test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", async () => {
@@ -45,7 +48,7 @@ test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", asy
       "token_gamma",
     ]);
 
-    // Next call starts from token_beta (Round-Robin) and supports POST with extraHeaders=true + sd-* headers
+    // Next call starts from token_beta (Round-Robin) and supports POST with customHeaders=true
     const secondCallTokens = [];
     let capturedUrl = "";
     let capturedOpts = null;
@@ -70,9 +73,9 @@ test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", asy
     );
     assert.equal(res2.status, 200);
     assert.deepEqual(secondCallTokens, ["token_beta"]);
-    assert.equal(capturedUrl.includes("extraHeaders=true"), true);
+    assert.equal(capturedUrl.includes("customHeaders=true"), true);
     assert.equal(capturedOpts.method, "POST");
-    assert.equal(capturedOpts.headers["sd-x-csrf-token"], "test_csrf_123");
+    assert.equal(capturedOpts.headers["x-csrf-token"], "test_csrf_123");
     assert.equal(capturedOpts.headers["Content-Length"], "0");
   } finally {
     if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
@@ -150,14 +153,117 @@ test("Vidcore & Vidlink proxy + Cloudflare Worker integration", async () => {
       "Chunk 281 must prioritize custom sub_url at the top of the subtitle list",
     );
 
-    // 5. /vidlink/movie/550 sanitizes HTML, sets limitAds:true, and injects subtitle RTL fix
+    // 5. /vidlink/movie/550 sanitizes HTML, sets limitAds:true, injects interceptor & subtitle RTL fix, and removes invalid preloads
     const r5 = await fetch(`${base}/vidlink/movie/550`);
     assert.equal(r5.status, 200);
     const t5 = await r5.text();
     assert.equal(t5.includes("/gtag-shield.js"), true);
     assert.equal(t5.includes('\\"limitAds\\":true'), true);
     assert.equal(t5.includes('id="hwto-sub-fix"'), true);
+    assert.equal(t5.includes('id="hwto-vidlink-interceptor"'), true);
+    assert.equal(/<link[^>]*rel=["']?preload["']?[^>]*href=["']\s*["']/i.test(t5), false);
   } finally {
     server.close();
   }
+});
+
+test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .ts, .mp4), and cleans invalid <link rel=preload>", async () => {
+  // 1. Verify sanitizeVidlinkHtml strips invalid/empty/Yandex preload tags
+  const sampleHtml = `<!DOCTYPE html><html><head><link rel="preload" as="image" href="https://mc.yandex.ru/watch/98154677"/><link rel="preload" as="image" href=""/><link rel="preload" as="script" href="/_next/static/chunks/webpack.js"/></head><body></body></html>`;
+  const cleanedHtml = sanitizeVidlinkHtml(sampleHtml);
+  assert.equal(cleanedHtml.includes('href="https://mc.yandex.ru/watch/98154677"'), false);
+  assert.equal(/<link[^>]*rel=["']?preload["']?[^>]*href=["']\s*["']/i.test(cleanedHtml), false);
+  assert.equal(cleanedHtml.includes('href="/_next/static/chunks/webpack.js"'), true);
+
+  // 2. Verify AD_SHIELD_JS monkey-patches window.fetch and XMLHttpRequest.prototype.open for DASH/HLS/MP4
+  const fetchedUrls = [];
+  const xhrOpened = [];
+
+  function MockXHR() {}
+  MockXHR.prototype.open = function (method, url, async) {
+    xhrOpened.push({ method, url, async, instance: this });
+  };
+
+  function MockDocument() {}
+  MockDocument.prototype.createElement = function (tag) {
+    return {
+      tagName: tag,
+      attrs: {},
+      setAttribute(k, v) {
+        this.attrs[k] = v;
+      },
+      getAttribute(k) {
+        return this.attrs[k] ?? null;
+      },
+      removeAttribute(k) {
+        delete this.attrs[k];
+      },
+    };
+  };
+
+  const sandbox = {
+    window: null,
+    Document: MockDocument,
+    document: {
+      querySelectorAll: () => [],
+      addEventListener: () => {},
+    },
+    XMLHttpRequest: MockXHR,
+    URL,
+    encodeURIComponent,
+    Object,
+    Array,
+    String,
+    Date,
+    fetch: async function (input) {
+      fetchedUrls.push(String(input));
+      return { status: 200, url: String(input) };
+    },
+  };
+  sandbox.window = sandbox;
+  sandbox.window.parent = { postMessage: () => {} };
+  sandbox.window.location = { origin: "https://hwto-kurd.vercel.app" };
+
+  vm.runInNewContext(AD_SHIELD_JS, sandbox);
+
+  // Test A: DASH .mpd via XHR
+  const mpdUrl =
+    "https://surge.flooderrr.store/sacdn/dash/87308238/index_web.mpd?host=https%3A%2F%2Fsacdn.hakunaymatata.com&sc=abc123";
+  const xhr1 = new sandbox.XMLHttpRequest();
+  xhr1.open("GET", mpdUrl, true);
+  assert.equal(
+    xhrOpened[0].url,
+    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(mpdUrl)}`,
+  );
+  // dash.js relies on xhr.responseURL being the original MPD URL to resolve relative segment templates
+  assert.equal(xhr1.responseURL, mpdUrl);
+
+  // Test B: Subsequent DASH .m4s segment with full flooderrr.store URL via XHR
+  const segUrl =
+    "https://surge.flooderrr.store/sacdn/dash/87308238/chunk-stream0-00001.m4s?host=https%3A%2F%2Fsacdn.hakunaymatata.com&sc=abc123";
+  const xhr2 = new sandbox.XMLHttpRequest();
+  xhr2.open("GET", segUrl, true);
+  assert.equal(
+    xhrOpened[1].url,
+    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(segUrl)}`,
+  );
+
+  // Test C: Subsequent DASH .m4s segment if resolved as root-relative /sacdn/dash/... via fetch
+  const relSegPath =
+    "/sacdn/dash/87308238/init-stream0.m4s?host=https%3A%2F%2Fsacdn.hakunaymatata.com&sc=abc123";
+  const expectedResolvedSeg = `https://surge.flooderrr.store${relSegPath}`;
+  const fetchRes = await sandbox.window.fetch(relSegPath);
+  assert.equal(
+    fetchedUrls[0],
+    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(expectedResolvedSeg)}`,
+  );
+  assert.equal(fetchRes.url, expectedResolvedSeg);
+
+  // Test D: Direct .m3u8 and hakunaymatata.com .mp4 via fetch
+  const hlsUrl = "https://sacdn.hakunaymatata.com/hls/movie/master.m3u8?token=xyz";
+  await sandbox.window.fetch(hlsUrl);
+  assert.equal(
+    fetchedUrls[1],
+    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(hlsUrl)}`,
+  );
 });
