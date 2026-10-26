@@ -382,6 +382,50 @@ const AD_SHIELD_JS = `(function() {
     }
   } catch (_e) {}
 
+  // 7b. Intercept HTMLScriptElement.prototype.src and HTMLIFrameElement.prototype.src setters
+  try {
+    if (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.prototype) {
+      var scriptSrcDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, "src");
+      if (scriptSrcDesc && scriptSrcDesc.set && scriptSrcDesc.get) {
+        Object.defineProperty(HTMLScriptElement.prototype, "src", {
+          configurable: true,
+          enumerable: scriptSrcDesc.enumerable,
+          get: function() { return scriptSrcDesc.get.call(this); },
+          set: function(val) {
+            var s = String(val || "");
+            if (isBlockedUrl(s)) {
+              try {
+                window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_script", url: s }, "*");
+              } catch (e) {}
+              return scriptSrcDesc.set.call(this, "/gtag-shield.js");
+            }
+            return scriptSrcDesc.set.call(this, val);
+          }
+        });
+      }
+    }
+    if (typeof HTMLIFrameElement !== "undefined" && HTMLIFrameElement.prototype) {
+      var iframeSrcDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "src");
+      if (iframeSrcDesc && iframeSrcDesc.set && iframeSrcDesc.get) {
+        Object.defineProperty(HTMLIFrameElement.prototype, "src", {
+          configurable: true,
+          enumerable: iframeSrcDesc.enumerable,
+          get: function() { return iframeSrcDesc.get.call(this); },
+          set: function(val) {
+            var s = String(val || "");
+            if (isBlockedUrl(s)) {
+              try {
+                window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_iframe", url: s }, "*");
+              } catch (e) {}
+              return iframeSrcDesc.set.call(this, "about:blank");
+            }
+            return iframeSrcDesc.set.call(this, val);
+          }
+        });
+      }
+    }
+  } catch (_e) {}
+
   // 8. Safely sanitize invalid <link rel="preload"> elements without deleting DOM nodes (preventing React hydration error #418)
   function cleanInvalidPreloads() {
     try {
@@ -405,17 +449,62 @@ const AD_SHIELD_JS = `(function() {
   Document.prototype.createElement = function(tagName) {
     var el = origCreateElement.apply(this, arguments);
     var tag = String(tagName || "").toLowerCase();
-    if (tag === "script" || tag === "iframe") {
+    if (tag === "script") {
       var origSetAttr = el.setAttribute;
       el.setAttribute = function(name, value) {
         if (String(name).toLowerCase() === "src" && isBlockedUrl(String(value))) {
           try {
             window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_script", url: String(value) }, "*");
           } catch (e) {}
-          return;
+          return origSetAttr.call(el, "src", "/gtag-shield.js");
         }
         return origSetAttr.apply(this, arguments);
       };
+      try {
+        Object.defineProperty(el, "src", {
+          configurable: true,
+          enumerable: true,
+          get: function() { return el.getAttribute("src") || ""; },
+          set: function(val) {
+            var s = String(val || "");
+            if (isBlockedUrl(s)) {
+              try {
+                window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_script", url: s }, "*");
+              } catch (e) {}
+              return origSetAttr.call(el, "src", "/gtag-shield.js");
+            }
+            return origSetAttr.call(el, "src", s);
+          }
+        });
+      } catch (_e) {}
+    } else if (tag === "iframe") {
+      var origIframeSetAttr = el.setAttribute;
+      el.setAttribute = function(name, value) {
+        if (String(name).toLowerCase() === "src" && isBlockedUrl(String(value))) {
+          try {
+            window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_iframe", url: String(value) }, "*");
+          } catch (e) {}
+          return origIframeSetAttr.call(el, "src", "about:blank");
+        }
+        return origIframeSetAttr.apply(this, arguments);
+      };
+      try {
+        Object.defineProperty(el, "src", {
+          configurable: true,
+          enumerable: true,
+          get: function() { return el.getAttribute("src") || ""; },
+          set: function(val) {
+            var s = String(val || "");
+            if (isBlockedUrl(s)) {
+              try {
+                window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_iframe", url: s }, "*");
+              } catch (e) {}
+              return origIframeSetAttr.call(el, "src", "about:blank");
+            }
+            return origIframeSetAttr.call(el, "src", s);
+          }
+        });
+      } catch (_e) {}
     } else if (tag === "link") {
       var origLinkSetAttr = el.setAttribute;
       el.setAttribute = function(name, value) {
@@ -449,6 +538,16 @@ const AD_SHIELD_JS = `(function() {
     }
     return el;
   };
+
+  try {
+    if (typeof document !== "undefined") {
+      var subtitleCss = '[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"],span[style*="text-shadow"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}';
+      var st = document.createElement("style");
+      st.id = "hwto-sub-fix";
+      st.textContent = subtitleCss;
+      (document.head || document.documentElement).appendChild(st);
+    }
+  } catch (_e) {}
 
   try {
     window.parent.postMessage({ type: "AD_SHIELD_READY", status: "active", timestamp: Date.now() }, "*");
@@ -503,7 +602,11 @@ function sanitizeVidcoreHtml(html) {
 
   // 4. Strip Cloudflare edge-injected beacon script
   out = out.replace(
-    /<script[^>]*src="https:\/\/static\.cloudflareinsights\.com\/beacon\.min\.js[^"]*"[^>]*><\/script>/gi,
+    /<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi,
+    "",
+  );
+  out = out.replace(
+    /<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi,
     "",
   );
 
@@ -523,7 +626,11 @@ function sanitizeVidlinkHtml(html) {
 
   // 1. Strip Cloudflare edge-injected beacon script to prevent CORS failure
   out = out.replace(
-    /<script[^>]*src="https:\/\/static\.cloudflareinsights\.com\/beacon\.min\.js[^"]*"[^>]*><\/script>/gi,
+    /<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi,
+    "",
+  );
+  out = out.replace(
+    /<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi,
     "",
   );
 
@@ -540,26 +647,30 @@ function sanitizeVidlinkHtml(html) {
     "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==",
   );
 
-  // 3. Force limitAds to true in Next.js SSR flight payload so ad components are skipped
+  // 3. Remove Yandex <noscript> tags from both HTML and RSC flight payload to prevent React 18 hydration error #418
+  out = out.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, "");
+  out = out.replace(/\[\\"\\$\\",\\"noscript\\",null,\{\\"children\\":\[\\"\\$\\",\\"div\\"[^\]]*\]\}\]\}/g, "null");
+
+  // 4. Force limitAds to true in Next.js SSR flight payload so ad components are skipped
   out = out.replace(/\\"limitAds\\":false/g, '\\"limitAds\\":true');
   out = out.replace(/"limitAds":false/g, '"limitAds":true');
 
-  // 4. Force referer to vidlink.pro
+  // 5. Force referer to vidlink.pro
   out = out.replace(
     /\\"referer\\":(null|\\"[^\\"]*\\")/g,
     '\\"referer\\":\\"https://vidlink.pro/\\"',
   );
 
-  // 4. Safely rewrite preload links (preserving DOM nodes for React hydration)
+  // 6. Safely rewrite preload links (preserving DOM nodes for React hydration)
   out = sanitizePreloadLinks(out);
 
-  // 5. Inject Client-side Interceptor (fetch + XHR monkey-patch) and RTL / BiDi subtitle CSS fix before </head>
+  // 7. Inject Client-side Interceptor & subtitle fix after </html> so React head/body hydration is completely unperturbed
   const earlyInterceptor = `<script id="hwto-vidlink-interceptor">${AD_SHIELD_JS}</script>`;
   const subtitleCss = `<style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>`;
-  if (out.includes("</head>")) {
-    out = out.replace("</head>", `${earlyInterceptor}${subtitleCss}</head>`);
-  } else if (out.includes("</body>")) {
-    out = out.replace("</body>", `${earlyInterceptor}${subtitleCss}</body>`);
+  if (out.includes("</html>")) {
+    out = out.replace("</html>", `</html>${subtitleCss}${earlyInterceptor}`);
+  } else {
+    out += `${subtitleCss}${earlyInterceptor}`;
   }
 
   return out;
