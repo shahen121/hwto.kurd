@@ -74,6 +74,7 @@ test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", asy
     assert.equal(res2.status, 200);
     assert.deepEqual(secondCallTokens, ["token_beta"]);
     assert.equal(capturedUrl.includes("customHeaders=true"), true);
+    assert.equal(capturedUrl.includes("sessionId="), true);
     assert.equal(capturedOpts.method, "POST");
     assert.equal(capturedOpts.headers["x-csrf-token"], "test_csrf_123");
     assert.equal(capturedOpts.headers["Content-Length"], "0");

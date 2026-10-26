@@ -26,14 +26,41 @@ function getScrapeDoTokens() {
   return [...new Set(rawTokens)];
 }
 
-function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true) {
+function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionId = null) {
   const api = new URL("https://api.scrape.do/");
   api.searchParams.set("token", token);
   api.searchParams.set("url", targetUrl);
   if (useCustomHeaders) {
     api.searchParams.set("customHeaders", "true");
   }
+  if (sessionId) {
+    // Scrape.do requires sessionId to be between 1 and 7 characters
+    const cleanSessionId = String(sessionId).trim().slice(0, 7);
+    if (cleanSessionId) {
+      api.searchParams.set("sessionId", cleanSessionId);
+    }
+  }
   return api.toString();
+}
+
+/**
+ * Derives a consistent 6-7 character numeric/alphanumeric sessionId for Scrape.do
+ * based on user IP, cookie, or user-agent, falling back to a fixed default session "998877".
+ */
+function getScrapeDoSessionId(req) {
+  if (!req) return "998877";
+  const ip =
+    (req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) ||
+    (req.socket && req.socket.remoteAddress) ||
+    "";
+  const raw = String(ip || req.headers["user-agent"] || "998877");
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    hash = (hash * 31 + raw.charCodeAt(i)) >>> 0;
+  }
+  // Return positive 6-digit number string
+  const num = (hash % 900000) + 100000;
+  return String(num);
 }
 
 /**
@@ -54,6 +81,7 @@ async function fetchViaScrapeDoWithRotation(
   const reqMethod = options.method || "GET";
   const rawHeaders = options.headers || {};
   const forwardHeaders = {};
+  const sessionId = options.sessionId || "998877";
 
   for (const [k, v] of Object.entries(rawHeaders)) {
     if (!v) continue;
@@ -105,7 +133,7 @@ async function fetchViaScrapeDoWithRotation(
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[(startIdx + i) % tokens.length];
-    const scrapeUrl = buildScrapeDoUrl(targetUrl, token, true);
+    const scrapeUrl = buildScrapeDoUrl(targetUrl, token, true, sessionId);
     try {
       const res = await fetchImpl(scrapeUrl, fetchOpts);
       // Check if this Scrape.do response is an auth/quota failure (401, 403, 429) or proxy failure (>= 500)
@@ -637,6 +665,12 @@ function patchPlayerChunk(jsCode, pathname) {
       `e.readyState||((function(){if(/^https?:\\/\\//i.test(t.url)&&!t.url.includes("/stream-proxy/")){t.url=${JSON.stringify(CF_WORKER_URL)}+"/stream-proxy/ref/"+encodeURIComponent(t.url);}})(),e.open("GET",t.url,!0))`,
     );
   }
+  if (out.includes('a.open("GET",t.url,!0),d(a,t.url)')) {
+    out = out.replace(
+      /a\.open\("GET",t\.url,!0\),d\(a,t\.url\)/g,
+      `(function(){if(/^https?:\\/\\//i.test(t.url)&&!t.url.includes("/stream-proxy/")){t.url=${JSON.stringify(CF_WORKER_URL)}+"/stream-proxy/ref/"+encodeURIComponent(t.url);}})(),a.open("GET",t.url,!0),d(a,t.url)`,
+    );
+  }
 
   // 5. Inject custom external subtitle (`?sub_url=...&sub_label=...`) into VidCore's `/wyzie?` subtitle list
   // Run inside `.finally(...)` AFTER `R.sort(...)` and unselect any previous track so the custom subtitle
@@ -732,11 +766,25 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
       forwardHeaders[h] = req.headers[h];
     }
   }
-  // Forward any custom headers used by VidLink / VidCore APIs
+  // Forward any custom headers and cookies used by VidLink / VidCore APIs
   for (const [k, v] of Object.entries(req.headers || {})) {
     const lower = k.toLowerCase();
-    if (lower.startsWith("x-") && !forwardHeaders[lower] && !lower.startsWith("x-forwarded") && !lower.startsWith("x-vercel")) {
+    if (
+      (lower.startsWith("x-") || lower === "cookie") &&
+      !forwardHeaders[lower] &&
+      !lower.startsWith("x-forwarded") &&
+      !lower.startsWith("x-vercel")
+    ) {
       forwardHeaders[k] = v;
+    }
+  }
+
+  // If this is an APA91ywF decryption request, set Referer to the actual movie/tv page path
+  if (targetPathAndQuery.startsWith("/APA91ywF")) {
+    const incomingRef = String(req.headers["referer"] || "");
+    const movieMatch = incomingRef.match(/\/(movie|tv)\/\d+/);
+    if (movieMatch) {
+      forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}${movieMatch[0]}`;
     }
   }
 
@@ -748,11 +796,13 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     targetPathAndQuery.startsWith("/APA91ywF") ||
     targetPathAndQuery.startsWith("/servers");
 
+  const sessionId = getScrapeDoSessionId(req);
   const hasScrapeTokens = getScrapeDoTokens().length > 0;
   const scrapeOptions = {
     method,
     headers: forwardHeaders,
     body: bodyBuffer,
+    sessionId,
   };
 
   // Always route /APA91ywF decryption endpoints through Scrape.do to avoid AWS datacenter Cloudflare 403 blocks
@@ -924,6 +974,12 @@ async function handleVidcoreProxy(req, res) {
       "X-AdShield": "Active",
     };
 
+    // Forward Set-Cookie headers if returned by upstream/Scrape.do
+    const setCookie = upstreamRes.headers.get("set-cookie");
+    if (setCookie) {
+      responseHeaders["Set-Cookie"] = setCookie;
+    }
+
     const cacheControl = upstreamRes.headers.get("cache-control");
     if (cacheControl && !isPlayerRoute && !isChunkRoute) {
       responseHeaders["Cache-Control"] = cacheControl;
@@ -987,5 +1043,6 @@ module.exports.CF_WORKER_URL = CF_WORKER_URL;
 module.exports.AD_SHIELD_JS = AD_SHIELD_JS;
 module.exports.sanitizeVidlinkHtml = sanitizeVidlinkHtml;
 module.exports.sanitizePreloadLinks = sanitizePreloadLinks;
+module.exports.getScrapeDoSessionId = getScrapeDoSessionId;
 module.exports.getScrapeDoTokens = getScrapeDoTokens;
 module.exports.fetchViaScrapeDoWithRotation = fetchViaScrapeDoWithRotation;
