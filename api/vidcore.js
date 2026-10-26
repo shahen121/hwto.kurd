@@ -478,11 +478,12 @@ function sanitizeVidcoreHtml(html) {
   out = out.replace(/\\"ad\\":true/g, '\\"ad\\":false');
   out = out.replace(/"ad":true/g, '"ad":false');
 
-  // 2. Force SSR "from" prop to https://vidcore.io/ so third-party domain triggers never activate
+  // 2. Ensure "from" prop matches https://vidcore.io exactly without trailing slash (preserving cryptographic integrity)
   out = out.replace(
-    /\\"from\\":(null|\\"[^\\"]*\\")/g,
-    '\\"from\\":\\"https://vidcore.io/\\"',
+    /\\"from\\":(null|\\"(?!https:\/\/vidcore\.io)[^\\"]*\\")/g,
+    '\\"from\\":\\"https://vidcore.io\\"',
   );
+  out = out.replace(/\\"from\\":\\"https:\/\/vidcore\.io\/\\"/g, '\\"from\\":\\"https://vidcore.io\\"');
 
   // 3. Replace Google Tag Manager script URL in BOTH <head> and RSC payload with local /gtag-shield.js
   out = out.replace(
@@ -718,7 +719,15 @@ function patchPlayerChunk(jsCode, pathname) {
     );
   }
 
-  // 6. Strip ad & analytics script URLs inside player bundle
+  // 7. Intercept sub-server error states (e.g. 555, 404, or any error code) in VidCore VM and emit status event to parent
+  if (out.includes('String.fromCharCode(30^e)}).join("")]=Z')) {
+    out = out.replace(
+      'String.fromCharCode(30^e)}).join("")]=Z',
+      'String.fromCharCode(30^e)}).join("")]=function(v){if(typeof v==="number"&&v!==0&&v!==1&&v!==2){try{window.parent.postMessage({event:"status",data:v},"*")}catch(_e){}}return Z(v)}',
+    );
+  }
+
+  // 8. Strip ad & analytics script URLs inside player bundle
   const adScripts = [
     "//kg.chiveyfewmets.com/rzgJYYsrJpx2H/kNmgM",
     "//cl.gogtib.com/rWXjzriQHyvUUDB/rwOme",

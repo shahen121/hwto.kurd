@@ -492,11 +492,17 @@ export default function MoviePage({
     return () => window.electron.offM3u8Found(handler);
   }, []);
 
-  // Auto-failover from Vidcore to Vidlink if all Vidcore sub-servers report 404
+  // Auto-failover from Vidcore to Vidlink if Vidcore reports any error (404, 555, or status >= 400)
   useEffect(() => {
     if (!playing || playerSource !== "vidcore") return;
     const onMessage = (e) => {
-      if (e.data && e.data.event === "status" && e.data.data === 404) {
+      if (
+        e.data &&
+        e.data.event === "status" &&
+        (e.data.data === 404 ||
+          e.data.data === 555 ||
+          (typeof e.data.data === "number" && e.data.data >= 400))
+      ) {
         setFailoverSource(`movie_${item.id}`, "vidlink");
         setPlayerSource("vidlink");
       }
