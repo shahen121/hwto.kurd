@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# CF_WORKER_URL is a public Cloudflare Worker endpoint that is intentionally
+# embedded in client-side player scripts, so it is not a secret.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "CF_WORKER_URL"
+
+# Single-page app fallback (API routes are served by Netlify Functions)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
