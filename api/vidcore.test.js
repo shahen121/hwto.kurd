@@ -7,6 +7,7 @@ const {
   getScrapeDoTokens,
   fetchViaScrapeDoWithRotation,
   AD_SHIELD_JS,
+  sanitizeVidcoreHtml,
   sanitizeVidlinkHtml,
   patchPlayerChunk,
   staticChunkCache,
@@ -177,7 +178,10 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   const cleanedHtml = sanitizeVidlinkHtml(sampleHtml);
   assert.equal(cleanedHtml.includes('href="https://mc.yandex.ru/watch/98154677"'), false);
   assert.equal(/<link[^>]*rel=["']?preload["']?[^>]*href=["']\s*["']/i.test(cleanedHtml), false);
-  assert.equal(cleanedHtml.includes('href="/_next/static/chunks/webpack.js"'), true);
+  assert.equal(
+    cleanedHtml.includes('href="/_next/static/chunks/webpack.js?v=2"'),
+    true,
+  );
 
   // 2. Verify AD_SHIELD_JS monkey-patches window.fetch and XMLHttpRequest.prototype.open for DASH/HLS/MP4
   const fetchedUrls = [];
@@ -450,4 +454,46 @@ test("patchPlayerChunk intercepts error handler to suppress 555 error", () => {
   assert.equal(postedMessages[0].event, "status");
   assert.equal(postedMessages[0].data, 404);
 });
+
+test("Cache busting (?v=2), anti-freeze, and sandbox patches in vidcore", () => {
+  // 1. Verify HTML sanitization adds ?v=2 to Next.js chunks
+  const sampleVidcoreHtml = `
+    <html>
+      <head>
+        <link rel="preload" href="/_next/static/chunks/281-d15eeb1ca15a1654.js" as="script"/>
+        <script src="/_next/static/chunks/281-d15eeb1ca15a1654.js" async=""></script>
+        <script src="/_next/static/chunks/main-app-14eacbf1653a965d.js" async=""></script>
+      </head>
+      <body></body>
+    </html>
+  `;
+  const sanitized = sanitizeVidcoreHtml(sampleVidcoreHtml);
+  assert.ok(sanitized.includes("/_next/static/chunks/281-d15eeb1ca15a1654.js?v=2"));
+  assert.ok(sanitized.includes("/_next/static/chunks/main-app-14eacbf1653a965d.js?v=2"));
+  // Ensure idempotent (no ?v=2?v=2)
+  const sanitizedTwice = sanitizeVidcoreHtml(sanitized);
+  assert.ok(!sanitizedTwice.includes("?v=2?v=2"));
+
+  // 2. Verify patchPlayerChunk anti-freeze and sandbox bypass
+  const mockCode = `
+    function wrapper() {
+      let t=[];for(let a=0;a<50;a++)t.push(e);let a=Date.now();return console.table(t),console.clear(),Date.now()-a<=10
+      if(!tI.current&&(tI.current=!0,window.self!==window.top)){let t=()=>{document.body.innerHTML='<h1>Please Disable Sandbox</h1>'};}
+      let{en:l,from:b,ad:h,mobile:u}=e;
+      R.length>0&&(R.sort((e,t)=>e.track.label.localeCompare(t.track.label)),el(R))
+    }
+  `;
+  const patched = patchPlayerChunk(mockCode, "/_next/static/chunks/281-d15eeb1ca15a1654.js");
+  assert.ok(patched.includes("return!0"), "Anti-freeze must return !0");
+  assert.ok(patched.includes("if(!1)"), "Sandbox check must be bypassed with if(!1)");
+  assert.ok(!patched.includes("Please Disable Sandbox"), "Please Disable Sandbox string must be stripped");
+  assert.ok(patched.includes("let h=!1,{en:l,from:b,ad:_h_ignored,"), "Ad prop must be forced to false");
+  assert.ok(patched.includes("(function(){try{var _sp="), "Subtitle injection must use valid IIFE syntax");
+
+  // Verify valid syntax by compiling with vm.Script
+  assert.doesNotThrow(() => {
+    new vm.Script(patched);
+  }, "Patched chunk must have zero syntax errors");
+});
+
 

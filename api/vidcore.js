@@ -411,6 +411,12 @@ function sanitizeVidlinkHtml(html) {
 
   out = sanitizePreloadLinks(out);
 
+  // Cache busting for chunks (?v=2) to bypass browser and CDN cache
+  out = out.replace(
+    /(\/_next\/static\/chunks\/[a-zA-Z0-9_\-./%]+\.js)(?![?a-zA-Z0-9_&=])/g,
+    "$1?v=2",
+  );
+
   const headInject = `
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
@@ -441,6 +447,12 @@ function sanitizeVidcoreHtml(html) {
 
   out = sanitizePreloadLinks(out);
 
+  // Cache busting for chunks (?v=2) to bypass browser and CDN cache
+  out = out.replace(
+    /(\/_next\/static\/chunks\/[a-zA-Z0-9_\-./%]+\.js)(?![?a-zA-Z0-9_&=])/g,
+    "$1?v=2",
+  );
+
   const headInject = `
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
@@ -463,12 +475,46 @@ function patchPlayerChunk(jsCode, pathname = "") {
     out = AD_SHIELD_JS + out;
   }
 
-  // 1. Force ad prop to false
+  // 1. Anti-DevTools / slow-CPU console.table check ("Date.now()-a<=10")
+  if (out.includes("return console.table(t),console.clear(),Date.now()-a<=10")) {
+    out = out.replace(
+      "return console.table(t),console.clear(),Date.now()-a<=10",
+      "return!0",
+    );
+  }
+
+  // 2. Sandbox bypass ("Please Disable Sandbox")
+  if (out.includes("window.self!==window.top")) {
+    out = out.replace(
+      "if(!tI.current&&(tI.current=!0,window.self!==window.top))",
+      "if(!1)",
+    );
+    out = out.replace(/if\(window\.self!==window\.top\)/g, "if(!1)");
+  }
+  if (out.includes("Please Disable Sandbox")) {
+    out = out.replace(/<h1>Please Disable Sandbox<\/h1>/g, "");
+  }
+
+  // 3. Force ad prop to false
   if (out.includes("let{en:l,from:b,ad:h,")) {
     out = out.replace("let{en:l,from:b,ad:h,", "let h=!1,{en:l,from:b,ad:_h_ignored,");
   }
 
-  // 2. Stream URL + failover flag
+  // 3b. VidLink limitAds & directLinks
+  if (out.includes("let{data:t,limitAds:a,referer:")) {
+    out = out.replace(
+      /let\{data:t,limitAds:a,referer:([a-zA-Z0-9_$]+)\}=e/g,
+      "let a=!0,{data:t,limitAds:_a_ignored,referer:$1}=e",
+    );
+  }
+  if (out.includes("enableDirectLinks:g=!1")) {
+    out = out.replace(/enableDirectLinks:g=!1/g, "enableDirectLinks:_g_ignored=!1,g=!1");
+  }
+  if (out.includes("https://brightadnetwork.com/jump/next.php")) {
+    out = out.split("https://brightadnetwork.com/jump/next.php").join("about:blank");
+  }
+
+  // 4. Stream URL + failover flag
   if (out.includes("await A,tl.current=T[0];")) {
     out = out.replace(
       "await A,tl.current=T[0];",
@@ -728,7 +774,9 @@ async function handleVidcoreProxy(req, res) {
       pathname.startsWith("/_next/static/");
 
     if (isChunkStaticPath && req.method === "GET") {
-      const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
+      const cacheKey =
+        (targetPath.startsWith("/_next/static/") ? targetPath : pathname) +
+        (search || "");
       if (staticChunkCache.has(cacheKey)) {
         const cached = staticChunkCache.get(cacheKey);
         res.writeHead(200, {
@@ -741,7 +789,14 @@ async function handleVidcoreProxy(req, res) {
     }
 
     const bodyBuffer = await readRequestBody(req);
-    const upstreamRes = await fetchFromUpstream(origin, targetPath + search, req, bodyBuffer, true);
+    const upstreamPath = isChunkStaticPath ? targetPath : targetPath + search;
+    const upstreamRes = await fetchFromUpstream(
+      origin,
+      upstreamPath,
+      req,
+      bodyBuffer,
+      true,
+    );
 
     const contentType =
       upstreamRes.headers.get("content-type") || "application/octet-stream";
@@ -778,8 +833,13 @@ async function handleVidcoreProxy(req, res) {
       const rawJs = await upstreamRes.text();
       const patchedJs = patchPlayerChunk(rawJs, targetPath);
       responseHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
-      const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
-      staticChunkCache.set(cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
+      const cacheKey =
+        (targetPath.startsWith("/_next/static/") ? targetPath : pathname) +
+        (search || "");
+      staticChunkCache.set(cacheKey, {
+        body: patchedJs,
+        contentType: "application/javascript; charset=utf-8",
+      });
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(patchedJs, "utf8");
     }
