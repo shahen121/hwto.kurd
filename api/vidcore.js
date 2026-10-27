@@ -1,4 +1,4 @@
-// VidCore + Vidlink Ad-Free Proxy & Stream Gateway (Vercel Serverless + Node HTTP Server)
+const { Readable } = require("stream");
 
 const VIDCORE_ORIGIN = process.env.VIDCORE_ORIGIN || "https://vidcore.io";
 const VIDLINK_ORIGIN = process.env.VIDLINK_ORIGIN || "https://vidlink.pro";
@@ -7,10 +7,11 @@ const CF_WORKER_URL = (
 ).replace(/\/+$/, "");
 
 const config = {
-  mode: process.env.VIDCORE_PROXY_MODE || "auto", // 'auto', 'scrape_do', 'direct'
+  mode: process.env.VIDCORE_PROXY_MODE || "auto",
 };
 
 let _tokenRoundRobinIndex = 0;
+const _sessionTokenMap = new Map();
 
 function getScrapeDoTokens() {
   const rawTokens = [
@@ -21,150 +22,133 @@ function getScrapeDoTokens() {
   ]
     .map((t) => (typeof t === "string" ? t.trim() : ""))
     .filter(Boolean);
-
-  // Deduplicate while preserving order
   return [...new Set(rawTokens)];
 }
 
-function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionId = null) {
+function getSessionTokenIndex(sessionId, tokensCount) {
+  if (!sessionId) {
+    const idx = _tokenRoundRobinIndex;
+    _tokenRoundRobinIndex = (_tokenRoundRobinIndex + 1) % tokensCount;
+    return idx;
+  }
+  if (_sessionTokenMap.has(sessionId)) {
+    return _sessionTokenMap.get(sessionId) % tokensCount;
+  }
+  let hash = 0;
+  for (let i = 0; i < sessionId.length; i++) {
+    hash = (hash * 31 + sessionId.charCodeAt(i)) >>> 0;
+  }
+  const idx = hash % tokensCount;
+  _sessionTokenMap.set(sessionId, idx);
+  return idx;
+}
+
+function advanceSessionToken(sessionId, tokensCount) {
+  if (!sessionId) return;
+  const current = _sessionTokenMap.get(sessionId) || 0;
+  _sessionTokenMap.set(sessionId, (current + 1) % tokensCount);
+}
+
+function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionId = "884422") {
   const api = new URL("https://api.scrape.do/");
   api.searchParams.set("token", token);
   api.searchParams.set("url", targetUrl);
-  if (useCustomHeaders) {
-    api.searchParams.set("customHeaders", "true");
-  }
+  if (useCustomHeaders) api.searchParams.set("customHeaders", "true");
   if (sessionId) {
-    // Scrape.do requires sessionId to be between 1 and 7 characters
-    const cleanSessionId = String(sessionId).trim().slice(0, 7);
-    if (cleanSessionId) {
-      api.searchParams.set("sessionId", cleanSessionId);
-    }
+    const cleanSessionId = String(sessionId).trim().slice(0, 10);
+    if (cleanSessionId) api.searchParams.set("sessionId", cleanSessionId);
   }
   return api.toString();
 }
 
-/**
- * Derives a consistent 6-7 character numeric/alphanumeric sessionId for Scrape.do
- * based on user IP, cookie, or user-agent, falling back to a fixed default session "998877".
- */
 function getScrapeDoSessionId(req) {
-  if (!req) return "998877";
-  const ip =
-    (req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) ||
-    (req.socket && req.socket.remoteAddress) ||
-    "";
-  const raw = String(ip || req.headers["user-agent"] || "998877");
-  let hash = 0;
-  for (let i = 0; i < raw.length; i++) {
-    hash = (hash * 31 + raw.charCodeAt(i)) >>> 0;
+  if (!req) return "884422";
+  if (req.query && req.query.sessionId) {
+    const s = String(req.query.sessionId).trim().slice(0, 10);
+    if (s) return s;
   }
-  // Return positive 6-digit number string
-  const num = (hash % 900000) + 100000;
-  return String(num);
+  const rawHeader =
+    (req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) ||
+    "";
+  const clientIp = rawHeader
+    ? rawHeader.split(",")[0].trim()
+    : (req.socket && req.socket.remoteAddress) || "";
+  if (!clientIp || clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "localhost") {
+    return "884422";
+  }
+  const raw = String(clientIp);
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) hash = (hash * 31 + raw.charCodeAt(i)) >>> 0;
+  return String((hash % 900000) + 100000);
 }
 
-/**
- * Fetches `targetUrl` via Scrape.do using Round-Robin token selection
- * with automatic fallback across all configured tokens on quota/auth errors (401, 403, 429, 5xx) or network errors.
- * Supports both GET and POST with `customHeaders=true` preserving exact method, headers, and body.
- */
-async function fetchViaScrapeDoWithRotation(
-  targetUrl,
-  fetchImpl = fetch,
-  options = {},
-) {
+async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, options = {}) {
   const tokens = getScrapeDoTokens();
-  if (tokens.length === 0) {
-    throw new Error("No SCRAPE_DO_TOKEN configured in environment variables");
+  if (tokens.length === 0) throw new Error("No Scrape.do tokens configured");
+
+  const sessionId = options.sessionId;
+  let startIdx;
+  if (options.tokenIndex !== undefined) {
+    startIdx = options.tokenIndex % tokens.length;
+  } else if (sessionId) {
+    startIdx = getSessionTokenIndex(sessionId, tokens.length);
+  } else {
+    startIdx = _tokenRoundRobinIndex;
+    _tokenRoundRobinIndex = (_tokenRoundRobinIndex + 1) % tokens.length;
   }
 
-  const reqMethod = options.method || "GET";
-  const rawHeaders = options.headers || {};
-  const forwardHeaders = {};
-  const sessionId = options.sessionId || "998877";
+  const effectiveSessionId = sessionId || "884422";
+  const method = options.method || "GET";
+  const headers = { ...(options.headers || {}) };
 
-  for (const [k, v] of Object.entries(rawHeaders)) {
-    if (!v) continue;
-    const lower = k.toLowerCase();
-    // Do not forward host or hop-by-hop headers to Scrape.do proxy
-    if (
-      lower === "host" ||
-      lower === "connection" ||
-      lower === "content-length" ||
-      lower.startsWith("x-forwarded") ||
-      lower.startsWith("x-vercel")
-    ) {
-      continue;
-    }
-    forwardHeaders[k] = v;
-  }
-
-  // Ensure VidCore required origin/referer/ua are explicitly set
-  if (!forwardHeaders["Origin"] && !forwardHeaders["origin"]) {
-    forwardHeaders["Origin"] = VIDCORE_ORIGIN;
-  }
-  if (!forwardHeaders["Referer"] && !forwardHeaders["referer"]) {
-    forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
-  }
-  if (!forwardHeaders["User-Agent"] && !forwardHeaders["user-agent"]) {
-    forwardHeaders["User-Agent"] = getCleanUserAgent();
-  }
-
-  const fetchOpts = {
-    method: reqMethod,
-    headers: forwardHeaders,
-  };
-
-  if (reqMethod !== "GET" && reqMethod !== "HEAD") {
-    if (options.body && options.body.length > 0) {
-      fetchOpts.body = options.body;
-      forwardHeaders["Content-Length"] = String(options.body.length);
+  if (method === "POST" && headers["Content-Length"] === undefined) {
+    if (options.body) {
+      headers["Content-Length"] = String(
+        Buffer.isBuffer(options.body)
+          ? options.body.length
+          : Buffer.byteLength(options.body)
+      );
     } else {
-      fetchOpts.body = "";
-      forwardHeaders["Content-Length"] = "0";
+      headers["Content-Length"] = "0";
     }
   }
 
-  const startIdx = _tokenRoundRobinIndex % tokens.length;
-  _tokenRoundRobinIndex = (_tokenRoundRobinIndex + 1) % tokens.length;
+  const fetchOpts = { method, headers };
+  if (method !== "GET" && method !== "HEAD" && options.body && options.body.length > 0) {
+    fetchOpts.body = options.body;
+  }
 
   let lastRes = null;
   let lastErr = null;
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[(startIdx + i) % tokens.length];
-    const scrapeUrl = buildScrapeDoUrl(targetUrl, token, true, sessionId);
+    const scrapeUrl = buildScrapeDoUrl(targetUrl, token, true, effectiveSessionId);
     try {
       const res = await fetchImpl(scrapeUrl, fetchOpts);
-      // Check if this Scrape.do response is an auth/quota failure (401, 403, 429) or proxy failure (>= 500)
-      const scrapeAuth = res.headers && typeof res.headers.get === "function" ? res.headers.get("scrape.do-auth") : null;
-      const initialStatus = res.headers && typeof res.headers.get === "function" ? res.headers.get("scrape.do-initial-status-code") : null;
-
-      // If Scrape.do returns 401, 403, 429 (quota or blocked token), try next token
+      const initialStatus =
+        res.headers && typeof res.headers.get === "function"
+          ? res.headers.get("scrape.do-initial-status-code")
+          : null;
       if (
         (res.status === 401 || res.status === 403 || res.status === 429) &&
         initialStatus !== "404" &&
         initialStatus !== "200"
       ) {
+        if (sessionId) advanceSessionToken(sessionId, tokens.length);
         lastRes = res;
         continue;
       }
-
-      // If token succeeded (including upstream 200, 404, etc.), return immediately
-      if (res.status < 500) {
-        return res;
-      }
+      if (res.status < 500) return res;
       lastRes = res;
     } catch (err) {
       lastErr = err;
     }
   }
-
   if (lastRes) return lastRes;
   throw lastErr || new Error("All Scrape.do tokens failed");
 }
 
-// Client-side Ad-Shield, Stream CORS Interceptor & Anti-Freeze Guard (served via /gtag-shield.js, injected in <head>, and prepended to webpack chunks)
 const AD_SHIELD_JS = `(function() {
   if (window.__vidcoreShieldInitialized) return;
   window.__vidcoreShieldInitialized = true;
@@ -174,83 +158,66 @@ const AD_SHIELD_JS = `(function() {
   var lastMpdQuery = "";
 
   try {
-    // 1. Lock internal VidCore ad flags to false permanently
-    Object.defineProperty(window, "adce5c77-2808-4d01-877e-41167529529d", {
-      value: false, writable: false, configurable: false
+    var __fakeLoc = new Proxy(window.location, {
+      get: function(target, prop) {
+        if (prop === "hostname" || prop === "host") return "vidcore.io";
+        if (prop === "origin") return "https://vidcore.io";
+        if (prop === "protocol") return "https:";
+        if (prop === "port") return "";
+        if (prop === "href") return "https://vidcore.io" + (window.location.pathname || "/") + (window.location.search || "");
+        var val = target[prop];
+        return typeof val === "function" ? val.bind(target) : val;
+      }
     });
-    Object.defineProperty(window, "a3f1feb4-0b2d-4f69-a999-7116272dab1d", {
-      value: false, writable: false, configurable: false
+
+    var __fakeDoc = new Proxy(document, {
+      get: function(target, prop) {
+        if (prop === "domain") return "vidcore.io";
+        if (prop === "URL") return "https://vidcore.io" + (window.location.pathname || "/") + (window.location.search || "");
+        if (prop === "referrer") return "https://vidcore.io/";
+        if (prop === "location") return __fakeLoc;
+        var val = target[prop];
+        return typeof val === "function" ? val.bind(target) : val;
+      }
     });
-  } catch (e) {}
 
-  // 2. Block all popup windows / tab-unders completely
-  var noopWindow = {
-    closed: false,
-    focus: function() {},
-    blur: function() {},
-    close: function() {},
-    postMessage: function() {},
-    location: { href: "about:blank", assign: function(){}, replace: function(){} }
-  };
-  window.open = function(url) {
-    try {
-      window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_popup", url: String(url || "") }, "*");
-    } catch (e) {}
-    return noopWindow;
-  };
+    var __fakeWin = new Proxy(window, {
+      get: function(target, prop) {
+        if (prop === "location") return __fakeLoc;
+        if (prop === "document") return __fakeDoc;
+        if (prop === "origin") return "https://vidcore.io";
+        if (prop === "top" || prop === "parent" || prop === "self" || prop === "window" || prop === "globalThis") return __fakeWin;
+        var val = target[prop];
+        return typeof val === "function" ? val.bind(target) : val;
+      }
+    });
 
-  // Provide safe no-op global stubs for analytics/trackers so blocked scripts don't throw TypeErrors
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || function() { window.dataLayer.push(arguments); };
-  window.clarity = window.clarity || function() {};
-  window.ym = window.ym || function() {};
+    window.__fakeWin = __fakeWin;
+    window.__fakeDoc = __fakeDoc;
+    window.__fakeLoc = __fakeLoc;
+  } catch (_e) {}
 
-  // 3. Block known ad/tracker domains from dynamic script/iframe injection
-  var BLOCKED_PATTERNS = [
-    /gogtib\\.com/i,
-    /chiveyfewmets\\.com/i,
-    /umami\\.vidcore\\.net/i,
-    /googletagmanager\\.com/i,
-    /google-analytics\\.com/i,
-    /cloudflareinsights\\.com/i,
-    /clarity\\.ms/i,
-    /doubleclick\\.net/i,
-    /popads\\.net/i,
-    /popcash\\.net/i,
-    /exoclick\\.com/i,
-    /propellerads\\.com/i,
-    /brightadnetwork\\.com/i,
-    /mc\\.yandex\\.ru/i,
-    /adsterra/i
-  ];
+  try {
+    var noopWindow = { closed: false, location: { href: "about:blank" }, focus: function() {}, close: function() {} };
+    window.open = function() { return noopWindow; };
+  } catch (_e) {}
+
+  var STREAM_EXT_RE = /\\.(m3u8|mpd|m4s|ts|mp4|m4a|m4v|aac|key)(\\?|$|#)/i;
+  var STREAM_HOST_RE = /(flooderrr\\.store|hakunaymatata\\.com|sacdn|\\/sacdn\\/|\\/dash\\/|\\/proxy\\/|\\/mp\\/|orbitcache|premilkyway|sunnybreeze|frostywinds|cloudnestra|shadowlands|trueparadise|goldenkite|wisecanvas|streamhi|streamcdn|vidsrc|vidstream|topcdn|vidplay|megafiles|megacloud)/i;
+  var SAFE_ASSET_RE = /(cdn\\.jsdelivr\\.net|cdn\\.jwplayer\\.com|wsrv\\.nl|image\\.tmdb\\.org|fonts\\.googleapis\\.com|fonts\\.gstatic\\.com|raw\\.githubusercontent\\.com)/i;
 
   function isBlockedUrl(url) {
     if (!url || typeof url !== "string") return false;
-    return BLOCKED_PATTERNS.some(function(re) { return re.test(url); });
+    return /googletagmanager|google-analytics|cloudflareinsights|doubleclick|popads|propeller|adnetwork|yandex/i.test(url);
   }
-
-  // 4. Stream URL Resolver & Rewriter for Vidlink (MPEG-DASH .mpd, .m4s, HLS .m3u8, .ts, .mp4, flooderrr.store, hakunaymatata.com, sacdn)
-  var SAFE_ASSET_RE = /(cdn\\.jsdelivr\\.net|cdn\\.jwplayer\\.com|wsrv\\.nl|image\\.tmdb\\.org|fonts\\.googleapis\\.com|fonts\\.gstatic\\.com|raw\\.githubusercontent\\.com)/i;
-  var STREAM_EXT_RE = /\\.(m3u8|mpd|m4s|ts|mp4|m4a|m4v|aac|key)(\\?|$|#)/i;
-  var STREAM_HOST_RE = /(flooderrr\\.store|hakunaymatata\\.com|sacdn|\\/sacdn\\/|\\/dash\\/|\\/proxy\\/|\\/mp\\/|orbitcache|premilkyway|sunnybreeze|frostywinds|cloudnestra|shadowlands|trueparadise)/i;
 
   function resolveVidlinkStreamUrl(inputUrl) {
     if (!inputUrl || typeof inputUrl !== "string") return null;
     var rawUrl = inputUrl.trim();
     if (!rawUrl || /^(blob:|data:|javascript:|about:)/i.test(rawUrl)) return null;
-
-    // Already routed through Cloudflare Worker proxy
-    if (
-      rawUrl.indexOf(CF_WORKER + "/?") === 0 ||
-      rawUrl.indexOf(CF_WORKER + "?") === 0 ||
-      rawUrl.indexOf("/stream-proxy/") !== -1
-    ) {
-      return null;
-    }
+    if (rawUrl.indexOf(CF_WORKER + "/?") === 0 || rawUrl.indexOf(CF_WORKER + "?") === 0 || rawUrl.indexOf("/stream-proxy/") !== -1) return null;
 
     var locOrigin = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "";
-
-    // Handle root-relative or wrongly-resolved DASH/HLS paths (e.g. /sacdn/dash/... resolved against location.origin or CF_WORKER)
     if (rawUrl.indexOf("/sacdn/") === 0 || rawUrl.indexOf("/dash/") === 0 || rawUrl.indexOf("/proxy/") === 0 || rawUrl.indexOf("/mp/") === 0) {
       rawUrl = (lastMpdOrigin || "https://surge.flooderrr.store") + rawUrl;
     } else if (rawUrl.indexOf(CF_WORKER + "/") === 0) {
@@ -264,22 +231,12 @@ const AD_SHIELD_JS = `(function() {
       var pageRel = rawUrl.slice(locOrigin.length);
       if (pageRel.indexOf("/sacdn/") === 0 || pageRel.indexOf("/dash/") === 0 || pageRel.indexOf("/proxy/") === 0 || pageRel.indexOf("/mp/") === 0) {
         rawUrl = (lastMpdOrigin || "https://surge.flooderrr.store") + pageRel;
-      } else if (/\\.(m4s|mpd)(\\?|$)/i.test(pageRel) && lastMpdBaseDir) {
+      } else if (STREAM_EXT_RE.test(pageRel) && lastMpdBaseDir) {
         rawUrl = lastMpdBaseDir + pageRel.replace(/^\\/+/, "");
-      } else {
-        return null;
-      }
-    } else if (!/^https?:\\/\\//i.test(rawUrl)) {
-      if (/\\.(m4s|mpd)(\\?|$)/i.test(rawUrl) && lastMpdBaseDir) {
-        rawUrl = lastMpdBaseDir + rawUrl.replace(/^\\.?\\//, "");
-      } else {
-        return null;
       }
     }
 
-    if (!/^https?:\\/\\//i.test(rawUrl)) return null;
     if (SAFE_ASSET_RE.test(rawUrl) || isBlockedUrl(rawUrl)) return null;
-
     var isStream = STREAM_EXT_RE.test(rawUrl) || STREAM_HOST_RE.test(rawUrl);
     if (!isStream) return null;
 
@@ -295,42 +252,45 @@ const AD_SHIELD_JS = `(function() {
       }
     } catch (_e) {}
 
+    var isVidcore = false;
+    try {
+      if (typeof window !== "undefined" && window.location) {
+        var h = String(window.location.href || "");
+        if (h.indexOf("/vidcore/") !== -1 || (window.location.hostname && window.location.hostname.indexOf("vidcore") !== -1)) {
+          isVidcore = true;
+        }
+      }
+    } catch (_e) {}
+
+    var proxiedUrl = "";
+    if (isVidcore) {
+      proxiedUrl = CF_WORKER + "/stream-proxy/ref/" + encodeURIComponent(rawUrl);
+    } else {
+      proxiedUrl = CF_WORKER + "/?ref=vidlink&url=" + encodeURIComponent(rawUrl);
+    }
+
     return {
       originalUrl: rawUrl,
-      proxiedUrl: CF_WORKER + "/?ref=vidlink&url=" + encodeURIComponent(rawUrl)
+      proxiedUrl: proxiedUrl
     };
   }
 
-  // 5. Monkey-patch window.fetch
   if (typeof window.fetch === "function") {
     var origFetch = window.fetch;
     window.fetch = function(input, init) {
       try {
         var reqUrl = "";
-        if (typeof input === "string") {
-          reqUrl = input;
-        } else if (typeof URL !== "undefined" && input instanceof URL) {
-          reqUrl = input.toString();
-        } else if (input && typeof input === "object" && typeof input.url === "string") {
-          reqUrl = input.url;
-        }
+        if (typeof input === "string") reqUrl = input;
+        else if (typeof URL !== "undefined" && input instanceof URL) reqUrl = input.toString();
+        else if (input && typeof input === "object" && typeof input.url === "string") reqUrl = input.url;
         var rw = resolveVidlinkStreamUrl(reqUrl);
         if (rw) {
           var newInput = rw.proxiedUrl;
           if (typeof Request !== "undefined" && input instanceof Request) {
-            try {
-              newInput = new Request(rw.proxiedUrl, input);
-            } catch (_re) {
-              newInput = rw.proxiedUrl;
-            }
+            try { newInput = new Request(rw.proxiedUrl, input); } catch (_re) { newInput = rw.proxiedUrl; }
           }
           return origFetch.call(this, newInput, init).then(function(res) {
-            try {
-              Object.defineProperty(res, "url", {
-                get: function() { return rw.originalUrl; },
-                configurable: true
-              });
-            } catch (_e) {}
+            try { Object.defineProperty(res, "url", { get: function() { return rw.originalUrl; }, configurable: true }); } catch (_e) {}
             return res;
           });
         }
@@ -339,7 +299,6 @@ const AD_SHIELD_JS = `(function() {
     };
   }
 
-  // 6. Monkey-patch XMLHttpRequest.prototype.open
   if (typeof XMLHttpRequest !== "undefined" && XMLHttpRequest.prototype && XMLHttpRequest.prototype.open) {
     var origXhrOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url) {
@@ -347,12 +306,7 @@ const AD_SHIELD_JS = `(function() {
         var urlStr = (typeof URL !== "undefined" && url instanceof URL) ? url.toString() : String(url || "");
         var rw = resolveVidlinkStreamUrl(urlStr);
         if (rw) {
-          try {
-            Object.defineProperty(this, "responseURL", {
-              get: function() { return rw.originalUrl; },
-              configurable: true
-            });
-          } catch (_e) {}
+          try { Object.defineProperty(this, "responseURL", { get: function() { return rw.originalUrl; }, configurable: true }); } catch (_e) {}
           var args = Array.prototype.slice.call(arguments);
           args[1] = rw.proxiedUrl;
           return origXhrOpen.apply(this, args);
@@ -362,17 +316,13 @@ const AD_SHIELD_JS = `(function() {
     };
   }
 
-  // 7. Intercept direct HTMLMediaElement.prototype.src assignment for external MP4/stream URLs
   try {
     if (typeof HTMLMediaElement !== "undefined" && HTMLMediaElement.prototype) {
       var srcDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
       if (srcDesc && srcDesc.set && srcDesc.get) {
         Object.defineProperty(HTMLMediaElement.prototype, "src", {
-          configurable: true,
-          enumerable: srcDesc.enumerable,
-          get: function() {
-            return srcDesc.get.call(this);
-          },
+          configurable: true, enumerable: srcDesc.enumerable,
+          get: function() { return srcDesc.get.call(this); },
           set: function(val) {
             var rw = resolveVidlinkStreamUrl(String(val || ""));
             return srcDesc.set.call(this, rw ? rw.proxiedUrl : val);
@@ -382,51 +332,6 @@ const AD_SHIELD_JS = `(function() {
     }
   } catch (_e) {}
 
-  // 7b. Intercept HTMLScriptElement.prototype.src and HTMLIFrameElement.prototype.src setters
-  try {
-    if (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.prototype) {
-      var scriptSrcDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, "src");
-      if (scriptSrcDesc && scriptSrcDesc.set && scriptSrcDesc.get) {
-        Object.defineProperty(HTMLScriptElement.prototype, "src", {
-          configurable: true,
-          enumerable: scriptSrcDesc.enumerable,
-          get: function() { return scriptSrcDesc.get.call(this); },
-          set: function(val) {
-            var s = String(val || "");
-            if (isBlockedUrl(s)) {
-              try {
-                window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_script", url: s }, "*");
-              } catch (e) {}
-              return scriptSrcDesc.set.call(this, "/gtag-shield.js");
-            }
-            return scriptSrcDesc.set.call(this, val);
-          }
-        });
-      }
-    }
-    if (typeof HTMLIFrameElement !== "undefined" && HTMLIFrameElement.prototype) {
-      var iframeSrcDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "src");
-      if (iframeSrcDesc && iframeSrcDesc.set && iframeSrcDesc.get) {
-        Object.defineProperty(HTMLIFrameElement.prototype, "src", {
-          configurable: true,
-          enumerable: iframeSrcDesc.enumerable,
-          get: function() { return iframeSrcDesc.get.call(this); },
-          set: function(val) {
-            var s = String(val || "");
-            if (isBlockedUrl(s)) {
-              try {
-                window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_iframe", url: s }, "*");
-              } catch (e) {}
-              return iframeSrcDesc.set.call(this, "about:blank");
-            }
-            return iframeSrcDesc.set.call(this, val);
-          }
-        });
-      }
-    }
-  } catch (_e) {}
-
-  // 8. Safely sanitize invalid <link rel="preload"> elements without deleting DOM nodes (preventing React hydration error #418)
   function cleanInvalidPreloads() {
     try {
       var safeDataUri = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
@@ -441,103 +346,8 @@ const AD_SHIELD_JS = `(function() {
   }
   if (typeof document !== "undefined" && document.addEventListener) {
     document.addEventListener("DOMContentLoaded", cleanInvalidPreloads);
-  } else {
-    setTimeout(cleanInvalidPreloads, 500);
   }
-
-  var origCreateElement = Document.prototype.createElement;
-  Document.prototype.createElement = function(tagName) {
-    var el = origCreateElement.apply(this, arguments);
-    var tag = String(tagName || "").toLowerCase();
-    if (tag === "script") {
-      var origSetAttr = el.setAttribute;
-      el.setAttribute = function(name, value) {
-        if (String(name).toLowerCase() === "src" && isBlockedUrl(String(value))) {
-          try {
-            window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_script", url: String(value) }, "*");
-          } catch (e) {}
-          return origSetAttr.call(el, "src", "/gtag-shield.js");
-        }
-        return origSetAttr.apply(this, arguments);
-      };
-      try {
-        Object.defineProperty(el, "src", {
-          configurable: true,
-          enumerable: true,
-          get: function() { return el.getAttribute("src") || ""; },
-          set: function(val) {
-            var s = String(val || "");
-            if (isBlockedUrl(s)) {
-              try {
-                window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_script", url: s }, "*");
-              } catch (e) {}
-              return origSetAttr.call(el, "src", "/gtag-shield.js");
-            }
-            return origSetAttr.call(el, "src", s);
-          }
-        });
-      } catch (_e) {}
-    } else if (tag === "iframe") {
-      var origIframeSetAttr = el.setAttribute;
-      el.setAttribute = function(name, value) {
-        if (String(name).toLowerCase() === "src" && isBlockedUrl(String(value))) {
-          try {
-            window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_iframe", url: String(value) }, "*");
-          } catch (e) {}
-          return origIframeSetAttr.call(el, "src", "about:blank");
-        }
-        return origIframeSetAttr.apply(this, arguments);
-      };
-      try {
-        Object.defineProperty(el, "src", {
-          configurable: true,
-          enumerable: true,
-          get: function() { return el.getAttribute("src") || ""; },
-          set: function(val) {
-            var s = String(val || "");
-            if (isBlockedUrl(s)) {
-              try {
-                window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_iframe", url: s }, "*");
-              } catch (e) {}
-              return origIframeSetAttr.call(el, "src", "about:blank");
-            }
-            return origIframeSetAttr.call(el, "src", s);
-          }
-        });
-      } catch (_e) {}
-    } else if (tag === "link") {
-      var origLinkSetAttr = el.setAttribute;
-      el.setAttribute = function(name, value) {
-        var attrName = String(name).toLowerCase();
-        var attrVal = String(value == null ? "" : value).trim();
-        if (attrName === "href" && (!attrVal || attrVal === "null" || attrVal === "undefined" || isBlockedUrl(attrVal))) {
-          if (String(el.getAttribute("rel") || "").toLowerCase() === "preload") {
-            el.removeAttribute("rel");
-          }
-          return;
-        }
-        if (attrName === "rel" && attrVal.toLowerCase() === "preload") {
-          var curHref = el.getAttribute("href");
-          if (curHref !== null && (!curHref.trim() || curHref === "null" || curHref === "undefined" || isBlockedUrl(curHref))) {
-            return;
-          }
-        }
-        return origLinkSetAttr.apply(this, arguments);
-      };
-    } else if (tag === "video" || tag === "source") {
-      var origMediaSetAttr = el.setAttribute;
-      el.setAttribute = function(name, value) {
-        if (String(name).toLowerCase() === "src") {
-          var rw = resolveVidlinkStreamUrl(String(value || ""));
-          if (rw) {
-            return origMediaSetAttr.call(this, name, rw.proxiedUrl);
-          }
-        }
-        return origMediaSetAttr.apply(this, arguments);
-      };
-    }
-    return el;
-  };
+  cleanInvalidPreloads();
 
   try {
     if (typeof document !== "undefined") {
@@ -545,174 +355,101 @@ const AD_SHIELD_JS = `(function() {
       var st = document.createElement("style");
       st.id = "hwto-sub-fix";
       st.textContent = subtitleCss;
-      (document.head || document.documentElement).appendChild(st);
+      if (document.head) document.head.appendChild(st);
     }
   } catch (_e) {}
-
-  try {
-    window.parent.postMessage({ type: "AD_SHIELD_READY", status: "active", timestamp: Date.now() }, "*");
-  } catch (e) {}
-})();\n`;
+})();`;
 
 function sanitizePreloadLinks(html) {
-  // Replace invalid/empty/blocked hrefs with safe 1x1 transparent GIF data URI instead of deleting <link> tags (which causes React 18 hydration error #418)
-  const safeDataUri = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
-  return html.replace(/<link\b[^>]*>/gi, (tag) => {
-    if (!/\brel\s*=\s*(?:["']preload["']|preload\b)/i.test(tag)) {
-      return tag;
-    }
-    const hrefMatch = tag.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i);
-    if (!hrefMatch) {
-      return tag.replace(/<link\b/i, `<link href="${safeDataUri}" `);
-    }
-    const hrefVal = (hrefMatch[1] ?? hrefMatch[2] ?? hrefMatch[3] ?? "").trim();
-    if (
-      !hrefVal ||
-      hrefVal === "null" ||
-      hrefVal === "undefined" ||
-      hrefVal === "about:blank" ||
-      /mc\.yandex\.ru/i.test(hrefVal) ||
-      /\/\/wsrv\.nl\/\?url=https:\/\/image\.tmdb\.org\/t\/p\/w500(?:null|undefined)?(?:&|$)/i.test(hrefVal)
-    ) {
-      return tag.replace(hrefMatch[0], `href="${safeDataUri}"`);
-    }
+  if (!html || typeof html !== "string") return html;
+  return html.replace(/<link\b[^>]*\brel=["']?preload["']?[^>]*>/gi, (tag) => {
+    if (/href=["']\s*["']/i.test(tag)) return "";
+    if (/yandex|analytics|googletagmanager|doubleclick/i.test(tag)) return "";
     return tag;
   });
 }
 
+function sanitizeVidlinkHtml(html) {
+  let out = html;
+  out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi, "");
+  out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
+  out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js");
+  out = out.replace(/https:\/\/mc\.yandex\.ru\/watch\/\d+/gi, "");
+
+  out = out.replace(/\\"limitAds\\":false/g, '\\"limitAds\\":true');
+  out = out.replace(/"limitAds":false/g, '"limitAds":true');
+  out = out.replace(/\\"referer\\":(null|\\"[^\\"]*\\")/g, '\\"referer\\":\\"https://vidlink.pro/\\"');
+
+  out = sanitizePreloadLinks(out);
+
+  const headInject = `
+<link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
+<link rel="dns-prefetch" href="${CF_WORKER_URL}" />
+<style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
+<script src="/gtag-shield.js"></script>
+<script id="hwto-vidlink-interceptor" src="/gtag-shield.js"></script>
+`;
+  if (out.includes("</head>")) {
+    out = out.replace("</head>", headInject + "</head>");
+  } else {
+    out = headInject + out;
+  }
+  return out;
+}
+
 function sanitizeVidcoreHtml(html) {
   let out = html;
-
-  // 1. Force SSR ad prop to false in Next.js flight payload without altering DOM structure
   out = out.replace(/\\"ad\\":true/g, '\\"ad\\":false');
   out = out.replace(/"ad":true/g, '"ad":false');
-
-  // 2. Ensure "from" prop matches https://vidcore.io exactly without trailing slash (preserving cryptographic integrity)
   out = out.replace(
-    /\\"from\\":(null|\\"(?!https:\/\/vidcore\.io)[^\\"]*\\")/g,
+    /\\"from\\":(null|\\"(?!https:\/\/vidcore\.io)[^\\]*\\")/g,
     '\\"from\\":\\"https://vidcore.io\\"',
   );
   out = out.replace(/\\"from\\":\\"https:\/\/vidcore\.io\/\\"/g, '\\"from\\":\\"https://vidcore.io\\"');
-
-  // 3. Replace Google Tag Manager script URL in BOTH <head> and RSC payload with local /gtag-shield.js
-  out = out.replace(
-    /https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi,
-    "/gtag-shield.js",
-  );
-
-  // 4. Strip Cloudflare edge-injected beacon script
-  out = out.replace(
-    /<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi,
-    "",
-  );
-  out = out.replace(
-    /<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi,
-    "",
-  );
+  out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js");
+  out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi, "");
+  out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
 
   out = sanitizePreloadLinks(out);
 
-  // 5. Inject RTL / BiDi subtitle CSS fix so Kurdish & Arabic punctuation and wrapping display properly
-  const subtitleCss = `<style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>`;
+  const headInject = `
+<link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
+<link rel="dns-prefetch" href="${CF_WORKER_URL}" />
+<style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
+<script src="/gtag-shield.js"></script>
+`;
   if (out.includes("</head>")) {
-    out = out.replace("</head>", `${subtitleCss}</head>`);
-  }
-
-  return out;
-}
-
-function sanitizeVidlinkHtml(html) {
-  let out = html;
-
-  // 1. Strip Cloudflare edge-injected beacon script to prevent CORS failure
-  out = out.replace(
-    /<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi,
-    "",
-  );
-  out = out.replace(
-    /<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi,
-    "",
-  );
-
-  // 2. Neutralize Google Tag Manager, Microsoft Clarity, and Yandex Metrika with local /gtag-shield.js
-  out = out.replace(
-    /https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi,
-    "/gtag-shield.js",
-  );
-  out = out.replace(/https:\/\/www\.clarity\.ms\/tag\/[a-zA-Z0-9_-]+/gi, "/gtag-shield.js");
-  out = out.replace(/https:\/\/www\.clarity\.ms\/tag\//gi, "/gtag-shield.js?c=");
-  out = out.replace(/https:\/\/mc\.yandex\.ru\/metrika\/tag\.js/gi, "/gtag-shield.js");
-  out = out.replace(
-    /https:\/\/mc\.yandex\.ru\/watch\/\d+/gi,
-    "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==",
-  );
-
-  // 3. Remove Yandex <noscript> tags from both HTML and RSC flight payload to prevent React 18 hydration error #418
-  out = out.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, "");
-  out = out.replace(/\[\\"\\$\\",\\"noscript\\",null,\{\\"children\\":\[\\"\\$\\",\\"div\\"[^\]]*\]\}\]\}/g, "null");
-
-  // 4. Force limitAds to true in Next.js SSR flight payload so ad components are skipped
-  out = out.replace(/\\"limitAds\\":false/g, '\\"limitAds\\":true');
-  out = out.replace(/"limitAds":false/g, '"limitAds":true');
-
-  // 5. Force referer to vidlink.pro
-  out = out.replace(
-    /\\"referer\\":(null|\\"[^\\"]*\\")/g,
-    '\\"referer\\":\\"https://vidlink.pro/\\"',
-  );
-
-  // 6. Safely rewrite preload links (preserving DOM nodes for React hydration)
-  out = sanitizePreloadLinks(out);
-
-  // 7. Inject Client-side Interceptor & subtitle fix after </html> so React head/body hydration is completely unperturbed
-  const earlyInterceptor = `<script id="hwto-vidlink-interceptor">${AD_SHIELD_JS}</script>`;
-  const subtitleCss = `<style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>`;
-  if (out.includes("</html>")) {
-    out = out.replace("</html>", `</html>${subtitleCss}${earlyInterceptor}`);
+    out = out.replace("</head>", headInject + "</head>");
   } else {
-    out += `${subtitleCss}${earlyInterceptor}`;
+    out = headInject + out;
   }
-
   return out;
 }
 
-function patchPlayerChunk(jsCode, pathname) {
+function patchPlayerChunk(jsCode, pathname = "") {
   let out = jsCode;
+  if (pathname.includes("/webpack-")) out = AD_SHIELD_JS + out;
 
-  // Prepend Ad-Shield to webpack runtime chunk so it executes before any page component
-  if (pathname.includes("/webpack-")) {
-    out = AD_SHIELD_JS + out;
-  }
-
-  // 1. Neutralize anti-DevTools / slow-CPU console.table freeze check ("Date.now()-a<=10")
+  // Anti-DevTools / slow-CPU console.table check
   if (out.includes("return console.table(t),console.clear(),Date.now()-a<=10")) {
-    out = out.replace(
-      "return console.table(t),console.clear(),Date.now()-a<=10",
-      "return!0",
-    );
+    out = out.replace("return console.table(t),console.clear(),Date.now()-a<=10", "return!0");
   }
 
-  // 2. Neutralize Sandbox detector ("Please Disable Sandbox") in both VidCore and VidLink
+  // Sandbox bypass
   if (out.includes("window.self!==window.top")) {
-    out = out.replace(
-      "if(!tI.current&&(tI.current=!0,window.self!==window.top))",
-      "if(!1)",
-    );
+    out = out.replace("if(!tI.current&&(tI.current=!0,window.self!==window.top))", "if(!1)");
     out = out.replace(/if\(window\.self!==window\.top\)/g, "if(!1)");
   }
   if (out.includes("Please Disable Sandbox")) {
     out = out.replace(/<h1>Please Disable Sandbox<\/h1>/g, "");
   }
 
-  // 3. Force component prop ad (h) to false at destructuring (VidCore)
+  // Force component ad prop to false
   if (out.includes("let{en:l,from:b,ad:h,")) {
-    out = out.replace(
-      "let{en:l,from:b,ad:h,",
-      "let h=!1,{en:l,from:b,ad:_h_ignored,",
-    );
+    out = out.replace("let{en:l,from:b,ad:h,", "let h=!1,{en:l,from:b,ad:_h_ignored,");
   }
 
-  // 3b. Force limitAds:true and enableDirectLinks:false in VidLink chunks
+  // LimitAds in VidLink chunks
   if (out.includes("let{data:t,limitAds:a,referer:")) {
     out = out.replace(
       /let\{data:t,limitAds:a,referer:([a-zA-Z0-9_$]+)\}=e/g,
@@ -722,152 +459,90 @@ function patchPlayerChunk(jsCode, pathname) {
   if (out.includes("enableDirectLinks:g=!1")) {
     out = out.replace(/enableDirectLinks:g=!1/g, "enableDirectLinks:_g_ignored=!1,g=!1");
   }
-  if (out.includes("https://brightadnetwork.com/jump/next.php")) {
-    out = out.split("https://brightadnetwork.com/jump/next.php").join("about:blank");
-  }
 
-  // 4. Route VidCore XHR loader and decoded stream URL through Cloudflare Worker
-  // Keep tl.current.url intact during `.m3u8` / `.mp4` extension checks, then rewrite XHR requests
-  // directly to CF_WORKER_URL/stream-proxy/ref/${encodeURIComponent(url)}
+  // Route stream URL through Cloudflare Worker + failover flag
   if (out.includes("await A,tl.current=T[0];")) {
     out = out.replace(
       "await A,tl.current=T[0];",
       `await A,tl.current=T[0];window.__CF_WORKER_URL=${JSON.stringify(CF_WORKER_URL)};window.__VC_STREAM_ERR=!1;`,
     );
   }
-
-  // Flag fatal stream HTTP errors (e.g. 404 on .m3u8) immediately so VidCore switches sub-servers in <100ms
   if (out.includes('console.error("".concat(r," while loading ").concat(e.url))')) {
     out = out.replace(
       'console.error("".concat(r," while loading ").concat(e.url))',
       '(window.__VC_STREAM_ERR=!0,console.error("".concat(r," while loading ").concat(e.url)))',
     );
   }
-  if (out.includes('eO.error("".concat(r," while loading ").concat(e.url))')) {
+
+  // Subtitle custom sub_url prioritization
+  if (out.includes("localeCompare(t.track.label)),el(R))")) {
     out = out.replace(
-      'eO.error("".concat(r," while loading ").concat(e.url))',
-      '(window.__VC_STREAM_ERR=!0,eO.error("".concat(r," while loading ").concat(e.url)))',
+      "localeCompare(t.track.label)),el(R))",
+      'localeCompare(t.track.label));try{var _sp=new URLSearchParams(window.location.search),_su=_sp.get("sub_url"),_sl=_sp.get("sub")||"ku";if(_su&&tb.current){R.forEach(function(x){x.selected=!1;});var _lbl=_sl==="ar"?"العربية (hwto-kurd)":"کوردی (hwto-kurd)";var _tr=tb.current.addTextTrack("subtitles",_lbl);_tr.xid="custom_"+Date.now();_tr.srclang=_sl;R.unshift({url:_su,track:_tr,encoding:"utf8",downloaded:!1,selected:!0});_=!0;}}catch(_err){}R.length>0&&el(R)',
     );
   }
 
-  // 4b. Prevent infinite spinner if an upstream m3u8/mp4 returns 404/error (instant failover to next VidCore sub-server)
-  if (
-    out.includes(
-      "let r=setInterval(()=>{if(t.duration>0)if(e){var d;(null==t||null==(d=t.player)?void 0:d.initialized)&&(clearInterval(r),a())}else clearInterval(r),a()},100)",
-    )
-  ) {
-    out = out.replace(
-      "let r=setInterval(()=>{if(t.duration>0)if(e){var d;(null==t||null==(d=t.player)?void 0:d.initialized)&&(clearInterval(r),a())}else clearInterval(r),a()},100)",
-      "let _st=Date.now(),r=setInterval(()=>{if(t.duration>0){if(e){var d;(null==t||null==(d=t.player)?void 0:d.initialized)&&(clearInterval(r),a())}else clearInterval(r),a()}else if(window.__VC_STREAM_ERR||Date.now()-_st>7000){clearInterval(r);try{e$(s=>s.map(x=>(x.selected&&(x.failed=!0),x)))}catch(_e){}}},100)",
-    );
-  }
-  if (
-    out.includes(
-      "let t=setInterval(()=>{tb.current.duration>0&&(clearInterval(t),e())},100)",
-    )
-  ) {
-    out = out.replace(
-      "let t=setInterval(()=>{tb.current.duration>0&&(clearInterval(t),e())},100)",
-      "let _st=Date.now(),t=setInterval(()=>{if(tb.current.duration>0){clearInterval(t),e()}else if(tb.current.error||Date.now()-_st>7000){clearInterval(t);try{e$(s=>s.map(x=>(x.selected&&(x.failed=!0),x)))}catch(_e){}}},100)",
-    );
-  }
-
-  // If MP4 direct assignment is used on video element (tb.current.src=tl.current.url)
-  if (out.includes("tb.current.src=tl.current.url")) {
-    out = out.replace(
-      "tb.current.src=tl.current.url",
-      `tb.current.src=(/^https?:\\/\\//i.test(tl.current.url)&&!tl.current.url.includes("/stream-proxy/")?${JSON.stringify(CF_WORKER_URL)}+"/stream-proxy/ref/"+encodeURIComponent(tl.current.url):tl.current.url)`,
-    );
-  }
-
-  // Rewrite all XHR `.open("GET", t.url, !0)` calls in chunk 281 (Accelerated HLS & hls.js fallback)
-  if (out.includes('a.open("GET",t.url,!0)')) {
-    out = out.replace(
-      /a\.open\("GET",t\.url,!0\)/g,
-      `(function(){if(/^https?:\\/\\//i.test(t.url)&&!t.url.includes("/stream-proxy/")){t.url=${JSON.stringify(CF_WORKER_URL)}+"/stream-proxy/ref/"+encodeURIComponent(t.url);}})(),a.open("GET",t.url,!0)`,
-    );
-  }
-  if (out.includes('e.readyState||e.open("GET",t.url,!0)')) {
-    out = out.replace(
-      /e\.readyState\|\|e\.open\("GET",t\.url,!0\)/g,
-      `e.readyState||((function(){if(/^https?:\\/\\//i.test(t.url)&&!t.url.includes("/stream-proxy/")){t.url=${JSON.stringify(CF_WORKER_URL)}+"/stream-proxy/ref/"+encodeURIComponent(t.url);}})(),e.open("GET",t.url,!0))`,
-    );
-  }
-  if (out.includes('a.open("GET",t.url,!0),d(a,t.url)')) {
-    out = out.replace(
-      /a\.open\("GET",t\.url,!0\),d\(a,t\.url\)/g,
-      `(function(){if(/^https?:\\/\\//i.test(t.url)&&!t.url.includes("/stream-proxy/")){t.url=${JSON.stringify(CF_WORKER_URL)}+"/stream-proxy/ref/"+encodeURIComponent(t.url);}})(),a.open("GET",t.url,!0),d(a,t.url)`,
-    );
-  }
-
-  // 5. Inject custom external subtitle (`?sub_url=...&sub_label=...`) into VidCore's `/wyzie?` subtitle list
-  // Run inside `.finally(...)` AFTER `R.sort(...)` and unselect any previous track so the custom subtitle
-  // is always at the top of the subtitle menu and guaranteed to be active even if `/wyzie?` fails.
-  if (
-    out.includes(
-      "R.length>0&&(R.sort((e,t)=>e.track.label.localeCompare(t.track.label)),el(R))",
-    )
-  ) {
-    out = out.replace(
-      "R.length>0&&(R.sort((e,t)=>e.track.label.localeCompare(t.track.label)),el(R))",
-      'R.sort((e,t)=>e.track.label.localeCompare(t.track.label));try{var _sp=new URLSearchParams(window.location.search),_su=_sp.get("sub_url"),_sl=_sp.get("sub")||"ku";if(_su&&tb.current){R.forEach(function(x){x.selected=!1;});var _lbl=_sl==="ar"?"العربية (hwto-kurd)":"کوردی (hwto-kurd)";var _tr=tb.current.addTextTrack("subtitles",_lbl);_tr.xid="custom_"+Date.now();_tr.srclang=_sl;R.unshift({url:_su,track:_tr,encoding:"utf8",downloaded:!1,selected:!0});_=!0;}}catch(_err){}R.length>0&&el(R)',
-    );
-  }
-
-  // 5b. Fix VidCore subtitle rendering:
-  // - Replace `whiteSpace:"nowrap"` with `whiteSpace:"pre-wrap",maxWidth:"92vw",margin:"0 auto",unicodeBidi:"plaintext"` so long lines wrap cleanly and RTL punctuation (Arabic/Kurdish) renders in the right order
+  // Subtitle RTL rendering fix
   if (out.includes('sx:{whiteSpace:"nowrap",textAlign:"center"}')) {
     out = out.replace(
       'sx:{whiteSpace:"nowrap",textAlign:"center"}',
       'sx:{whiteSpace:"pre-wrap",maxWidth:"92vw",margin:"0 auto",textAlign:"center",unicodeBidi:"plaintext"}',
     );
   }
-  // - Prevent VidCore's overly broad domain regex from deleting normal dialogue lines like "Mr.Smith" or "Wait.What"
-  if (
-    out.includes(
-      '/\\b[a-zA-Z0-9][-a-zA-Z0-9]*\\.[a-zA-Z]{2,}\\b/.test(d[t].text)',
-    )
-  ) {
+
+  // Prevent overly broad domain regex from dropping dialogue lines
+  if (out.includes('/\\b[a-zA-Z0-9][-a-zA-Z0-9]*\\.[a-zA-Z]{2,}\\b/.test(d[t].text)')) {
     out = out.replace(
       '/\\b[a-zA-Z0-9][-a-zA-Z0-9]*\\.[a-zA-Z]{2,}\\b/.test(d[t].text)',
-      '/\\b(opensubtitles|subdl|subscene|yifysubtitles|addic7ed)\\.(org|com|net)\\b/i.test(d[t].text)',
+      '/(?:https?:\\/\\/|www\\.)[a-zA-Z0-9][-a-zA-Z0-9]*\\.[a-zA-Z]{2,}\\b/i.test(d[t].text)',
     );
   }
 
-  // 5c. Fix VidLink external subtitle format detection so both `.vtt` and `.srt` files work via `?sub_file=`
-  if (
-    out.includes(
-      'S&&(0,l.jsx)(i.fQ8,{src:S,kind:"subtitles",label:_,lang:"und",type:"vtt",default:!0})',
-    )
-  ) {
+  // Chunk 281 Domain Lock & 555 error interception
+  if (out.includes('.map(function(e){return String.fromCharCode(30^e)}).join("")]=window')) {
     out = out.replace(
-      'S&&(0,l.jsx)(i.fQ8,{src:S,kind:"subtitles",label:_,lang:"und",type:"vtt",default:!0})',
-      'S&&(0,l.jsx)(i.fQ8,{src:S,kind:"subtitles",label:_,lang:"und",type:S&&/\\.srt(\\?|$)/i.test(S)?"srt":"vtt",default:!0})',
+      '.map(function(e){return String.fromCharCode(30^e)}).join("")]=window',
+      '.map(function(e){return String.fromCharCode(30^e)}).join("")]=window.__fakeWin||window',
     );
   }
-
-  // 7. Intercept sub-server error states (e.g. 555, 404, or any error code) in VidCore VM and emit status event to parent
-  if (out.includes('String.fromCharCode(30^e)}).join("")]=Z')) {
+  if (out.includes('.map(function(e){return String.fromCharCode(30^e)}).join("")]=document')) {
     out = out.replace(
-      'String.fromCharCode(30^e)}).join("")]=Z',
-      'String.fromCharCode(30^e)}).join("")]=function(v){if(typeof v==="number"&&v!==0&&v!==1&&v!==2){try{window.parent.postMessage({event:"status",data:v},"*")}catch(_e){}}return Z(v)}',
+      '.map(function(e){return String.fromCharCode(30^e)}).join("")]=document',
+      '.map(function(e){return String.fromCharCode(30^e)}).join("")]=window.__fakeDoc||document',
+    );
+  }
+  if (out.includes('.map(function(e){return String.fromCharCode(30^e)}).join("")]=Z')) {
+    out = out.replace(
+      '.map(function(e){return String.fromCharCode(30^e)}).join("")]=Z',
+      '.map(function(e){return String.fromCharCode(30^e)}).join("")]=function(v){if(v===555){console.warn("[VidCore] Blocked 555 error");return;}if(typeof v==="number"&&v!==0&&v!==1&&v!==2){try{window.parent.postMessage({event:"status",data:v},"*")}catch(_e){}}return Z(v)}',
+    );
+  }
+  if (out.includes('e.charCodeAt(0)-3)}).join("")]=window')) {
+    out = out.replace(
+      'e.charCodeAt(0)-3)}).join("")]=window',
+      'e.charCodeAt(0)-3)}).join("")]=window.__fakeWin||window',
+    );
+  }
+  if (out.includes('e.charCodeAt(0)-3)}).join("")]=document')) {
+    out = out.replace(
+      'e.charCodeAt(0)-3)}).join("")]=document',
+      'e.charCodeAt(0)-3)}).join("")]=window.__fakeDoc||document',
     );
   }
 
-  // 8. Strip ad & analytics script URLs inside player bundle
   const adScripts = [
-    "//kg.chiveyfewmets.com/rzgJYYsrJpx2H/kNmgM",
-    "//cl.gogtib.com/rWXjzriQHyvUUDB/rwOme",
-    "https://umami.vidcore.net/script.js",
+    "//kg." + "chiveyfewmets.com/rzgJYYsrJpx2H/kNmgM",
+    "//cl." + "gogtib.com/rWXjzriQHyvUUDB/rwOme",
+    "https://" + "umami.vidcore.net/script.js"
   ];
   for (const s of adScripts) {
-    if (out.includes(s)) {
-      out = out.split(s).join("");
-    }
+    if (out.includes(s)) out = out.split(s).join("");
   }
 
   return out;
 }
+
+const staticChunkCache = new Map();
 
 function getCleanUserAgent(rawUa) {
   if (!rawUa || /node|curl|python|axios|undici/i.test(rawUa)) {
@@ -877,32 +552,21 @@ function getCleanUserAgent(rawUa) {
 }
 
 async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, useScrapeDoFallback = true) {
-  const targetUrl = `${origin}${targetPathAndQuery}`;
+  const targetUrl = origin + targetPathAndQuery;
   const method = req.method || "GET";
-
   const forwardHeaders = {
     "User-Agent": getCleanUserAgent(req.headers["user-agent"]),
     Accept: req.headers["accept"] || "*/*",
-    "Accept-Language":
-      req.headers["accept-language"] || "en-US,en;q=0.9,ar;q=0.8",
+    "Accept-Language": req.headers["accept-language"] || "en-US,en;q=0.9,ar;q=0.8",
+    Connection: "keep-alive",
     Referer: `${origin}/`,
     Origin: origin,
   };
-
-  const optionalHeaders = [
-    "x-csrf-token",
-    "content-type",
-    "rsc",
-    "next-router-state-tree",
-    "next-router-prefetch",
-    "next-url",
-  ];
+  const optionalHeaders = ["x-csrf-token", "content-type", "rsc", "next-router-state-tree", "next-router-prefetch", "next-url"];
   for (const h of optionalHeaders) {
-    if (req.headers[h]) {
-      forwardHeaders[h] = req.headers[h];
-    }
+    if (req.headers[h]) forwardHeaders[h] = req.headers[h];
   }
-  // Forward any custom headers and cookies used by VidLink / VidCore APIs
+
   for (const [k, v] of Object.entries(req.headers || {})) {
     const lower = k.toLowerCase();
     if (
@@ -915,13 +579,9 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     }
   }
 
-  // If this is an APA91ywF decryption request, set Referer to the actual movie/tv page path
   if (targetPathAndQuery.startsWith("/APA91ywF")) {
-    const incomingRef = String(req.headers["referer"] || "");
-    const movieMatch = incomingRef.match(/\/(movie|tv)\/\d+/);
-    if (movieMatch) {
-      forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}${movieMatch[0]}`;
-    }
+    forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
+    forwardHeaders["Origin"] = VIDCORE_ORIGIN;
   }
 
   const isHtmlNavigation =
@@ -941,17 +601,10 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     sessionId,
   };
 
-  // Always route /APA91ywF decryption endpoints through Scrape.do to avoid AWS datacenter Cloudflare 403 blocks
-  if (useScrapeDoFallback && isDecryptionRoute && hasScrapeTokens) {
-    return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
-  }
-
   if (
-    useScrapeDoFallback &&
-    config.mode === "scrape_do" &&
-    (method === "GET" || method === "POST") &&
-    isHtmlNavigation &&
-    hasScrapeTokens
+    config.mode !== "direct" &&
+    hasScrapeTokens &&
+    (isHtmlNavigation || isDecryptionRoute)
   ) {
     return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
   }
@@ -960,39 +613,21 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     const fetchOptions = {
       method,
       headers: forwardHeaders,
-      redirect: "follow",
     };
-    if (
-      method !== "GET" &&
-      method !== "HEAD" &&
-      bodyBuffer &&
-      bodyBuffer.length > 0
-    ) {
-      fetchOptions.body = bodyBuffer;
-    }
-
+    if (method === "POST" && bodyBuffer && bodyBuffer.length > 0) fetchOptions.body = bodyBuffer;
     const directRes = await fetch(targetUrl, fetchOptions);
-
     if (
       useScrapeDoFallback &&
-      (directRes.status === 403 ||
-        directRes.status === 503 ||
-        directRes.status === 429) &&
+      (directRes.status === 403 || directRes.status === 503 || directRes.status === 429) &&
       config.mode !== "direct" &&
       (method === "GET" || method === "POST") &&
       hasScrapeTokens
     ) {
       return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
     }
-
     return directRes;
   } catch (err) {
-    if (
-      useScrapeDoFallback &&
-      config.mode !== "direct" &&
-      (method === "GET" || method === "POST") &&
-      hasScrapeTokens
-    ) {
+    if (useScrapeDoFallback && config.mode !== "direct" && (method === "GET" || method === "POST") && hasScrapeTokens) {
       return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
     }
     throw err;
@@ -1001,10 +636,8 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
 
 function readRequestBody(req) {
   if (req.body && Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
-  if (req.body && typeof req.body === "string")
-    return Promise.resolve(Buffer.from(req.body));
-  if (req.body && typeof req.body === "object")
-    return Promise.resolve(Buffer.from(JSON.stringify(req.body)));
+  if (req.body && typeof req.body === "string") return Promise.resolve(Buffer.from(req.body));
+  if (req.body && typeof req.body === "object") return Promise.resolve(Buffer.from(JSON.stringify(req.body)));
   return new Promise((resolve, reject) => {
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
@@ -1020,87 +653,81 @@ async function handleVidcoreProxy(req, res) {
     let pathname = parsedUrl.pathname;
     const search = parsedUrl.search || "";
 
-    // CORS preflight
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "*",
+        "Access-Control-Max-Age": "86400",
       });
       return res.end();
     }
 
-    // 1. Serve Ad-Shield script as /gtag-shield.js
     if (pathname === "/gtag-shield.js") {
       res.writeHead(200, {
         "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "no-store",
+        "Cache-Control": "public, max-age=31536000, immutable",
         "Access-Control-Allow-Origin": "*",
       });
       return res.end(AD_SHIELD_JS, "utf8");
     }
 
-    // 2. Fallback Redirect (302) for /stream-proxy/* to Cloudflare Worker
-    if (pathname.startsWith("/stream-proxy/")) {
-      const m = pathname.match(
-        /^\/stream-proxy\/(ref|noref)\/(https?)\/([^/]+)(\/.*)?$/,
-      );
-      let workerTarget;
-      if (m) {
-        const refMode = m[1];
-        const scheme = m[2];
-        const upHost = m[3];
-        const restPath = m[4] || "/";
-        const rawStreamUrl = `${scheme}://${upHost}${restPath}${search}`;
-        workerTarget = `${CF_WORKER_URL}/stream-proxy/${refMode}/${encodeURIComponent(rawStreamUrl)}`;
-      } else {
-        workerTarget = `${CF_WORKER_URL}${pathname}${search}`;
+    if (pathname.startsWith("/stream-proxy/ref/")) {
+      let rawTarget = pathname.slice("/stream-proxy/ref/".length) + search;
+      if (rawTarget.startsWith("https/")) {
+        rawTarget = "https://" + rawTarget.slice(6);
+      } else if (rawTarget.startsWith("http/")) {
+        rawTarget = "http://" + rawTarget.slice(5);
+      } else if (!rawTarget.startsWith("http://") && !rawTarget.startsWith("https://")) {
+        try {
+          const dec = decodeURIComponent(rawTarget);
+          if (dec.startsWith("http")) rawTarget = dec;
+        } catch (_e) {}
       }
+      const redirectUrl = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(rawTarget)}`;
       res.writeHead(302, {
-        Location: workerTarget,
+        Location: redirectUrl,
         "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-store",
       });
       return res.end();
     }
 
-    // 3. Support /embed/movie/... or /embed/tv/...
-    if (pathname.startsWith("/embed/")) {
-      const cleanTarget = pathname.replace(/^\/embed/, "") + search;
-      res.writeHead(302, { Location: cleanTarget });
-      return res.end();
+    let origin = VIDCORE_ORIGIN;
+    let targetPath = pathname;
+
+    if (pathname.startsWith("/vidlink/")) {
+      origin = VIDLINK_ORIGIN;
+      targetPath = pathname.slice("/vidlink".length) || "/";
+    } else if (pathname.startsWith("/vidcore/")) {
+      origin = VIDCORE_ORIGIN;
+      targetPath = pathname.slice("/vidcore".length) || "/";
+    } else {
+      const incomingRef = String(req.headers["referer"] || "");
+      if (incomingRef.includes("/vidlink/")) origin = VIDLINK_ORIGIN;
+      else origin = VIDCORE_ORIGIN;
     }
 
-    // 4. Support /vidcore/movie/... or /vidcore/tv/...
-    let forceVidlink = false;
-    if (pathname.startsWith("/vidcore/")) {
-      pathname = pathname.replace(/^\/vidcore/, "");
-    } else if (pathname.startsWith("/vidlink/")) {
-      pathname = pathname.replace(/^\/vidlink/, "");
-      forceVidlink = true;
+    // In-memory Caching for Static Assets / Chunks (normalized across prefixes)
+    const isChunkStaticPath =
+      targetPath.startsWith("/_next/static/") ||
+      pathname.startsWith("/_next/static/");
+
+    if (isChunkStaticPath && req.method === "GET") {
+      const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
+      if (staticChunkCache.has(cacheKey)) {
+        const cached = staticChunkCache.get(cacheKey);
+        res.writeHead(200, {
+          "Content-Type": cached.contentType,
+          "Cache-Control": "public, max-age=31536000, immutable",
+          "Access-Control-Allow-Origin": "*",
+        });
+        return res.end(cached.body);
+      }
     }
 
-    // Determine whether this sub-asset request belongs to VidLink or VidCore based on Referer
-    const referer = String(req.headers["referer"] || "");
-    const isFromVidlink = forceVidlink || referer.includes("/vidlink/");
-    const targetOrigin = isFromVidlink ? VIDLINK_ORIGIN : VIDCORE_ORIGIN;
+    const bodyBuffer = await readRequestBody(req);
+    const upstreamRes = await fetchFromUpstream(origin, targetPath + search, req, bodyBuffer, true);
 
-    const isPlayerRoute =
-      pathname.startsWith("/movie/") || pathname.startsWith("/tv/");
-    const isChunkRoute = pathname.startsWith("/_next/static/chunks/");
-
-    const reqBody =
-      req.method !== "GET" && req.method !== "HEAD"
-        ? await readRequestBody(req)
-        : null;
-
-    const upstreamRes = await fetchFromUpstream(
-      targetOrigin,
-      pathname + search,
-      req,
-      reqBody,
-      !isFromVidlink,
-    );
     const contentType =
       upstreamRes.headers.get("content-type") || "application/octet-stream";
 
@@ -1110,66 +737,66 @@ async function handleVidcoreProxy(req, res) {
       "X-AdShield": "Active",
     };
 
-    // Forward Set-Cookie headers if returned by upstream/Scrape.do
     const setCookie = upstreamRes.headers.get("set-cookie");
-    if (setCookie) {
-      responseHeaders["Set-Cookie"] = setCookie;
-    }
+    if (setCookie) responseHeaders["Set-Cookie"] = setCookie;
 
-    const cacheControl = upstreamRes.headers.get("cache-control");
-    if (cacheControl && !isPlayerRoute && !isChunkRoute) {
-      responseHeaders["Cache-Control"] = cacheControl;
-    } else {
-      responseHeaders["Cache-Control"] = "no-store";
-    }
-
-    // Transform HTML / RSC payloads to strip ads and inject Ad-Shield
-    if (
+    const isHtmlRoute =
       contentType.includes("text/html") ||
-      contentType.includes("text/x-component") ||
-      isPlayerRoute
-    ) {
+      targetPath.startsWith("/movie/") ||
+      targetPath.startsWith("/tv/") ||
+      targetPath.startsWith("/embed/");
+
+    if (isHtmlRoute) {
+      const isFromVidlink = origin === VIDLINK_ORIGIN;
       const rawText = await upstreamRes.text();
-      const cleaned = isFromVidlink
-        ? sanitizeVidlinkHtml(rawText)
-        : sanitizeVidcoreHtml(rawText);
+      const cleaned = isFromVidlink ? sanitizeVidlinkHtml(rawText) : sanitizeVidcoreHtml(rawText);
+      responseHeaders["Cache-Control"] = "no-cache";
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(cleaned, "utf8");
     }
 
-    // Transform JS chunks to disable Sandbox check, DevTools freeze check, ad scripts, and route streams to CF Worker
-    if (
-      isChunkRoute ||
-      (contentType.includes("javascript") && pathname.includes("/_next/"))
-    ) {
+    const isChunkRoute =
+      isChunkStaticPath ||
+      (contentType.includes("javascript") && (pathname.includes("/_next/") || targetPath.includes("/_next/")));
+
+    if (isChunkRoute) {
       const rawJs = await upstreamRes.text();
-      const patchedJs = patchPlayerChunk(rawJs, pathname);
+      const patchedJs = patchPlayerChunk(rawJs, targetPath);
+      responseHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
+      const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
+      staticChunkCache.set(cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(patchedJs, "utf8");
     }
 
-    // Binary / JSON / WASM / Subtitle passthrough
+    // Media streaming optimization for .ts / .m4s / .mp4 / video streams
+    const isMediaSegment =
+      /\.(ts|m4s|mp4|m4a|m4v)(\?|$)/i.test(targetPath) ||
+      /\.(ts|m4s|mp4|m4a|m4v)(\?|$)/i.test(pathname) ||
+      contentType.includes("video/");
+
+    if (isMediaSegment) {
+      responseHeaders["Cache-Control"] = "public, max-age=3600";
+    }
+
+    if (upstreamRes.body && typeof Readable.fromWeb === "function" && req.method !== "HEAD") {
+      res.writeHead(upstreamRes.status, responseHeaders);
+      return Readable.fromWeb(upstreamRes.body).pipe(res);
+    }
+
     const arrayBuffer = await upstreamRes.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     res.writeHead(upstreamRes.status, responseHeaders);
     return res.end(buffer);
   } catch (err) {
     if (!res.headersSent) {
-      res.writeHead(502, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
-      });
+      res.writeHead(502, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
       res.end(JSON.stringify({ ok: false, error: err.message }));
     }
   }
 }
 
-// Vercel Serverless Function Configuration: Disable body parser to preserve raw/binary payloads
-const vercelConfig = {
-  api: {
-    bodyParser: false,
-  },
-};
+const vercelConfig = { api: { bodyParser: false } };
 
 module.exports = handleVidcoreProxy;
 module.exports.default = handleVidcoreProxy;
@@ -1177,8 +804,12 @@ module.exports.config = vercelConfig;
 module.exports.handleVidcoreProxy = handleVidcoreProxy;
 module.exports.CF_WORKER_URL = CF_WORKER_URL;
 module.exports.AD_SHIELD_JS = AD_SHIELD_JS;
+module.exports.sanitizeVidcoreHtml = sanitizeVidcoreHtml;
 module.exports.sanitizeVidlinkHtml = sanitizeVidlinkHtml;
 module.exports.sanitizePreloadLinks = sanitizePreloadLinks;
 module.exports.getScrapeDoSessionId = getScrapeDoSessionId;
 module.exports.getScrapeDoTokens = getScrapeDoTokens;
 module.exports.fetchViaScrapeDoWithRotation = fetchViaScrapeDoWithRotation;
+module.exports.patchPlayerChunk = patchPlayerChunk;
+module.exports.staticChunkCache = staticChunkCache;
+module.exports.getSessionTokenIndex = getSessionTokenIndex;

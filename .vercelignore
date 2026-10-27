@@ -1,0 +1,47 @@
+# Dependencies
+node_modules
+.npm
+
+# Version control
+.git
+.github
+.gitignore
+
+# Environment & Config
+.env
+.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Documentation & Screenshots (large media assets)
+README.md
+CONTRIBUTING.md
+LICENSE
+screenshots
+screenshots/**
+firebase.txt
+firestore.rules
+
+# Temporary, archives & debug artifacts
+*.rar
+*.zip
+*.tar
+probe*
+test_*
+extracted_*
+restore_*
+chunk_281*
+find_*
+inspect_*
+list_*
+print_*
+scan_*
+fix_*
+
+# Test suites (keep serverless functions light)
+*.test.js
+api/*.test.js

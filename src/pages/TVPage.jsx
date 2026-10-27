@@ -733,7 +733,7 @@ export default function TVPage({
 
   useEffect(() => {
     if (isElectron || !playing || !webviewLoading) return;
-    const t = setTimeout(() => setWebviewLoading(false), 1800);
+    const t = setTimeout(() => setWebviewLoading(false), 400);
     return () => clearTimeout(t);
   }, [playing, webviewLoading, playerSource, selectedEp?.episode_number]);
 
@@ -1338,7 +1338,7 @@ export default function TVPage({
   useEffect(() => {
     if (!playing) return;
     if (!isElectron) {
-      const t = setTimeout(() => setWebviewLoading(false), 1800);
+      const t = setTimeout(() => setWebviewLoading(false), 400);
       return () => clearTimeout(t);
     }
     const wv = webviewRef.current;

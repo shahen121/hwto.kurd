@@ -8,6 +8,9 @@ const {
   fetchViaScrapeDoWithRotation,
   AD_SHIELD_JS,
   sanitizeVidlinkHtml,
+  patchPlayerChunk,
+  staticChunkCache,
+  getScrapeDoSessionId,
 } = require("./vidcore.js");
 
 test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", async () => {
@@ -268,3 +271,183 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
     `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(hlsUrl)}`,
   );
 });
+
+test("Scrape.do Session Sticky Token Pinning", async () => {
+  const saved = {
+    t1: process.env.SCRAPE_DO_TOKEN_1,
+    t2: process.env.SCRAPE_DO_TOKEN_2,
+    t3: process.env.SCRAPE_DO_TOKEN_3,
+    t0: process.env.SCRAPE_DO_TOKEN,
+  };
+
+  try {
+    process.env.SCRAPE_DO_TOKEN_1 = "tok_A";
+    process.env.SCRAPE_DO_TOKEN_2 = "tok_B";
+    process.env.SCRAPE_DO_TOKEN_3 = "tok_C";
+    delete process.env.SCRAPE_DO_TOKEN;
+
+    const testSession = "user_sess_99";
+    const usedTokens = [];
+
+    // First call with testSession
+    await fetchViaScrapeDoWithRotation(
+      "https://vidcore.io/movie/550",
+      async (url) => {
+        const u = new URL(url);
+        usedTokens.push(u.searchParams.get("token"));
+        return { status: 200, text: async () => "OK" };
+      },
+      { sessionId: testSession },
+    );
+
+    // Second call with the same testSession MUST use the EXACT same token
+    await fetchViaScrapeDoWithRotation(
+      "https://vidcore.io/APA91ywF/verify",
+      async (url) => {
+        const u = new URL(url);
+        usedTokens.push(u.searchParams.get("token"));
+        return { status: 200, text: async () => "OK" };
+      },
+      { sessionId: testSession, method: "POST" },
+    );
+
+    assert.equal(usedTokens.length, 2);
+    assert.equal(
+      usedTokens[0],
+      usedTokens[1],
+      "Same session must pin to the same token to prevent IP rotation and 555 errors",
+    );
+  } finally {
+    if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
+    else delete process.env.SCRAPE_DO_TOKEN_1;
+    if (saved.t2 !== undefined) process.env.SCRAPE_DO_TOKEN_2 = saved.t2;
+    else delete process.env.SCRAPE_DO_TOKEN_2;
+    if (saved.t3 !== undefined) process.env.SCRAPE_DO_TOKEN_3 = saved.t3;
+    else delete process.env.SCRAPE_DO_TOKEN_3;
+    if (saved.t0 !== undefined) process.env.SCRAPE_DO_TOKEN = saved.t0;
+    else delete process.env.SCRAPE_DO_TOKEN;
+  }
+});
+
+test("Static chunk cache and prefix normalization in handleVidcoreProxy", async () => {
+  const dummyChunkPath = "/_next/static/chunks/test-chunk-abc.js";
+  const dummyCode = 'console.log("cached chunk code");';
+  staticChunkCache.set(dummyChunkPath, {
+    body: dummyCode,
+    contentType: "application/javascript; charset=utf-8",
+  });
+
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
+  const base = `http://127.0.0.1:${port}`;
+
+  try {
+    // 1. Direct request to /_next/static/...
+    const res1 = await fetch(`${base}${dummyChunkPath}`);
+    assert.equal(res1.status, 200);
+    assert.equal(await res1.text(), dummyCode);
+    assert.equal(
+      res1.headers.get("cache-control"),
+      "public, max-age=31536000, immutable",
+    );
+
+    // 2. Request through /vidcore/_next/static/... hits the same cache
+    const res2 = await fetch(`${base}/vidcore${dummyChunkPath}`);
+    assert.equal(res2.status, 200);
+    assert.equal(await res2.text(), dummyCode);
+    assert.equal(
+      res2.headers.get("cache-control"),
+      "public, max-age=31536000, immutable",
+    );
+  } finally {
+    server.close();
+    staticChunkCache.delete(dummyChunkPath);
+  }
+});
+
+test("AD_SHIELD_JS fake proxies spoof origin, protocol, port, hostname, and window references", () => {
+  const sandbox = {
+    window: null,
+    document: {},
+    URL,
+    encodeURIComponent,
+    Object,
+    Array,
+    String,
+    Date,
+  };
+  sandbox.window = sandbox;
+  sandbox.window.location = {
+    origin: "http://localhost:3000",
+    protocol: "http:",
+    port: "3000",
+    hostname: "localhost",
+    host: "localhost:3000",
+    pathname: "/vidcore/movie/550",
+    search: "?token=123",
+  };
+
+  vm.runInNewContext(AD_SHIELD_JS, sandbox);
+
+  const fakeWin = sandbox.window.__fakeWin;
+  const fakeLoc = sandbox.window.__fakeLoc;
+  const fakeDoc = sandbox.window.__fakeDoc;
+
+  assert.ok(fakeWin, "__fakeWin must be created");
+  assert.ok(fakeLoc, "__fakeLoc must be created");
+  assert.ok(fakeDoc, "__fakeDoc must be created");
+
+  assert.equal(fakeLoc.hostname, "vidcore.io");
+  assert.equal(fakeLoc.host, "vidcore.io");
+  assert.equal(fakeLoc.protocol, "https:");
+  assert.equal(fakeLoc.port, "");
+  assert.equal(fakeLoc.origin, "https://vidcore.io");
+
+  assert.equal(fakeDoc.domain, "vidcore.io");
+  assert.equal(fakeDoc.referrer, "https://vidcore.io/");
+
+  assert.equal(fakeWin.origin, "https://vidcore.io");
+  assert.equal(fakeWin.location.hostname, "vidcore.io");
+  assert.equal(fakeWin.self, fakeWin);
+  assert.equal(fakeWin.window, fakeWin);
+});
+
+test("patchPlayerChunk intercepts error handler to suppress 555 error", () => {
+  const mockChunkCode = `
+    cR[[109,123,106,77,106,127,106,123].map(function(e){return String.fromCharCode(30^e)}).join("")]=Z;
+  `;
+  const patched = patchPlayerChunk(mockChunkCode, "/_next/static/chunks/281-test.js");
+  assert.ok(patched.includes("if(v===555)"));
+
+  let interceptedStatus = null;
+  let postedMessages = [];
+  const sandbox = {
+    cR: {},
+    Z: (val) => {
+      interceptedStatus = val;
+    },
+    window: {
+      parent: {
+        postMessage: (msg) => postedMessages.push(msg),
+      },
+    },
+    console: { warn: () => {} },
+  };
+
+  vm.runInNewContext(patched, sandbox);
+
+  // Invoke the patched setState function with 555:
+  sandbox.cR.setState(555);
+  // Must NOT forward 555 to original Z and must NOT post 555 message
+  assert.equal(interceptedStatus, null, "555 must be suppressed");
+  assert.equal(postedMessages.length, 0, "555 must not postMessage");
+
+  // Invoke with normal error status like 404:
+  sandbox.cR.setState(404);
+  assert.equal(interceptedStatus, 404);
+  assert.equal(postedMessages.length, 1);
+  assert.equal(postedMessages[0].event, "status");
+  assert.equal(postedMessages[0].data, 404);
+});
+
