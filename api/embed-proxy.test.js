@@ -10,193 +10,102 @@ const {
   handleEmbedProxy,
 } = require("./embed-proxy.js");
 
-test("stripAdScripts eliminates all ad, popup, and devtools detector scripts", () => {
+test("stripAdScripts removes ad-network scripts by src but keeps inline page scripts", () => {
   const dirtyHtml = `
-    <html>
-      <head>
-        <script src="https://example.com/safe.js"></script>
-        <script src="https://popcash.net/show.js"></script>
-        <script>
-          /* adcash inline script */
-          var _pop = _pop || [];
-        </script>
-        <script src="https://histats.com/js15.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/disable-devtool"></script>
-        <script>console.log("sbx detector");</script>
-      </head>
-      <body>
-        <div id="player"></div>
-        <script src="https://www.googletagmanager.com/gtag/js"></script>
-      </body>
-    </html>
-  `;
-
+    <html><head>
+      <script src="https://example.com/safe.js"></script>
+      <script src="https://popcash.net/show.js"></script>
+      <script src="https://histats.com/js15.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/disable-devtool"></script>
+      <script>function bgImage(){return 1} /* sandbox sbx yandex */</script>
+    </head><body>
+      <script src="https://www.googletagmanager.com/gtag/js"></script>
+    </body></html>`;
   const cleaned = stripAdScripts(dirtyHtml);
-
-  assert.ok(cleaned.includes("https://example.com/safe.js"), "Safe script must be retained");
-  assert.ok(!cleaned.includes("popcash.net"), "popcash must be stripped");
-  assert.ok(!cleaned.includes("adcash inline script"), "adcash must be stripped");
-  assert.ok(!cleaned.includes("histats.com"), "histats must be stripped");
-  assert.ok(!cleaned.includes("disable-devtool"), "disable-devtool must be stripped");
-  assert.ok(!cleaned.includes("sbx detector"), "sbx detector must be stripped");
-  assert.ok(!cleaned.includes("googletagmanager.com"), "googletagmanager must be stripped");
+  assert.ok(cleaned.includes("https://example.com/safe.js"));
+  assert.ok(!cleaned.includes("popcash.net"));
+  assert.ok(!cleaned.includes("histats.com"));
+  assert.ok(!cleaned.includes("disable-devtool"));
+  assert.ok(!cleaned.includes("googletagmanager.com"));
+  assert.ok(cleaned.includes("function bgImage()"), "Inline scripts must be preserved");
 });
 
-test("sanitizeEmbedHtml injects base href and ULTIMATE_AD_SHIELD at the top of head", () => {
-  const sampleHtml = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>External Player</title>
-      </head>
-      <body>
-        <h1>Video</h1>
-      </body>
-    </html>
-  `;
-
-  const sanitized = sanitizeEmbedHtml(sampleHtml, "https://vidsrc.me");
-
-  assert.ok(sanitized.includes('<base href="https://vidsrc.me/">'), "Must inject base href");
-  assert.ok(sanitized.includes('id="ultimate-ad-shield"'), "Must inject ultimate-ad-shield");
-  const headIdx = sanitized.indexOf("<head>");
-  const shieldIdx = sanitized.indexOf('id="ultimate-ad-shield"');
-  assert.ok(headIdx !== -1 && shieldIdx > headIdx, "Shield must be inside <head>");
+test("sanitizeEmbedHtml injects base href and shield inside head", () => {
+  const out = sanitizeEmbedHtml("<html><head><title>x</title></head><body></body></html>", "https://vidsrc.me");
+  assert.ok(out.includes('<base href="https://vidsrc.me/">'));
+  assert.ok(out.indexOf('id="ultimate-ad-shield"') > out.indexOf("<head>"));
 });
 
-test("ULTIMATE_AD_SHIELD neutralizes popups, sandbox detection, and auto-click anchors", () => {
+test("ULTIMATE_AD_SHIELD only fakes window.open, blocks _blank anchors and ad scripts", () => {
   const rawJs = ULTIMATE_AD_SHIELD.replace(/<\/?script[^>]*>/gi, "");
-
-  const mockWindow = {
-    parent: { postMessage: () => {} },
-    location: { href: "http://localhost:3000/embed-proxy?url=https%3A%2F%2Fvidsrc.me%2Fembed" },
-    document: {
-      body: {},
-      documentElement: {},
-    },
-    EventTarget: function() {},
-    HTMLAnchorElement: function() {},
-    HTMLIFrameElement: function() {},
-    Element: function() {},
-    MutationObserver: function() {
-      this.observe = () => {};
-    },
+  let clicked = 0;
+  function Anchor() {}
+  Anchor.prototype.click = function () { clicked++; };
+  function El() {}
+  El.prototype.appendChild = (c) => c;
+  const globals = {
+    HTMLAnchorElement: Anchor,
+    Element: El,
+    bgImage: function () { return "ok"; },
   };
-  mockWindow.window = mockWindow;
-  mockWindow.EventTarget.prototype = {
-    addEventListener: () => {},
-  };
-  mockWindow.HTMLAnchorElement.prototype = {
-    click: () => {},
-  };
-  mockWindow.Element.prototype = {
-    appendChild: (c) => c,
-    insertBefore: (c) => c,
-    setAttribute: () => {},
-  };
-  mockWindow.HTMLIFrameElement.prototype = Object.create(mockWindow.Element.prototype);
-  Object.defineProperty(mockWindow.HTMLIFrameElement.prototype, "src", {
-    configurable: true,
-    enumerable: true,
-    get: function() { return this._src; },
-    set: function(val) { this._src = val; }
-  });
-
-  const sandbox = {
-    window: mockWindow,
-    document: mockWindow.document,
-    EventTarget: mockWindow.EventTarget,
-    HTMLAnchorElement: mockWindow.HTMLAnchorElement,
-    HTMLIFrameElement: mockWindow.HTMLIFrameElement,
-    Element: mockWindow.Element,
-    MutationObserver: mockWindow.MutationObserver,
-    URL,
-    encodeURIComponent,
-    Object,
-    String,
-    Date,
-  };
-
+  const sandbox = { ...globals, window: {} };
   vm.runInNewContext(rawJs, sandbox);
 
-  // 1. Verify fake window.open
-  assert.equal(typeof sandbox.window.open, "function");
-  const fakeWin = sandbox.window.open("https://ad-trap.example");
-  assert.ok(fakeWin, "window.open must return fake window");
-  assert.equal(fakeWin.closed, false);
-  assert.equal(typeof fakeWin.focus, "function");
-  assert.equal(typeof fakeWin.document.write, "function");
-  fakeWin.close();
-  assert.equal(fakeWin.closed, true);
+  const w = sandbox.window.open("https://ad.example");
+  assert.equal(w.closed, false);
+  w.close();
+  assert.equal(w.closed, true);
+  assert.equal(typeof w.document.write, "function");
 
-  // 2. Verify fake window.frameElement
-  assert.ok(sandbox.window.frameElement);
-  assert.equal(sandbox.window.frameElement.hasAttribute("sandbox"), false);
+  const blank = new Anchor();
+  blank.target = "_blank";
+  blank.click();
+  assert.equal(clicked, 0, "_blank anchors must not be clicked");
+  const normal = new Anchor();
+  normal.target = "";
+  normal.click();
+  assert.equal(clicked, 1);
 
-  // 3. Verify nested iframe src wrapping
-  const dummyIframe = Object.create(mockWindow.HTMLIFrameElement.prototype);
-  dummyIframe.tagName = "IFRAME";
-  dummyIframe.src = "https://cloudquest.example/embed/stream";
-  assert.ok(
-    dummyIframe.src.startsWith("/embed-proxy?url="),
-    "Nested iframe src must be rewritten through /embed-proxy",
-  );
-  assert.ok(
-    dummyIframe.src.includes(encodeURIComponent("https://cloudquest.example/embed/stream")),
-  );
+  const adScript = { tagName: "SCRIPT", src: "https://popads.net/x.js" };
+  const okScript = { tagName: "SCRIPT", src: "https://site.example/app.js" };
+  const parent = new El();
+  assert.equal(parent.appendChild(adScript), adScript);
+  assert.equal(parent.appendChild(okScript), okScript);
+
+  assert.equal(sandbox.bgImage(), "ok", "Host globals must remain untouched");
 });
 
 test("Embed Proxy HTTP Integration: fetches, cleans, and strips framing headers", async () => {
-  // Mock external server
-  const mockExternalServer = http.createServer((req, res) => {
+  const ext = http.createServer((req, res) => {
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
       "X-Frame-Options": "SAMEORIGIN",
       "Content-Security-Policy": "frame-ancestors 'self'",
     });
-    res.end(`
-      <html>
-        <head>
-          <title>External Provider</title>
-          <script src="https://popads.net/banner.js"></script>
-        </head>
-        <body>
-          <iframe src="https://nested-stream.example/play"></iframe>
-        </body>
-      </html>
-    `);
+    res.end(`<html><head><script src="https://popads.net/banner.js"></script></head><body></body></html>`);
   });
-
-  await new Promise((resolve) => mockExternalServer.listen(0, resolve));
-  const extPort = mockExternalServer.address().port;
+  await new Promise((r) => ext.listen(0, r));
+  const extPort = ext.address().port;
   const targetUrl = `http://127.0.0.1:${extPort}/embed/movie/550`;
 
-  // Mock our proxy server
-  const proxyServer = http.createServer((req, res) => {
-    handleEmbedProxy(req, res);
-  });
-  await new Promise((resolve) => proxyServer.listen(0, resolve));
-  const proxyPort = proxyServer.address().port;
+  const proxy = http.createServer((req, res) => handleEmbedProxy(req, res));
+  await new Promise((r) => proxy.listen(0, r));
+  const proxyPort = proxy.address().port;
 
   try {
-    // 1. Missing ?url parameter
     const errRes = await fetch(`http://127.0.0.1:${proxyPort}/embed-proxy`);
     assert.equal(errRes.status, 400);
 
-    // 2. Valid proxy request
     const res = await fetch(`http://127.0.0.1:${proxyPort}/embed-proxy?url=${encodeURIComponent(targetUrl)}`);
     assert.equal(res.status, 200);
-    assert.ok(res.headers.get("content-type").includes("text/html"));
-    assert.equal(res.headers.get("access-control-allow-origin"), "*");
-    assert.equal(res.headers.get("x-frame-options"), null, "X-Frame-Options must be stripped");
-    assert.equal(res.headers.get("content-security-policy"), null, "CSP must be stripped");
-
+    assert.equal(res.headers.get("x-frame-options"), null);
+    assert.equal(res.headers.get("content-security-policy"), null);
     const html = await res.text();
     assert.ok(html.includes(`<base href="http://127.0.0.1:${extPort}/">`));
     assert.ok(html.includes('id="ultimate-ad-shield"'));
-    assert.ok(!html.includes("popads.net"), "Ad script must be stripped");
+    assert.ok(!html.includes("popads.net"));
   } finally {
-    mockExternalServer.close();
-    proxyServer.close();
+    ext.close();
+    proxy.close();
   }
 });

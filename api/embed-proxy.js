@@ -1,189 +1,58 @@
 const { URL } = require("url");
 const { fetchViaScrapeDoWithRotation, getScrapeDoTokens } = require("./vidcore.js");
 
-const AD_SCRIPT_PATTERNS = /(popads|popcash|adcash|aclib|histats|yandex|googletagmanager|disable-devtool|devtools-detector|\bsbx\b|sandbox|trafficjunky|propellerads|clickadu|exoclick|adservice|doubleclick)/i;
+const AD_SCRIPT_PATTERNS = /(popads|popcash|adcash|aclib|histats|yandex|googletagmanager|disable-devtool|devtools-detector|trafficjunky|propellerads|clickadu|exoclick|doubleclick)/i;
 
 const ULTIMATE_AD_SHIELD = `<script id="ultimate-ad-shield">
 (function() {
   'use strict';
-
-  // 1. Fake Window Proxy for window.open: returns complete fake window to bypass ad checks
-  var fakeWin = {
-    closed: false,
-    focus: function() {},
-    blur: function() {},
-    close: function() { this.closed = true; },
-    postMessage: function() {},
-    location: { href: 'about:blank', assign: function(){}, replace: function(){} },
-    document: { write: function(){}, open: function(){}, close: function(){} }
-  };
-  window.open = function() {
-    try {
-      window.parent.postMessage({ type: 'AD_SHIELD_EVENT', action: 'blocked_popup' }, '*');
-    } catch (e) {}
-    return fakeWin;
-  };
-
-  // 2. Fake window.frameElement to bypass sandbox and anti-embed checks
   try {
-    Object.defineProperty(window, 'frameElement', {
-      get: function() {
-        return {
-          hasAttribute: function(attr) {
-            return attr && String(attr).toLowerCase() === 'sandbox' ? false : false;
-          },
-          getAttribute: function() { return null; },
-          sandbox: { length: 0, contains: function() { return false; }, value: "" }
-        };
-      },
-      configurable: true
-    });
-  } catch (e) {}
+    // Minimal shield: never touches the host page's own globals (e.g. bgImage).
+    var AD_RE = /(popads|popcash|adcash|aclib|histats|yandex|googletagmanager|disable-devtool|devtools-detector|doubleclick|clickadu|propeller|exoclick|trafficjunky)/i;
 
-  // 3. Block creation and appending of ad elements (<script>, <iframe>, auto-clicking <a>)
-  var AD_KEYWORDS = /(popads|popcash|adcash|aclib|histats|yandex|googletagmanager|disable-devtool|devtools-detector|\bsbx\b|sandbox|doubleclick|clickadu|propeller|exoclick)/i;
+    // 1. window.open returns a fake window only
+    var fakeWin = {
+      closed: false,
+      focus: function() {},
+      blur: function() {},
+      close: function() { this.closed = true; },
+      postMessage: function() {},
+      location: { href: 'about:blank', assign: function(){}, replace: function(){} },
+      document: { write: function(){}, open: function(){}, close: function(){} }
+    };
+    window.open = function() { return fakeWin; };
 
-  function isAdUrl(url) {
-    if (!url || typeof url !== 'string') return false;
-    return AD_KEYWORDS.test(url);
-  }
-
-  // Trap <a> clicks with target="_blank"
-  var origAnchorClick = HTMLAnchorElement.prototype.click;
-  HTMLAnchorElement.prototype.click = function() {
-    if (this.target === '_blank' || isAdUrl(this.href)) {
-      return;
-    }
-    return origAnchorClick.apply(this, arguments);
-  };
-
-  // Intercept appendChild and insertBefore to block ad scripts and ad iframes
-  var origAppend = Element.prototype.appendChild;
-  Element.prototype.appendChild = function(child) {
-    if (child && child.tagName === 'SCRIPT') {
-      var src = child.src || child.getAttribute('src') || '';
-      if (isAdUrl(src) || AD_KEYWORDS.test(child.textContent || '')) {
-        return child;
-      }
-    }
-    if (child && child.tagName === 'IFRAME') {
-      var ifrSrc = child.src || child.getAttribute('src') || '';
-      if (isAdUrl(ifrSrc)) {
-        return child;
-      }
-    }
-    return origAppend.apply(this, arguments);
-  };
-
-  var origInsertBefore = Element.prototype.insertBefore;
-  Element.prototype.insertBefore = function(newChild, refChild) {
-    if (newChild && newChild.tagName === 'SCRIPT') {
-      var src = newChild.src || newChild.getAttribute('src') || '';
-      if (isAdUrl(src) || AD_KEYWORDS.test(newChild.textContent || '')) {
-        return newChild;
-      }
-    }
-    if (newChild && newChild.tagName === 'IFRAME') {
-      var ifrSrc = newChild.src || newChild.getAttribute('src') || '';
-      if (isAdUrl(ifrSrc)) {
-        return newChild;
-      }
-    }
-    return origInsertBefore.apply(this, arguments);
-  };
-
-  // 4. Intercept addEventListener on window and document for click hijacking
-  var origAddEventListener = EventTarget.prototype.addEventListener;
-  EventTarget.prototype.addEventListener = function(type, listener, options) {
-    if ((this === window || this === document || (document.body && this === document.body)) &&
-        (type === 'click' || type === 'mousedown' || type === 'pointerdown' || type === 'touchstart')) {
-      var wrappedListener = function(evt) {
-        try {
-          return listener.apply(this, arguments);
-        } catch (err) {
-          // suppress ad crash
-        }
-      };
-      return origAddEventListener.call(this, type, wrappedListener, options);
-    }
-    return origAddEventListener.call(this, type, listener, options);
-  };
-
-  // 5. Proxy nested iframes to pass through /embed-proxy (Requirement 2)
-  function wrapIframeUrl(val) {
-    if (!val || typeof val !== 'string') return val;
-    if (val.startsWith('about:') || val.startsWith('blob:') || val.startsWith('javascript:')) return val;
-    if (val.includes('/embed-proxy?url=')) return val;
-    try {
-      var resolved = new URL(val, window.location.href).href;
-      if (resolved.startsWith('http://') || resolved.startsWith('https://')) {
-        if (isAdUrl(resolved)) return 'about:blank';
-        return '/embed-proxy?url=' + encodeURIComponent(resolved);
-      }
-    } catch (e) {}
-    return val;
-  }
-
-  try {
-    var iframeDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'src');
-    if (iframeDesc && iframeDesc.set) {
-      Object.defineProperty(HTMLIFrameElement.prototype, 'src', {
-        configurable: true,
-        enumerable: true,
-        get: iframeDesc.get,
-        set: function(val) {
-          return iframeDesc.set.call(this, wrapIframeUrl(val));
-        }
-      });
-    }
-
-    var origSetAttr = Element.prototype.setAttribute;
-    Element.prototype.setAttribute = function(name, val) {
-      if (this.tagName === 'IFRAME' && String(name).toLowerCase() === 'src') {
-        val = wrapIframeUrl(val);
-      }
-      return origSetAttr.call(this, name, val);
+    // 2. Block <a target=_blank> programmatic clicks (popup triggers)
+    var origClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function() {
+      try {
+        if (this.target === '_blank') return;
+      } catch (e) {}
+      return origClick.apply(this, arguments);
     };
 
-    // Observe dynamic DOM mutations for iframes
-    var observer = new MutationObserver(function(mutations) {
-      mutations.forEach(function(m) {
-        m.addedNodes.forEach(function(node) {
-          if (node && node.nodeType === 1) {
-            var ifrs = node.tagName === 'IFRAME' ? [node] : (node.querySelectorAll ? node.querySelectorAll('iframe') : []);
-            for (var i = 0; i < ifrs.length; i++) {
-              var s = ifrs[i].getAttribute('src');
-              if (s && !s.includes('/embed-proxy?url=') && !s.startsWith('about:') && !s.startsWith('blob:') && !s.startsWith('javascript:')) {
-                ifrs[i].setAttribute('src', wrapIframeUrl(s));
-              }
-            }
-          }
-        });
-      });
-    });
-    observer.observe(document.documentElement || document, { childList: true, subtree: true });
+    // 3. Block known ad-network scripts only
+    var origAppend = Element.prototype.appendChild;
+    Element.prototype.appendChild = function(child) {
+      try {
+        if (child && child.tagName === 'SCRIPT') {
+          var src = child.src || (child.getAttribute && child.getAttribute('src')) || '';
+          if (AD_RE.test(src)) return child;
+        }
+      } catch (e) {}
+      return origAppend.apply(this, arguments);
+    };
   } catch (e) {}
 })();
 </script>`;
 
 function stripAdScripts(html) {
   if (!html || typeof html !== "string") return "";
-
-  // 1. Remove full <script>...</script> tags whose tag or content matches ad patterns
-  let out = html.replace(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi, (match, content) => {
-    if (AD_SCRIPT_PATTERNS.test(match) || AD_SCRIPT_PATTERNS.test(content)) {
-      return "<!-- stripped ad script -->";
-    }
-    return match;
-  });
-
-  // 2. Remove self-closing or unclosed <script ... src="..." ...> tags matching ad patterns
-  out = out.replace(
-    /<script\b[^>]*src=["'][^"']*(?:popads|popcash|adcash|aclib|histats|yandex|googletagmanager|disable-devtool|devtools-detector|sbx|sandbox)[^"']*["'][^>]*>(?:<\/script>)?/gi,
-    "<!-- stripped ad script -->"
+  // Only strip external scripts whose src points to a known ad network /
+  // detector. Inline scripts are never removed (they may define page globals).
+  return html.replace(/<script\b[^>]*\bsrc=["'][^"']*["'][^>]*>\s*<\/script\s*>/gi, (match) =>
+    AD_SCRIPT_PATTERNS.test(match) ? "<!-- stripped ad script -->" : match,
   );
-
-  return out;
 }
 
 function sanitizeEmbedHtml(html, targetOrigin) {
