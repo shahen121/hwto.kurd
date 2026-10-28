@@ -2343,7 +2343,6 @@ export default function TVPage({
                     }
                     partition="persist:player"
                     allowpopups="false"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
                     style={{
                       position: "absolute",
                       inset: 0,
@@ -2379,7 +2378,6 @@ export default function TVPage({
                     allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                     allowFullScreen
                     referrerPolicy="origin"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
                     onLoad={() => setWebviewLoading(false)}
                     style={{
                       position: "absolute",

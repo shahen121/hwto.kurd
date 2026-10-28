@@ -205,13 +205,18 @@ const AD_SHIELD_JS = `(function() {
     Object.defineProperty(window, "a3f1feb4-0b2d-4f69-a999-7116272dab1d", { value: false, writable: false, configurable: false });
   } catch (e) {}
 
-  var noopWindow = {
-    closed: false, focus: function() {}, blur: function() {}, close: function() {}, postMessage: function() {},
-    location: { href: "about:blank", assign: function(){}, replace: function(){} }
+  var fakeWin = {
+    closed: false,
+    focus: function() {},
+    blur: function() {},
+    close: function() { this.closed = true; },
+    postMessage: function() {},
+    location: { href: "about:blank", assign: function(){}, replace: function(){} },
+    document: { write: function(){}, open: function(){}, close: function(){} }
   };
   window.open = function(url) {
     try { window.parent.postMessage({ type: "AD_SHIELD_EVENT", action: "blocked_popup", url: String(url || "") }, "*"); } catch (e) {}
-    return noopWindow;
+    return fakeWin;
   };
 
   window.dataLayer = window.dataLayer || [];

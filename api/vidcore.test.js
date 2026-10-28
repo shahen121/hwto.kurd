@@ -393,6 +393,22 @@ test("AD_SHIELD_JS fake proxies spoof origin, protocol, port, hostname, and wind
   assert.equal(fakeWin.location.hostname, "vidcore.io");
   assert.equal(fakeWin.self, fakeWin);
   assert.equal(fakeWin.window, fakeWin);
+
+  // Verify fake window.open proxy satisfies anti-adblock and sandbox checks
+  assert.equal(typeof sandbox.window.open, "function");
+  const openedWin = sandbox.window.open("https://ad-trap.example");
+  assert.ok(openedWin, "window.open must return a fake window object instead of null");
+  assert.equal(openedWin.closed, false);
+  assert.equal(typeof openedWin.focus, "function");
+  assert.equal(typeof openedWin.blur, "function");
+  assert.equal(typeof openedWin.close, "function");
+  assert.equal(typeof openedWin.postMessage, "function");
+  assert.ok(openedWin.location && typeof openedWin.location.assign === "function");
+  assert.ok(openedWin.document && typeof openedWin.document.write === "function");
+  assert.ok(openedWin.document && typeof openedWin.document.open === "function");
+  assert.ok(openedWin.document && typeof openedWin.document.close === "function");
+  openedWin.close();
+  assert.equal(openedWin.closed, true);
 });
 
 test("patchPlayerChunk intercepts error handler to suppress 555 error", () => {
