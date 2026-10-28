@@ -109,6 +109,8 @@ function isProxyRoute(pathname, req) {
       !pathname.startsWith("/api/tmdb") &&
       !pathname.startsWith("/api/football") &&
       !pathname.startsWith("/api/hls") &&
+      !pathname.startsWith("/api/subtitles") &&
+      !pathname.startsWith("/subtitles/") &&
       !pathname.startsWith("/assets/")
     ) {
       return true;
@@ -135,8 +137,14 @@ async function app(req, res) {
     return footballHandler(req, res);
   }
 
-  // 3. Subtitles API
-  if (pathname === "/api/subtitles") {
+  // 3. Subtitles API & Direct Subtitle Requests
+  if (pathname === "/api/subtitles" || pathname.startsWith("/subtitles/")) {
+    if (pathname.startsWith("/subtitles/")) {
+      const cleanSubFile = pathname.replace(/^\/subtitles\//, "");
+      parsedUrl.searchParams.set("file", cleanSubFile);
+      decorateVercelHelpers(req, res, parsedUrl);
+      req.url = `/api/subtitles?file=${encodeURIComponent(cleanSubFile)}`;
+    }
     return subtitlesHandler(req, res);
   }
 

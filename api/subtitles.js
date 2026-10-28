@@ -143,6 +143,7 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
         tr.srclang = item.lang;
         tr.src = item.url;
         if (item.def) tr.default = true;
+        // Quietly append track strictly to the video element without altering any surrounding DOM
         v.appendChild(tr);
         addedAny = true;
       }
@@ -159,23 +160,59 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
   }
 
   function checkVideos() {
-    var vids = document.querySelectorAll("video");
-    for (var i = 0; i < vids.length; i++) {
-      injectSubtitlesToVideo(vids[i]);
+    try {
+      var vids = document.querySelectorAll("video");
+      for (var i = 0; i < vids.length; i++) {
+        injectSubtitlesToVideo(vids[i]);
+      }
+    } catch (_e) {}
+  }
+
+  // Defer subtitle track injection strictly until after page load & initial React hydration
+  // to prevent Minified React error #418 (hydration mismatch)
+  function initSubtitleObserver() {
+    function scheduleCheck() {
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(function() { checkVideos(); }, { timeout: 1000 });
+      } else {
+        setTimeout(checkVideos, 250);
+      }
+    }
+
+    // Run first check safely after hydration
+    scheduleCheck();
+
+    if (typeof MutationObserver !== "undefined") {
+      var obs = new MutationObserver(function(mutations) {
+        var shouldCheck = false;
+        for (var m = 0; m < mutations.length; m++) {
+          var added = mutations[m].addedNodes;
+          for (var n = 0; n < added.length; n++) {
+            var node = added[n];
+            if (node.nodeType === 1) {
+              if (node.nodeName === "VIDEO" || (node.querySelector && node.querySelector("video"))) {
+                shouldCheck = true;
+                break;
+              }
+            }
+          }
+          if (shouldCheck) break;
+        }
+        if (shouldCheck) scheduleCheck();
+      });
+
+      var root = document.body || document.documentElement;
+      if (root) {
+        obs.observe(root, { childList: true, subtree: true });
+      }
     }
   }
 
-  if (typeof MutationObserver !== "undefined") {
-    var obs = new MutationObserver(function() { checkVideos(); });
-    var root = document.body || document.documentElement;
-    if (root) {
-      obs.observe(root, { childList: true, subtree: true });
-      checkVideos();
-    }
-    document.addEventListener("DOMContentLoaded", function() {
-      var r = document.body || document.documentElement;
-      if (r) obs.observe(r, { childList: true, subtree: true });
-      checkVideos();
+  if (document.readyState === "complete") {
+    setTimeout(initSubtitleObserver, 600);
+  } else {
+    window.addEventListener("load", function() {
+      setTimeout(initSubtitleObserver, 600);
     });
   }
 })();`;
@@ -205,9 +242,15 @@ async function subtitlesHandler(req, res) {
 
   const subDir = getSubtitlesDirectory();
 
-  // 1. Direct file stream request
-  if (query.file) {
-    const safeRel = sanitizeSubtitleRelPath(query.file);
+  // 1. Direct file stream request (or direct /subtitles/* path)
+  const rawFileParam =
+    query.file ||
+    (parsedUrl.pathname.startsWith("/subtitles/")
+      ? parsedUrl.pathname.replace(/^\/subtitles\//, "")
+      : "");
+
+  if (rawFileParam) {
+    const safeRel = sanitizeSubtitleRelPath(rawFileParam);
     const targetFile = path.join(subDir, safeRel);
     if (fs.existsSync(targetFile) && fs.statSync(targetFile).isFile()) {
       const ext = path.extname(targetFile).toLowerCase();
@@ -217,6 +260,7 @@ async function subtitlesHandler(req, res) {
           : "text/plain; charset=utf-8";
       res.writeHead(200, {
         "Content-Type": contentType,
+        "Access-Control-Allow-Origin": "*",
         "Cache-Control": "public, max-age=86400",
       });
       return fs.createReadStream(targetFile).pipe(res);
@@ -233,6 +277,7 @@ async function subtitlesHandler(req, res) {
           const data = await upstreamRes.arrayBuffer();
           res.writeHead(200, {
             "Content-Type": contentType,
+            "Access-Control-Allow-Origin": "*",
             "Cache-Control": "public, max-age=86400",
           });
           return res.end(Buffer.from(data));
@@ -240,8 +285,13 @@ async function subtitlesHandler(req, res) {
       } catch (_e) {}
     }
 
-    res.statusCode = 404;
-    return res.end(JSON.stringify({ ok: false, error: "Subtitle file not found" }));
+    // Never return 404 for subtitle files - return a valid empty WebVTT with 200 OK
+    res.writeHead(200, {
+      "Content-Type": "text/vtt; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "public, max-age=3600",
+    });
+    return res.end("WEBVTT\n\n");
   }
 
   // 2. Query subtitles for media item

@@ -143,6 +143,8 @@ export default function SubtitleOverlay({
 
   const fileInputRef = useRef(null);
   const lastTickRef = useRef(Date.now());
+  const fetchedSubtitleKeyRef = useRef(new Map());
+  const lastFetchedMediaKeyRef = useRef("");
 
   // Sync internal time with external progress prop when available
   useEffect(() => {
@@ -200,15 +202,33 @@ export default function SubtitleOverlay({
     return () => clearInterval(interval);
   }, [playing, timerRunning, currentTimeRef]);
 
-  // Fetch available subtitles for this media
+  // Stable key for externalSubtitles to avoid unnecessary effect runs
+  const externalSubsKey = useMemo(
+    () => (externalSubtitles || []).map((s) => `${s.lang}:${s.url}`).join("|"),
+    [externalSubtitles],
+  );
+
+  // Synchronize availableSubs when externalSubtitles prop actually changes
+  useEffect(() => {
+    if (externalSubtitles && externalSubtitles.length > 0) {
+      setAvailableSubs(externalSubtitles);
+    }
+  }, [externalSubsKey]);
+
+  // Fetch available subtitles metadata for this media (only once per media key)
   useEffect(() => {
     let active = true;
     if (!tmdbId) return;
 
     if (externalSubtitles && externalSubtitles.length > 0) {
-      setAvailableSubs(externalSubtitles);
       return;
     }
+
+    const mediaKey = `${type || "movie"}_${tmdbId}_${season || 1}_${episode || 1}`;
+    if (lastFetchedMediaKeyRef.current === mediaKey) {
+      return;
+    }
+    lastFetchedMediaKeyRef.current = mediaKey;
 
     const query = new URLSearchParams({
       type: type || "movie",
@@ -273,9 +293,11 @@ export default function SubtitleOverlay({
     return () => {
       active = false;
     };
-  }, [type, tmdbId, season, episode, externalSubtitles]);
+  }, [type, tmdbId, season, episode]);
 
-  // Fetch and parse subtitle file whenever selected language changes
+  // Fetch and parse subtitle file whenever selected language changes.
+  // Depends only on primitives [tmdbId, season, episode, selectedLang, type].
+  // Uses fetchedSubtitleKeyRef to fetch each .vtt exactly once and prevent infinite loops.
   useEffect(() => {
     if (selectedLang === "off") {
       setCues([]);
@@ -288,16 +310,32 @@ export default function SubtitleOverlay({
       return;
     }
 
-    const sub = availableSubs.find((s) => s.lang === selectedLang);
-    if (!sub || !sub.url) {
+    if (!tmdbId) {
       setCues([]);
       return;
     }
 
+    const subLangKey = `${type || "movie"}_${tmdbId}_${season || 0}_${episode || 0}_${selectedLang}`;
+
+    // Return immediately if already fetched or previously attempted for this exact media/language
+    if (fetchedSubtitleKeyRef.current.has(subLangKey)) {
+      const cached = fetchedSubtitleKeyRef.current.get(subLangKey);
+      setCues(cached.cues || []);
+      setLoadError(cached.error || null);
+      return;
+    }
+
+    const sub = availableSubs.find((s) => s.lang === selectedLang);
+    const targetUrl =
+      sub?.url ||
+      (type === "tv"
+        ? `/subtitles/tv/${tmdbId}/s${season || 1}e${episode || 1}/${selectedLang}.vtt`
+        : `/subtitles/movie/${tmdbId}/${selectedLang}.vtt`);
+
     let active = true;
     setLoadError(null);
 
-    fetch(sub.url)
+    fetch(targetUrl)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();
@@ -305,13 +343,20 @@ export default function SubtitleOverlay({
       .then((text) => {
         if (!active) return;
         const parsed = parseSubtitleText(text);
-        if (parsed.length === 0) {
-          throw new Error("ملف الترجمة فارغ أو غير متوافق");
-        }
+        // Cache result in ref so it is requested only once
+        fetchedSubtitleKeyRef.current.set(subLangKey, {
+          cues: parsed,
+          error: null,
+        });
         setCues(parsed);
       })
       .catch((err) => {
         if (!active) return;
+        // Cache failure in ref so failed/missing subtitles never trigger an infinite fetch loop
+        fetchedSubtitleKeyRef.current.set(subLangKey, {
+          cues: [],
+          error: err.message,
+        });
         setLoadError(err.message);
         setCues([]);
       });
@@ -319,7 +364,7 @@ export default function SubtitleOverlay({
     return () => {
       active = false;
     };
-  }, [selectedLang, availableSubs]);
+  }, [tmdbId, season, episode, selectedLang, type]);
 
   // Handle local subtitle file upload
   const handleCustomFileUpload = (e) => {

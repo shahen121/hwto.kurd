@@ -172,9 +172,12 @@ test("Universal Subtitles: Path normalization and direct file streaming without 
     assert.equal(staticRes.status, 200);
     assert.equal(await staticRes.text(), testVttContent);
 
-    // 3. Missing subtitle returns 404, NOT 200 index.html
+    // 3. Missing subtitle returns 200 OK with valid empty WEBVTT, NOT 404 and NOT index.html
     const missingRes = await fetch(`${base}/subtitles/movie/00000000/ku.vtt`);
-    assert.equal(missingRes.status, 404);
+    assert.equal(missingRes.status, 200);
+    assert.ok(missingRes.headers.get("content-type").includes("text/vtt"));
+    assert.equal(missingRes.headers.get("access-control-allow-origin"), "*");
+    assert.equal(await missingRes.text(), "WEBVTT\n\n");
   } finally {
     server.close();
     fs.rmSync(testSubDir, { recursive: true, force: true });
@@ -204,4 +207,33 @@ test("getSourceUrl embeds universal subtitle parameters across all 5 servers", a
   const s5 = getSourceUrl("embedsu", "movie", 550, null, null, {}, "e50914", "ku");
   assert.ok(s5.includes("sub_url="));
   assert.ok(s5.includes("sub_label="));
+});
+
+test("Subtitle 404 Prevention: missing TV subtitles return 200 OK with valid empty WEBVTT and CORS header, even with TV referer", async () => {
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
+  const base = `http://127.0.0.1:${port}`;
+
+  try {
+    // 1. Kurdish TV subtitle request with TV referer
+    const kuRes = await fetch(`${base}/subtitles/tv/220542/s1e1/ku.vtt`, {
+      headers: { Referer: `${base}/tv/220542/1/1` },
+    });
+    assert.equal(kuRes.status, 200);
+    assert.ok(kuRes.headers.get("content-type").includes("text/vtt"));
+    assert.equal(kuRes.headers.get("access-control-allow-origin"), "*");
+    assert.equal(await kuRes.text(), "WEBVTT\n\n");
+
+    // 2. Arabic TV subtitle request with TV referer
+    const arRes = await fetch(`${base}/subtitles/tv/220542/s1e1/ar.vtt`, {
+      headers: { Referer: `${base}/tv/220542/1/1` },
+    });
+    assert.equal(arRes.status, 200);
+    assert.ok(arRes.headers.get("content-type").includes("text/vtt"));
+    assert.equal(arRes.headers.get("access-control-allow-origin"), "*");
+    assert.equal(await arRes.text(), "WEBVTT\n\n");
+  } finally {
+    server.close();
+  }
 });

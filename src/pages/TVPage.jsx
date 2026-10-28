@@ -63,6 +63,7 @@ import {
 } from "../utils/storage";
 import { resolveGithubSubtitle } from "../utils/subtitles";
 import SubtitleOverlay from "../components/SubtitleOverlay";
+const EMPTY_SUBS = [];
 import { useAutoplay } from "../utils/useAutoplay";
 import { fetchAniSkipTimings } from "../utils/aniSkip";
 import {
@@ -451,6 +452,7 @@ export default function TVPage({
   const [m3u8Url, setM3u8Url] = useState(null);
   const [interceptedSubs, setInterceptedSubs] = useState([]);
   const [githubSub, setGithubSub] = useState(null);
+  const fetchedTvSubKeyRef = useRef("");
   const [playerSource, setPlayerSource] = useState(() => {
     if (item.server && PLAYER_SOURCES.some((s) => s.id === item.server)) {
       return item.server;
@@ -481,6 +483,14 @@ export default function TVPage({
     }
     return githubSub;
   }, [githubSub, subDisabled, selectedSubLang]);
+
+  const tvOverlaySubtitles = useMemo(() => {
+    if (githubSub?.available && githubSub.available.length > 0) {
+      return githubSub.available;
+    }
+    if (activeSub) return [activeSub];
+    return EMPTY_SUBS;
+  }, [githubSub, activeSub]);
 
   useEffect(() => {
     setSubDisabled(false);
@@ -1114,11 +1124,18 @@ export default function TVPage({
     return applyEpisodeMapping(item.id, rawSeason, rawEpisode, episodeGroupMap);
   }, [selectedEp, selectedSeason, item.id, episodeGroupMap]);
 
-  // Automatically check GitHub subtitles repo for the active TV episode
+  // Automatically check GitHub subtitles repo for the active TV episode (fetched once per ep/lang key)
   useEffect(() => {
     let mounted = true;
+    if (!playerEp?.season || !playerEp?.episode || !item?.id) {
+      setGithubSub(null);
+      return;
+    }
+    const subKey = `${item.id}_s${playerEp.season}e${playerEp.episode}_${playerSubLang || ""}`;
+    if (fetchedTvSubKeyRef.current === subKey) return;
+    fetchedTvSubKeyRef.current = subKey;
     setGithubSub(null);
-    if (!playerEp.season || !playerEp.episode) return;
+
     resolveGithubSubtitle({
       type: "tv",
       tmdbId: item.id,
@@ -2378,7 +2395,7 @@ export default function TVPage({
                   tmdbId={item.id}
                   season={playerEp?.season}
                   episode={playerEp?.episode}
-                  externalSubtitles={githubSub?.available || (activeSub ? [activeSub] : [])}
+                  externalSubtitles={tvOverlaySubtitles}
                   playing={playing && !pipOpen && !webviewLoading}
                   externalCurrentTime={lastKnownTimeRef.current || null}
                   currentTimeRef={lastKnownTimeRef}

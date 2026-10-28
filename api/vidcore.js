@@ -377,12 +377,12 @@ const AD_SHIELD_JS = `(function() {
   }
 
   try {
-    if (typeof document !== "undefined") {
+    if (typeof document !== "undefined" && document.head && !document.getElementById("hwto-sub-fix")) {
       var subtitleCss = '[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"],span[style*="text-shadow"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}';
       var st = document.createElement("style");
       st.id = "hwto-sub-fix";
       st.textContent = subtitleCss;
-      (document.head || document.documentElement).appendChild(st);
+      document.head.appendChild(st);
     }
   } catch (_e) {}
 
@@ -411,6 +411,16 @@ function addChunkCacheBusting(html) {
 }
 const { UNIVERSAL_SUBTITLE_INJECTOR_JS } = require("./subtitles.js");
 
+function injectStrictlyIntoHead(htmlStr, injectContent) {
+  if (!htmlStr || typeof htmlStr !== "string") return htmlStr;
+  if (htmlStr.includes("</head>")) {
+    return htmlStr.replace("</head>", injectContent + "</head>");
+  }
+  if (/<head\b[^>]*>/i.test(htmlStr)) {
+    return htmlStr.replace(/(<head\b[^>]*>)/i, "$1" + injectContent);
+  }
+  return "<head>" + injectContent + "</head>" + htmlStr;
+}
 
 function sanitizeVidlinkHtml(html) {
   let out = html;
@@ -431,16 +441,10 @@ function sanitizeVidlinkHtml(html) {
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
-<script src="/gtag-shield.js"></script>
 <script id="hwto-vidlink-interceptor" src="/gtag-shield.js"></script>
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
-  if (out.includes("</head>")) {
-    out = out.replace("</head>", headInject + "</head>");
-  } else {
-    out = headInject + out;
-  }
-  return out;
+  return injectStrictlyIntoHead(out, headInject);
 }
 
 function sanitizeVidcoreHtml(html) {
@@ -463,15 +467,10 @@ function sanitizeVidcoreHtml(html) {
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
-<script src="/gtag-shield.js"></script>
+<script id="hwto-vidcore-interceptor" src="/gtag-shield.js"></script>
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
-  if (out.includes("</head>")) {
-    out = out.replace("</head>", headInject + "</head>");
-  } else {
-    out = headInject + out;
-  }
-  return out;
+  return injectStrictlyIntoHead(out, headInject);
 }
 
 function patchPlayerChunk(jsCode, pathname = "") {

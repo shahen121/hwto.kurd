@@ -57,6 +57,7 @@ import {
 } from "../utils/storage";
 import { resolveGithubSubtitle } from "../utils/subtitles";
 import SubtitleOverlay from "../components/SubtitleOverlay";
+const EMPTY_SUBS = [];
 import {
   fetchMovieRating,
   isRestricted,
@@ -108,6 +109,7 @@ export default function MoviePage({
   const [m3u8Url, setM3u8Url] = useState(null);
   const [interceptedSubs, setInterceptedSubs] = useState([]);
   const [githubSub, setGithubSub] = useState(null);
+  const fetchedMovieSubKeyRef = useRef("");
   const [playerSource, setPlayerSource] = useState(() => {
     if (item.server && PLAYER_SOURCES.some((s) => s.id === item.server)) {
       return item.server;
@@ -123,10 +125,18 @@ export default function MoviePage({
   const playerAccentColor = playerSettings?.accentColor ?? null;
   const playerSubLang = playerSettings?.subtitleLang ?? null;
 
-  // Automatically check GitHub subtitles repo for this movie
+  // Automatically check GitHub subtitles repo for this movie (fetched once per id/lang key)
   useEffect(() => {
     let mounted = true;
+    if (!item?.id) {
+      setGithubSub(null);
+      return;
+    }
+    const subKey = `${item.id}_${playerSubLang || ""}`;
+    if (fetchedMovieSubKeyRef.current === subKey) return;
+    fetchedMovieSubKeyRef.current = subKey;
     setGithubSub(null);
+
     resolveGithubSubtitle({
       type: "movie",
       tmdbId: item.id,
@@ -166,6 +176,14 @@ export default function MoviePage({
     }
     return githubSub;
   }, [githubSub, subDisabled, selectedSubLang]);
+
+  const movieOverlaySubtitles = useMemo(() => {
+    if (githubSub?.available && githubSub.available.length > 0) {
+      return githubSub.available;
+    }
+    if (activeSub) return [activeSub];
+    return EMPTY_SUBS;
+  }, [githubSub, activeSub]);
 
   useEffect(() => {
     setSubDisabled(false);
@@ -1268,7 +1286,7 @@ export default function MoviePage({
             <SubtitleOverlay
               type="movie"
               tmdbId={item.id}
-              externalSubtitles={githubSub?.available || (activeSub ? [activeSub] : [])}
+              externalSubtitles={movieOverlaySubtitles}
               playing={playing && !pipOpen && !webviewLoading}
               externalCurrentTime={lastKnownTimeRef.current || null}
               currentTimeRef={lastKnownTimeRef}
