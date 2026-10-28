@@ -62,6 +62,7 @@ import {
   clearFailoverSource,
 } from "../utils/storage";
 import { resolveGithubSubtitle } from "../utils/subtitles";
+import SubtitleOverlay from "../components/SubtitleOverlay";
 import { useAutoplay } from "../utils/useAutoplay";
 import { fetchAniSkipTimings } from "../utils/aniSkip";
 import {
@@ -424,7 +425,16 @@ export default function TVPage({
   downloads,
   onGoToDownloads,
   onEpisodeChange,
+  onLeave,
 }) {
+  const onLeaveRef = useRef(onLeave);
+  onLeaveRef.current = onLeave;
+  useEffect(() => {
+    return () => {
+      onLeaveRef.current?.();
+    };
+  }, []);
+
   const [details, setDetails] = useState(null);
   const [seasonData, setSeasonData] = useState(null);
   const [failedSeasons, setFailedSeasons] = useState(() => new Set()); // season numbers which give 404 on TMDB
@@ -442,6 +452,9 @@ export default function TVPage({
   const [interceptedSubs, setInterceptedSubs] = useState([]);
   const [githubSub, setGithubSub] = useState(null);
   const [playerSource, setPlayerSource] = useState(() => {
+    if (item.server && PLAYER_SOURCES.some((s) => s.id === item.server)) {
+      return item.server;
+    }
     const saved = storage.get("playerSource");
     return PLAYER_SOURCES.some((s) => s.id === saved)
       ? saved
@@ -914,9 +927,9 @@ export default function TVPage({
     return () => window.electron.offM3u8Found(handler);
   }, []);
 
-  // Auto-failover from Vidcore to Vidlink if Vidcore reports any error (404, 555, or status >= 400)
+  // Auto-failover from Vidcore to Vidlink to AutoEmbed if error occurs
   useEffect(() => {
-    if (!playing || playerSource !== "vidcore") return;
+    if (!playing) return;
     const onMessage = (e) => {
       if (
         e.data &&
@@ -926,8 +939,20 @@ export default function TVPage({
           (typeof e.data.data === "number" && e.data.data >= 400))
       ) {
         const epKey = `tv_${item.id}_s${selectedSeason}_e${selectedEp?.episode_number ?? 1}`;
-        setFailoverSource(epKey, "vidlink");
-        setPlayerSource("vidlink");
+        if (playerSource === "vidcore") {
+          setFailoverSource(epKey, "vidlink");
+          setPlayerSource("vidlink");
+        } else if (playerSource === "vidlink") {
+          setFailoverSource(epKey, "autoembed");
+          setPlayerSource("autoembed");
+        } else if (playerSource === "autoembed") {
+          setFailoverSource(epKey, "vidsrc_cc");
+          setPlayerSource("vidsrc_cc");
+        } else if (playerSource === "vidsrc_cc") {
+          setFailoverSource(epKey, "embedsu");
+          setPlayerSource("embedsu");
+        }
+
       }
     };
     window.addEventListener("message", onMessage);
@@ -1557,7 +1582,12 @@ export default function TVPage({
               lastKnownTimeRef.current = ct;
             }
             const p = Math.floor((ct / result.duration) * 100);
-            saveProgressRef.current(currentProgressKey, Math.min(p, 100));
+            saveProgressRef.current(
+              currentProgressKey,
+              Math.min(p, 100),
+              Math.floor(ct),
+              Math.floor(result.duration),
+            );
             // Also persist actual seconds so DownloadsPage can show resume position
             storage.set("dlTime_" + currentProgressKey, Math.floor(ct));
 
@@ -1719,6 +1749,7 @@ export default function TVPage({
         season: selectedSeason,
         episode: ep.episode_number,
         episodeName: ep.name,
+        server: playerSource,
       });
       // d and selectedSeason are stable within a season view; onHistory is useCallback in App
     },
@@ -2342,6 +2373,16 @@ export default function TVPage({
                     tabIndex={-1}
                   />
                 )}
+                <SubtitleOverlay
+                  type="tv"
+                  tmdbId={item.id}
+                  season={playerEp?.season}
+                  episode={playerEp?.episode}
+                  externalSubtitles={githubSub?.available || (activeSub ? [activeSub] : [])}
+                  playing={playing && !pipOpen && !webviewLoading}
+                  externalCurrentTime={lastKnownTimeRef.current || null}
+                  currentTimeRef={lastKnownTimeRef}
+                />
                 {/* Left-side overlay button group, flex row, no fixed px offsets */}
                 <div className="player-overlay-group">
                   <button

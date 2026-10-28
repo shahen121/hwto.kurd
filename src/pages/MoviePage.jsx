@@ -56,6 +56,7 @@ import {
   clearFailoverSource,
 } from "../utils/storage";
 import { resolveGithubSubtitle } from "../utils/subtitles";
+import SubtitleOverlay from "../components/SubtitleOverlay";
 import {
   fetchMovieRating,
   isRestricted,
@@ -89,7 +90,16 @@ export default function MoviePage({
   downloads,
   onGoToDownloads,
   onSelect,
+  onLeave,
 }) {
+  const onLeaveRef = useRef(onLeave);
+  onLeaveRef.current = onLeave;
+  useEffect(() => {
+    return () => {
+      onLeaveRef.current?.();
+    };
+  }, []);
+
   const [details, setDetails] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
@@ -99,6 +109,9 @@ export default function MoviePage({
   const [interceptedSubs, setInterceptedSubs] = useState([]);
   const [githubSub, setGithubSub] = useState(null);
   const [playerSource, setPlayerSource] = useState(() => {
+    if (item.server && PLAYER_SOURCES.some((s) => s.id === item.server)) {
+      return item.server;
+    }
     const saved = storage.get("playerSource");
     return PLAYER_SOURCES.some((s) => s.id === saved)
       ? saved
@@ -492,9 +505,9 @@ export default function MoviePage({
     return () => window.electron.offM3u8Found(handler);
   }, []);
 
-  // Auto-failover from Vidcore to Vidlink if Vidcore reports any error (404, 555, or status >= 400)
+  // Auto-failover from Vidcore to Vidlink to AutoEmbed if error occurs
   useEffect(() => {
-    if (!playing || playerSource !== "vidcore") return;
+    if (!playing) return;
     const onMessage = (e) => {
       if (
         e.data &&
@@ -503,8 +516,20 @@ export default function MoviePage({
           e.data.data === 555 ||
           (typeof e.data.data === "number" && e.data.data >= 400))
       ) {
-        setFailoverSource(`movie_${item.id}`, "vidlink");
-        setPlayerSource("vidlink");
+        if (playerSource === "vidcore") {
+          setFailoverSource(`movie_${item.id}`, "vidlink");
+          setPlayerSource("vidlink");
+        } else if (playerSource === "vidlink") {
+          setFailoverSource(`movie_${item.id}`, "autoembed");
+          setPlayerSource("autoembed");
+        } else if (playerSource === "autoembed") {
+          setFailoverSource(`movie_${item.id}`, "vidsrc_cc");
+          setPlayerSource("vidsrc_cc");
+        } else if (playerSource === "vidsrc_cc") {
+          setFailoverSource(`movie_${item.id}`, "embedsu");
+          setPlayerSource("embedsu");
+        }
+
       }
     };
     window.addEventListener("message", onMessage);
@@ -759,7 +784,12 @@ export default function MoviePage({
               lastKnownTimeRef.current = ct;
             }
             const p = Math.floor((ct / result.duration) * 100);
-            saveProgressRef.current(progressKey, Math.min(p, 100));
+            saveProgressRef.current(
+              progressKey,
+              Math.min(p, 100),
+              Math.floor(ct),
+              Math.floor(result.duration),
+            );
             // Also persist actual seconds so DownloadsPage can show resume position
             storage.set("dlTime_" + progressKey, Math.floor(ct));
 
@@ -787,8 +817,8 @@ export default function MoviePage({
     setM3u8Url(null);
     setInterceptedSubs([]);
     setPlaying(true);
-    onHistory({ ...d, media_type: "movie" });
-  }, [d, onHistory]);
+    onHistory({ ...d, media_type: "movie", server: playerSource });
+  }, [d, onHistory, playerSource]);
 
   // Intercept fullscreen requests from embedded players (vidsrc / 2embed use
   // the native Fullscreen API which would otherwise fullscreen the entire app).
@@ -1235,6 +1265,14 @@ export default function MoviePage({
                 }}
               />
             )}
+            <SubtitleOverlay
+              type="movie"
+              tmdbId={item.id}
+              externalSubtitles={githubSub?.available || (activeSub ? [activeSub] : [])}
+              playing={playing && !pipOpen && !webviewLoading}
+              externalCurrentTime={lastKnownTimeRef.current || null}
+              currentTimeRef={lastKnownTimeRef}
+            />
             {/* Left-side overlay button group, flex row, no fixed px offsets */}
             <div className="player-overlay-group">
               <button

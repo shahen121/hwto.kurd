@@ -13,23 +13,30 @@ import {
   signOut,
 } from "firebase/auth";
 
+const env =
+  typeof import.meta !== "undefined" && import.meta.env
+    ? import.meta.env
+    : typeof process !== "undefined" && process.env
+      ? process.env
+      : {};
+
 export const FIREBASE_CONFIG = {
   apiKey:
-    import.meta.env.VITE_FIREBASE_API_KEY ||
+    env.VITE_FIREBASE_API_KEY ||
     "AIzaSyDtvAsnr-SXvdgrb3Yh5djpZY1OCtFNGJQ",
   authDomain:
-    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "hwto-kurd.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "hwto-kurd",
+    env.VITE_FIREBASE_AUTH_DOMAIN || "hwto-kurd.firebaseapp.com",
+  projectId: env.VITE_FIREBASE_PROJECT_ID || "hwto-kurd",
   storageBucket:
-    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+    env.VITE_FIREBASE_STORAGE_BUCKET ||
     "hwto-kurd.firebasestorage.app",
   messagingSenderId:
-    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "611705263660",
+    env.VITE_FIREBASE_MESSAGING_SENDER_ID || "611705263660",
   appId:
-    import.meta.env.VITE_FIREBASE_APP_ID ||
+    env.VITE_FIREBASE_APP_ID ||
     "1:611705263660:web:f37a19907be8d0973ce389",
   measurementId:
-    import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-HW5MNTW912",
+    env.VITE_FIREBASE_MEASUREMENT_ID || "G-HW5MNTW912",
 };
 
 const AUTH_SESSION_KEY = "hwto_auth_user";

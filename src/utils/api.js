@@ -196,8 +196,8 @@ function resolvePlayerBaseUrl(relativePath) {
 const ALL_PLAYER_SOURCES = [
   {
     id: "vidcore",
-    label: "سيرفر 1: Vidcore الأساسي",
-    tag: null,
+    label: "سيرفر 1: VidCore (الأساسي)",
+    tag: "HD",
     note: null,
     supportsProgress: true,
     colorParam: "theme", // hex without #
@@ -212,8 +212,8 @@ const ALL_PLAYER_SOURCES = [
   },
   {
     id: "vidlink",
-    label: "سيرفر 2: Vidlink الاحتياطي",
-    tag: null,
+    label: "سيرفر 2: VidLink (سريع)",
+    tag: "سريع",
     note: null,
     supportsProgress: true,
     colorParam: "primaryColor", // hex without #
@@ -229,6 +229,52 @@ const ALL_PLAYER_SOURCES = [
     tvUrl: (id, season, ep) =>
       resolvePlayerBaseUrl(`/vidlink/tv/${id}/${season}/${ep}`),
   },
+  {
+    id: "autoembed",
+    label: "سيرفر 3: AutoEmbed FHD",
+    tag: "FHD",
+    note: null,
+    supportsProgress: false,
+    colorParam: null,
+    langParam: "ds_lang",
+    subUrlParam: "sub_url",
+    params: {
+      server: "1",
+    },
+    movieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://player.autoembed.cc/embed/tv/${id}/${season}/${ep}`,
+  },
+  {
+    id: "vidsrc_cc",
+    label: "سيرفر 4: VidSrc Pro",
+    tag: "Pro",
+    note: null,
+    supportsProgress: false,
+    colorParam: null,
+    langParam: "ds_lang",
+    subUrlParam: "sub_url",
+    params: {
+      autoPlay: "false",
+    },
+    movieUrl: (id) => `https://vidsrc.cc/v2/embed/movie/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://vidsrc.cc/v2/embed/tv/${id}/${season}/${ep}`,
+  },
+  {
+    id: "embedsu",
+    label: "سيرفر 5: Embed.su",
+    tag: "Fast",
+    note: null,
+    supportsProgress: false,
+    colorParam: null,
+    langParam: "ds_lang",
+    subUrlParam: "sub_url",
+    params: {},
+    movieUrl: (id) => `https://embed.su/embed/movie/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://embed.su/embed/tv/${id}/${season}/${ep}`,
+  },
 ];
 
 // On the web, progress can't be read from a cross-origin iframe and
@@ -237,7 +283,7 @@ export const PLAYER_SOURCES = IS_ELECTRON
   ? ALL_PLAYER_SOURCES
   : ALL_PLAYER_SOURCES.filter((s) => !s.electronOnly).map((s) => ({
       ...s,
-      supportsProgress: true,
+      supportsProgress: s.supportsProgress ?? false,
     }));
 
 export const sourceSupportsExternalSubs = (sourceId) =>
@@ -271,19 +317,50 @@ export const getSourceUrl = (
     url.searchParams.set(src.colorParam, accentColor.replace(/^#/, ""));
   }
 
-  if (subtitleLang && src.langParam) {
-    url.searchParams.set(src.langParam, subtitleLang);
+  const origin =
+    typeof window !== "undefined" &&
+    window.location?.origin &&
+    window.location.protocol.startsWith("http")
+      ? window.location.origin
+      : "http://localhost:3000";
+
+  const subBasePath =
+    type === "movie"
+      ? `/subtitles/movie/${id}`
+      : `/subtitles/tv/${id}/s${season || 1}e${ep || 1}`;
+
+  const normLang = subtitleLang === "ar" ? "ar" : "ku";
+
+  if (src.langParam) {
+    url.searchParams.set(
+      src.langParam,
+      normLang === "ar" ? "ar" : src.langParam === "ds_lang" ? "ckb" : "ku",
+    );
   }
 
-  if (subtitleUrl && src.subUrlParam) {
-    url.searchParams.set(src.subUrlParam, subtitleUrl);
-    if (src.id === "vidlink") {
-      url.searchParams.set(
-        "sub_label",
-        subtitleLang === "ar" ? "العربية" : "کوردی",
-      );
-    }
+  // Ensure subtitle URL is an absolute URL for external players
+  let effectiveSubUrl = subtitleUrl;
+  if (!effectiveSubUrl) {
+    effectiveSubUrl = `${origin}${subBasePath}/${normLang}.vtt`;
+  } else if (!effectiveSubUrl.startsWith("http")) {
+    effectiveSubUrl = `${origin}${effectiveSubUrl.startsWith("/") ? "" : "/"}${effectiveSubUrl}`;
   }
+
+  if (effectiveSubUrl && src.subUrlParam) {
+    url.searchParams.set(src.subUrlParam, effectiveSubUrl);
+    const subLabel =
+      normLang === "ar"
+        ? "العربية"
+        : src.id === "vidlink"
+          ? "کوردی"
+          : "Kurdish";
+    url.searchParams.set("sub_label", subLabel);
+  }
+
+  // Provide separate ku and ar subtitle URLs for all compatible players
+  url.searchParams.set("sub_url_ku", `${origin}${subBasePath}/ku.vtt`);
+  url.searchParams.set("sub_url_ar", `${origin}${subBasePath}/ar.vtt`);
+
 
   Object.entries(extraParams).forEach(([key, value]) => {
     if (value != null) {

@@ -1,0 +1,333 @@
+const fs = require("fs");
+const path = require("path");
+
+const SUB_META = {
+  ku: { lang: "ku", label: "کوردی (سۆرانی)", flag: "☀️" },
+  ckb: { lang: "ku", label: "کوردی (سۆرانی)", flag: "☀️" },
+  ar: { lang: "ar", label: "العربية", flag: "🇸🇦" },
+  en: { lang: "en", label: "English", flag: "🇬🇧" },
+};
+
+function getSubtitlesDirectory() {
+  const candidates = [
+    path.join(__dirname, "..", "public", "subtitles"),
+    path.join(__dirname, "public", "subtitles"),
+    path.join(process.cwd(), "public", "subtitles"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
+}
+
+function loadIndexJson(subDir) {
+  const indexPath = path.join(subDir, "index.json");
+  if (fs.existsSync(indexPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(indexPath, "utf8"));
+    } catch (_e) {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Strips leading /subtitles/, .. and slashes so path resolves accurately inside subDir
+ */
+function sanitizeSubtitleRelPath(rawFile) {
+  if (!rawFile || typeof rawFile !== "string") return "";
+  let clean = rawFile.replace(/\\/g, "/").trim();
+  clean = clean.replace(/^(\.\.[\/\\])+/, "");
+  clean = clean.replace(/^\/?subtitles\/?/i, "");
+  clean = clean.replace(/^\/+/, "");
+  return path.normalize(clean).replace(/^(\.\.[\/\\])+/, "");
+}
+
+/**
+ * Universal Subtitle Injector JS:
+ * Injected into proxy players (<head>) for VidCore & VidLink.
+ * Features:
+ * - Detects Kurdish & Arabic subtitle URLs from query params OR derives them from pathname
+ * - Injects <track> elements for HTML5 video with MutationObserver
+ * - Ensures ONLY the preferred language is active ('showing') without conflict
+ * - Re-activates tracks on video loadedmetadata / canplay events
+ */
+const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
+  if (window.__universalSubtitlesInjected) return;
+  window.__universalSubtitlesInjected = true;
+
+  function getQueryParam(name) {
+    try {
+      var p = new URLSearchParams(window.location.search);
+      return p.get(name) || "";
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  var subUrl = getQueryParam("sub_url") || getQueryParam("sub_file") || "";
+  var subLang = (getQueryParam("sub") || getQueryParam("ds_lang") || getQueryParam("lang") || "ku").toLowerCase();
+  if (subLang === "ckb") subLang = "ku";
+
+  var kuUrl = getQueryParam("sub_url_ku");
+  var arUrl = getQueryParam("sub_url_ar");
+
+  if (subUrl) {
+    if (subLang === "ar" && !arUrl) arUrl = subUrl;
+    else if (!kuUrl) kuUrl = subUrl;
+  }
+
+  // If sub URLs are not in query params, derive default paths from current URL pathname
+  // e.g. /vidcore/movie/550, /vidlink/movie/550, /movie/550, /tv/550/1/2
+  if (!kuUrl || !arUrl) {
+    var pathMatch = (window.location.pathname || "").match(/\\/(?:vidcore|vidlink|embed)?\\/?(movie|tv)\\/(\\d+)(?:\\/(\\d+)\\/(\\d+))?/i);
+    if (pathMatch) {
+      var mType = pathMatch[1].toLowerCase();
+      var mId = pathMatch[2];
+      var mSeason = pathMatch[3];
+      var mEp = pathMatch[4];
+      var itemPath = mType === "tv"
+        ? "tv/" + mId + "/s" + (mSeason || "1") + "e" + (mEp || "1")
+        : "movie/" + mId;
+      if (!kuUrl) kuUrl = "/subtitles/" + itemPath + "/ku.vtt";
+      if (!arUrl) arUrl = "/subtitles/" + itemPath + "/ar.vtt";
+    }
+  }
+
+  var origin = window.location.origin;
+  function toAbsolute(url) {
+    if (!url) return "";
+    if (/^https?:\\/\\//i.test(url)) return url;
+    return origin + (url.indexOf("/") === 0 ? "" : "/") + url;
+  }
+
+  kuUrl = toAbsolute(kuUrl);
+  arUrl = toAbsolute(arUrl);
+
+  function activatePreferredTrack(v) {
+    try {
+      if (!v || !v.textTracks || v.textTracks.length === 0) return;
+      var targetLang = subLang === "ar" ? "ar" : "ku";
+      for (var i = 0; i < v.textTracks.length; i++) {
+        var t = v.textTracks[i];
+        var isTarget = t.language === targetLang || (targetLang === "ku" && (t.language === "ckb" || (t.label && t.label.indexOf("کوردی") !== -1)));
+        var isOtherHwto = !isTarget && t.label && t.label.indexOf("hwto-kurd") !== -1;
+        if (isTarget) {
+          t.mode = "showing";
+        } else if (isOtherHwto) {
+          t.mode = "hidden";
+        }
+      }
+    } catch (_e) {}
+  }
+
+  function injectSubtitlesToVideo(v) {
+    if (!v) return;
+
+    var tracks = [];
+    if (kuUrl) {
+      tracks.push({ lang: "ku", label: "کوردی (hwto-kurd)", url: kuUrl, def: subLang !== "ar" });
+    }
+    if (arUrl) {
+      tracks.push({ lang: "ar", label: "العربية (hwto-kurd)", url: arUrl, def: subLang === "ar" });
+    }
+
+    var addedAny = false;
+    tracks.forEach(function(item) {
+      var existing = v.querySelectorAll('track[srclang="' + item.lang + '"]');
+      if (existing.length === 0) {
+        var tr = document.createElement("track");
+        tr.kind = "subtitles";
+        tr.label = item.label;
+        tr.srclang = item.lang;
+        tr.src = item.url;
+        if (item.def) tr.default = true;
+        v.appendChild(tr);
+        addedAny = true;
+      }
+    });
+
+    if (addedAny || !v.__hwtoListenersBound) {
+      v.__hwtoListenersBound = true;
+      v.addEventListener("loadedmetadata", function() { activatePreferredTrack(v); });
+      v.addEventListener("canplay", function() { activatePreferredTrack(v); });
+    }
+
+    setTimeout(function() { activatePreferredTrack(v); }, 300);
+    setTimeout(function() { activatePreferredTrack(v); }, 1200);
+  }
+
+  function checkVideos() {
+    var vids = document.querySelectorAll("video");
+    for (var i = 0; i < vids.length; i++) {
+      injectSubtitlesToVideo(vids[i]);
+    }
+  }
+
+  if (typeof MutationObserver !== "undefined") {
+    var obs = new MutationObserver(function() { checkVideos(); });
+    var root = document.body || document.documentElement;
+    if (root) {
+      obs.observe(root, { childList: true, subtree: true });
+      checkVideos();
+    }
+    document.addEventListener("DOMContentLoaded", function() {
+      var r = document.body || document.documentElement;
+      if (r) obs.observe(r, { childList: true, subtree: true });
+      checkVideos();
+    });
+  }
+})();`;
+
+/**
+ * Universal Subtitles API Handler: /api/subtitles
+ * Query params:
+ *   - type: "movie" | "tv"
+ *   - id: TMDB Id
+ *   - season: Season number (for tv)
+ *   - episode: Episode number (for tv)
+ *   - file: Path to specific subtitle file to serve directly (.vtt / .srt)
+ */
+async function subtitlesHandler(req, res) {
+  const host = req.headers?.host || "localhost:3000";
+  const parsedUrl = new URL(req.url || "/", `http://${host}`);
+  const query = Object.fromEntries(parsedUrl.searchParams.entries());
+
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "*");
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    return res.end();
+  }
+
+  const subDir = getSubtitlesDirectory();
+
+  // 1. Direct file stream request
+  if (query.file) {
+    const safeRel = sanitizeSubtitleRelPath(query.file);
+    const targetFile = path.join(subDir, safeRel);
+    if (fs.existsSync(targetFile) && fs.statSync(targetFile).isFile()) {
+      const ext = path.extname(targetFile).toLowerCase();
+      const contentType =
+        ext === ".vtt"
+          ? "text/vtt; charset=utf-8"
+          : "text/plain; charset=utf-8";
+      res.writeHead(200, {
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=86400",
+      });
+      return fs.createReadStream(targetFile).pipe(res);
+    }
+
+    // Upstream fallback if external repository base URL is configured
+    const externalBase = process.env.SUBTITLES_BASE_URL || process.env.VITE_SUBTITLES_BASE_URL;
+    if (externalBase && externalBase.startsWith("http")) {
+      const remoteUrl = `${externalBase.replace(/\/+$/, "")}/${safeRel.replace(/\\/g, "/")}`;
+      try {
+        const upstreamRes = await fetch(remoteUrl);
+        if (upstreamRes.ok) {
+          const contentType = upstreamRes.headers.get("content-type") || "text/vtt; charset=utf-8";
+          const data = await upstreamRes.arrayBuffer();
+          res.writeHead(200, {
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=86400",
+          });
+          return res.end(Buffer.from(data));
+        }
+      } catch (_e) {}
+    }
+
+    res.statusCode = 404;
+    return res.end(JSON.stringify({ ok: false, error: "Subtitle file not found" }));
+  }
+
+  // 2. Query subtitles for media item
+  const { type, id, season, episode } = query;
+  if (!id) {
+    res.statusCode = 400;
+    return res.end(JSON.stringify({ ok: false, error: "Missing required parameter: id" }));
+  }
+
+  const itemPath =
+    type === "tv"
+      ? `tv/${id}/s${season || 1}e${episode || 1}`
+      : `movie/${id}`;
+
+  const available = [];
+  const index = loadIndexJson(subDir);
+
+  if (index && typeof index === "object" && Array.isArray(index[itemPath])) {
+    for (const rawItem of index[itemPath]) {
+      if (typeof rawItem !== "string") continue;
+      const clean = rawItem.trim();
+      const langCode = clean.split(".")[0].toLowerCase();
+      const normLang = langCode === "ckb" ? "ku" : langCode;
+      const meta = SUB_META[normLang] || { lang: normLang, label: normLang, flag: "🌐" };
+      const fileName = /\.(vtt|srt)$/i.test(clean) ? clean : `${normLang}.vtt`;
+      if (!available.some((a) => a.lang === meta.lang)) {
+        available.push({
+          ...meta,
+          url: `/subtitles/${itemPath}/${fileName}`,
+        });
+      }
+    }
+  }
+
+  // Also scan local disk if public/subtitles/<itemPath> exists
+  const localItemDir = path.join(subDir, itemPath);
+  if (fs.existsSync(localItemDir) && fs.statSync(localItemDir).isDirectory()) {
+    try {
+      const files = fs.readdirSync(localItemDir);
+      for (const file of files) {
+        if (!/\.(vtt|srt)$/i.test(file)) continue;
+        const langCode = file.split(".")[0].toLowerCase();
+        const normLang = langCode === "ckb" ? "ku" : langCode;
+        const meta = SUB_META[normLang] || { lang: normLang, label: normLang, flag: "🌐" };
+        if (!available.some((a) => a.lang === meta.lang)) {
+          available.push({
+            ...meta,
+            url: `/subtitles/${itemPath}/${file}`,
+          });
+        }
+      }
+    } catch (_e) {}
+  }
+
+  // If no specific subtitles were registered in index/folder, always provide default fallback paths
+  // for Kurdish & Arabic so players can attempt loading them directly
+  if (available.length === 0) {
+    available.push({
+      ...SUB_META.ku,
+      url: `/subtitles/${itemPath}/ku.vtt`,
+    });
+    available.push({
+      ...SUB_META.ar,
+      url: `/subtitles/${itemPath}/ar.vtt`,
+    });
+  }
+
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "public, max-age=300",
+  });
+  return res.end(
+    JSON.stringify({
+      ok: true,
+      type: type || "movie",
+      id,
+      season: season || null,
+      episode: episode || null,
+      subtitles: available,
+    }),
+  );
+}
+
+module.exports = subtitlesHandler;
+module.exports.default = subtitlesHandler;
+module.exports.subtitlesHandler = subtitlesHandler;
+module.exports.UNIVERSAL_SUBTITLE_INJECTOR_JS = UNIVERSAL_SUBTITLE_INJECTOR_JS;
+module.exports.sanitizeSubtitleRelPath = sanitizeSubtitleRelPath;
+module.exports.SUB_META = SUB_META;

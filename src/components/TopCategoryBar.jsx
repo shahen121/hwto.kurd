@@ -65,6 +65,7 @@ export default function TopCategoryBar({
   onOpenSearch,
   authUser,
   onSignOut,
+  onOpenProfile,
 }) {
   return (
     <header className="top-cat-header">
@@ -137,12 +138,63 @@ export default function TopCategoryBar({
           </button>
 
           {authUser && (
-            <div className="top-cat-user">
-              <span className="top-cat-username" title={authUser.email || ""}>
-                {authUser.isGuest
-                  ? t("guestUser")
-                  : authUser.displayName || t("user")}
-              </span>
+            <div className="top-cat-user" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                type="button"
+                className="top-cat-profile-pill"
+                onClick={() => (onOpenProfile ? onOpenProfile() : onSelectCategory?.("profile"))}
+                title={authUser.email || authUser.displayName || t("profile")}
+                style={{
+                  background: activeCategory === "profile" ? "var(--surface3)" : "rgba(255, 255, 255, 0.06)",
+                  border: activeCategory === "profile" ? "1px solid var(--red)" : "1px solid var(--border)",
+                  borderRadius: 20,
+                  padding: "4px 10px 4px 6px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                  color: "var(--text)",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                {authUser.photoURL ? (
+                  <img
+                    src={authUser.photoURL}
+                    alt=""
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: "50%",
+                      objectFit: "cover",
+                    }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <span
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: "50%",
+                      backgroundColor: "var(--red)",
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {(authUser.displayName || "U")[0].toUpperCase()}
+                  </span>
+                )}
+                <span className="top-cat-username" style={{ fontSize: 13, fontWeight: 500, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {authUser.isGuest
+                    ? t("guestUser")
+                    : authUser.displayName || t("user")}
+                </span>
+              </button>
               <button
                 type="button"
                 className="top-cat-logout-btn"

@@ -1,7 +1,30 @@
 {
   "rewrites": [
     {
-      "source": "/(vidcore|vidlink|movie|tv|embed|_next|stream-proxy)/(.*)",
+      "source": "/api/subtitles",
+      "destination": "/api/subtitles"
+    },
+    {
+      "source": "/subtitles/(.*)",
+      "destination": "/api/subtitles?file=$1"
+    },
+    {
+      "source": "/vidlink/(.*)",
+      "destination": "/api/vidlink"
+    },
+    {
+      "source": "/((?!api/tmdb|api/football|api/subtitles|subtitles/|assets/).*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "referer",
+          "value": ".*vidlink.*"
+        }
+      ],
+      "destination": "/api/vidlink"
+    },
+    {
+      "source": "/(vidcore|movie|tv|embed|_next|stream-proxy)/(.*)",
       "destination": "/api/vidcore"
     },
     {
@@ -21,12 +44,12 @@
       "destination": "/api/vidcore"
     },
     {
-      "source": "/((?!api/tmdb|api/football|subtitles/|assets/).*)",
+      "source": "/((?!api/tmdb|api/football|api/subtitles|subtitles/|assets/).*)",
       "has": [
         {
           "type": "header",
           "key": "referer",
-          "value": ".*(vidcore|vidlink).*"
+          "value": ".*vidcore.*"
         }
       ],
       "destination": "/api/vidcore"

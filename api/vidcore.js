@@ -398,6 +398,20 @@ function sanitizePreloadLinks(html) {
   });
 }
 
+function addChunkCacheBusting(html) {
+  if (!html || typeof html !== "string") return html;
+  return html.replace(
+    /(href|src)=["'](\/_next\/static\/chunks\/[^"']+)["']/g,
+    (match, attr, path) => {
+      if (path.includes("v=2")) return match;
+      const separator = path.includes("?") ? "&" : "?";
+      return `${attr}="${path}${separator}v=2"`;
+    }
+  );
+}
+const { UNIVERSAL_SUBTITLE_INJECTOR_JS } = require("./subtitles.js");
+
+
 function sanitizeVidlinkHtml(html) {
   let out = html;
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi, "");
@@ -410,19 +424,16 @@ function sanitizeVidlinkHtml(html) {
   out = out.replace(/\\"referer\\":(null|\\"[^\\"]*\\")/g, '\\"referer\\":\\"https://vidlink.pro/\\"');
 
   out = sanitizePreloadLinks(out);
-
-  // Cache busting for chunks (?v=2) to bypass browser and CDN cache
-  out = out.replace(
-    /(\/_next\/static\/chunks\/[a-zA-Z0-9_\-./%]+\.js)(?![?a-zA-Z0-9_&=])/g,
-    "$1?v=2",
-  );
+  out = addChunkCacheBusting(out);
 
   const headInject = `
+<link rel="preconnect" href="https://hwto.proteome626.workers.dev" />
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
 <script src="/gtag-shield.js"></script>
 <script id="hwto-vidlink-interceptor" src="/gtag-shield.js"></script>
+<script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
   if (out.includes("</head>")) {
     out = out.replace("</head>", headInject + "</head>");
@@ -446,18 +457,14 @@ function sanitizeVidcoreHtml(html) {
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
 
   out = sanitizePreloadLinks(out);
-
-  // Cache busting for chunks (?v=2) to bypass browser and CDN cache
-  out = out.replace(
-    /(\/_next\/static\/chunks\/[a-zA-Z0-9_\-./%]+\.js)(?![?a-zA-Z0-9_&=])/g,
-    "$1?v=2",
-  );
+  out = addChunkCacheBusting(out);
 
   const headInject = `
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
 <script src="/gtag-shield.js"></script>
+<script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
   if (out.includes("</head>")) {
     out = out.replace("</head>", headInject + "</head>");
@@ -475,46 +482,29 @@ function patchPlayerChunk(jsCode, pathname = "") {
     out = AD_SHIELD_JS + out;
   }
 
-  // 1. Anti-DevTools / slow-CPU console.table check ("Date.now()-a<=10")
-  if (out.includes("return console.table(t),console.clear(),Date.now()-a<=10")) {
-    out = out.replace(
-      "return console.table(t),console.clear(),Date.now()-a<=10",
-      "return!0",
-    );
-  }
+  // Anti-freeze bypass (DevTools timing detection)
+  out = out.replace(
+    /return\s*console\.table\(t\),\s*console\.clear\(\),\s*Date\.now\(\)\s*-\s*a\s*<=\s*10/g,
+    "return!0",
+  );
 
-  // 2. Sandbox bypass ("Please Disable Sandbox")
-  if (out.includes("window.self!==window.top")) {
+  // Sandbox bypass (iframe / top window restriction)
+  if (out.includes("if(!tI.current&&(tI.current=!0,window.self!==window.top))")) {
     out = out.replace(
       "if(!tI.current&&(tI.current=!0,window.self!==window.top))",
       "if(!1)",
     );
-    out = out.replace(/if\(window\.self!==window\.top\)/g, "if(!1)");
   }
   if (out.includes("Please Disable Sandbox")) {
-    out = out.replace(/<h1>Please Disable Sandbox<\/h1>/g, "");
+    out = out.split("Please Disable Sandbox").join("");
   }
 
-  // 3. Force ad prop to false
+  // 1. Force ad prop to false
   if (out.includes("let{en:l,from:b,ad:h,")) {
     out = out.replace("let{en:l,from:b,ad:h,", "let h=!1,{en:l,from:b,ad:_h_ignored,");
   }
 
-  // 3b. VidLink limitAds & directLinks
-  if (out.includes("let{data:t,limitAds:a,referer:")) {
-    out = out.replace(
-      /let\{data:t,limitAds:a,referer:([a-zA-Z0-9_$]+)\}=e/g,
-      "let a=!0,{data:t,limitAds:_a_ignored,referer:$1}=e",
-    );
-  }
-  if (out.includes("enableDirectLinks:g=!1")) {
-    out = out.replace(/enableDirectLinks:g=!1/g, "enableDirectLinks:_g_ignored=!1,g=!1");
-  }
-  if (out.includes("https://brightadnetwork.com/jump/next.php")) {
-    out = out.split("https://brightadnetwork.com/jump/next.php").join("about:blank");
-  }
-
-  // 4. Stream URL + failover flag
+  // 2. Stream URL + failover flag
   if (out.includes("await A,tl.current=T[0];")) {
     out = out.replace(
       "await A,tl.current=T[0];",
@@ -753,20 +743,21 @@ async function handleVidcoreProxy(req, res) {
       return res.end();
     }
 
+    // Delegate any Vidlink request directly to dedicated fast Vidlink proxy
+    const incomingRef = String(req.headers["referer"] || "");
+    if (pathname.startsWith("/vidlink/") || (incomingRef.includes("/vidlink/") && !pathname.startsWith("/vidcore/"))) {
+      const handleVidlinkProxy = require("./vidlink.js").handleVidlinkProxy;
+      return handleVidlinkProxy(req, res);
+    }
+
     let origin = VIDCORE_ORIGIN;
     let targetPath = pathname;
 
-    if (pathname.startsWith("/vidlink/")) {
-      origin = VIDLINK_ORIGIN;
-      targetPath = pathname.slice("/vidlink".length) || "/";
-    } else if (pathname.startsWith("/vidcore/")) {
+    if (pathname.startsWith("/vidcore/")) {
       origin = VIDCORE_ORIGIN;
       targetPath = pathname.slice("/vidcore".length) || "/";
-    } else {
-      const incomingRef = String(req.headers["referer"] || "");
-      if (incomingRef.includes("/vidlink/")) origin = VIDLINK_ORIGIN;
-      else origin = VIDCORE_ORIGIN;
     }
+
 
     // In-memory Caching for Static Assets / Chunks (normalized across prefixes)
     const isChunkStaticPath =
@@ -774,9 +765,7 @@ async function handleVidcoreProxy(req, res) {
       pathname.startsWith("/_next/static/");
 
     if (isChunkStaticPath && req.method === "GET") {
-      const cacheKey =
-        (targetPath.startsWith("/_next/static/") ? targetPath : pathname) +
-        (search || "");
+      const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
       if (staticChunkCache.has(cacheKey)) {
         const cached = staticChunkCache.get(cacheKey);
         res.writeHead(200, {
@@ -789,14 +778,7 @@ async function handleVidcoreProxy(req, res) {
     }
 
     const bodyBuffer = await readRequestBody(req);
-    const upstreamPath = isChunkStaticPath ? targetPath : targetPath + search;
-    const upstreamRes = await fetchFromUpstream(
-      origin,
-      upstreamPath,
-      req,
-      bodyBuffer,
-      true,
-    );
+    const upstreamRes = await fetchFromUpstream(origin, targetPath + search, req, bodyBuffer, true);
 
     const contentType =
       upstreamRes.headers.get("content-type") || "application/octet-stream";
@@ -833,13 +815,8 @@ async function handleVidcoreProxy(req, res) {
       const rawJs = await upstreamRes.text();
       const patchedJs = patchPlayerChunk(rawJs, targetPath);
       responseHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
-      const cacheKey =
-        (targetPath.startsWith("/_next/static/") ? targetPath : pathname) +
-        (search || "");
-      staticChunkCache.set(cacheKey, {
-        body: patchedJs,
-        contentType: "application/javascript; charset=utf-8",
-      });
+      const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
+      staticChunkCache.set(cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(patchedJs, "utf8");
     }
@@ -888,3 +865,4 @@ module.exports.fetchViaScrapeDoWithRotation = fetchViaScrapeDoWithRotation;
 module.exports.patchPlayerChunk = patchPlayerChunk;
 module.exports.staticChunkCache = staticChunkCache;
 module.exports.getSessionTokenIndex = getSessionTokenIndex;
+module.exports.UNIVERSAL_SUBTITLE_INJECTOR_JS = UNIVERSAL_SUBTITLE_INJECTOR_JS;

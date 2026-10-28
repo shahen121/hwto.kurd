@@ -39,9 +39,12 @@ import {
   canSync,
   loadCloudData,
   saveCloudData,
+  smartMergeUserData,
   mergeData,
   hasSyncedBefore,
   markSynced,
+  clearSyncedMark,
+  SyncController,
 } from "./utils/cloudSync";
 import {
   readDiscordRpcSettings,
@@ -69,6 +72,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const DownloadsPage = lazy(() => import("./pages/DownloadsPage"));
 const HwtoSportPage = lazy(() => import("./pages/HwtoSportPage"));
 const AnimePage = lazy(() => import("./pages/AnimePage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 import {
   checkForUpdatesWithFallback,
   DEFAULT_UPDATE_SOURCE,
@@ -85,6 +89,7 @@ export default function App() {
       const hash = window.location.hash.toLowerCase();
       if (hash === "#sport" || hash === "#/sport") return "sport";
       if (hash === "#anime" || hash === "#/anime") return "anime";
+      if (hash === "#profile" || hash === "#/profile") return "profile";
     }
     return storage.get("startPage") || "home";
   });
@@ -116,6 +121,8 @@ export default function App() {
         setPage("sport");
       } else if (hash === "#anime" || hash === "#/anime") {
         setPage("anime");
+      } else if (hash === "#profile" || hash === "#/profile") {
+        setPage("profile");
       }
     };
     window.addEventListener("hashchange", handleHash);
@@ -409,15 +416,71 @@ export default function App() {
 
   // ── Cloud sync (Firestore) for signed-in, non-guest users ─────────────────
   const [cloudReady, setCloudReady] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("idle"); // 'idle' | 'syncing' | 'synced' | 'error'
+  const syncControllerRef = useRef(null);
+
+  // Keep latest library data in ref so SyncController always flushes current state
+  const currentLibraryDataRef = useRef({ saved, savedOrder, progress, history, watched });
+  useEffect(() => {
+    currentLibraryDataRef.current = { saved, savedOrder, progress, history, watched };
+  }, [saved, savedOrder, progress, history, watched]);
+
+  // Setup SyncController with lifecycle listeners and debouncing
+  useEffect(() => {
+    if (!canSync(authUser)) {
+      syncControllerRef.current?.destroy();
+      syncControllerRef.current = null;
+      return;
+    }
+
+    const controller = new SyncController({
+      getUid: () => authUser?.uid,
+      canSyncFn: () => canSync(authUser),
+      getData: () => currentLibraryDataRef.current,
+      onSyncStart: () => setSyncStatus("syncing"),
+      onSyncSuccess: () => {
+        setSyncStatus("synced");
+        setTimeout(() => setSyncStatus("idle"), 2500);
+      },
+      onSyncError: () => {
+        setSyncStatus("error");
+        setTimeout(() => setSyncStatus("idle"), 4000);
+      },
+    });
+    syncControllerRef.current = controller;
+
+    return () => {
+      controller.destroy();
+      syncControllerRef.current = null;
+    };
+  }, [authUser?.uid, authUser?.isGuest]);
+
+  // Flush cloud sync whenever leaving a watch page (movie or tv unmount / navigation)
+  const prevWatchRef = useRef({ page, selectedId: selected?.id });
+  useEffect(() => {
+    const prev = prevWatchRef.current;
+    const wasWatching = prev.page === "movie" || prev.page === "tv";
+    const changedItemOrPage =
+      page !== prev.page || selected?.id !== prev.selectedId;
+
+    if (wasWatching && changedItemOrPage) {
+      syncControllerRef.current?.flushSync();
+    }
+    prevWatchRef.current = { page, selectedId: selected?.id };
+  }, [page, selected?.id]);
+
+  // Single read on auth + smart merge
   useEffect(() => {
     setCloudReady(false);
     if (!canSync(authUser)) return;
     let cancelled = false;
     (async () => {
       try {
+        setSyncStatus("syncing");
         const cloud = await loadCloudData(authUser.uid);
         if (cancelled) return;
-        const merged = mergeData(
+        const isFirstSync = !hasSyncedBefore(authUser.uid);
+        const merged = smartMergeUserData(
           {
             saved: storage.get("saved") || {},
             savedOrder: storage.get("savedOrder") || null,
@@ -426,21 +489,32 @@ export default function App() {
             watched: storage.get("watched") || {},
           },
           cloud,
-          hasSyncedBefore(authUser.uid),
+          !isFirstSync,
         );
+
         setSaved(merged.saved);
         setSavedOrder(merged.savedOrder);
         setProgress(merged.progress);
         setHistory(merged.history);
         setWatched(merged.watched);
+
         storage.set("saved", merged.saved);
         storage.set("savedOrder", merged.savedOrder);
         storage.set("progress", merged.progress);
         storage.set("history", merged.history);
         storage.set("watched", merged.watched);
         markSynced(authUser.uid);
+
+        // First login: upload merged data to cloud once so nothing local is lost
+        if (isFirstSync) {
+          await saveCloudData(authUser.uid, merged);
+        }
+        setSyncStatus("synced");
+        setTimeout(() => setSyncStatus("idle"), 2500);
       } catch (e) {
         console.warn("[cloud sync] load failed:", e?.message);
+        setSyncStatus("error");
+        setTimeout(() => setSyncStatus("idle"), 4000);
       } finally {
         if (!cancelled) setCloudReady(true);
       }
@@ -449,20 +523,6 @@ export default function App() {
       cancelled = true;
     };
   }, [authUser?.uid, authUser?.isGuest]);
-
-  useEffect(() => {
-    if (!cloudReady || !canSync(authUser)) return;
-    const t = setTimeout(() => {
-      saveCloudData(authUser.uid, {
-        saved,
-        savedOrder: savedOrder || null,
-        progress,
-        history,
-        watched,
-      }).catch((e) => console.warn("[cloud sync] save failed:", e?.message));
-    }, 2500);
-    return () => clearTimeout(t);
-  }, [cloudReady, authUser?.uid, saved, savedOrder, progress, history, watched]);
 
   // ── Detect platform for Windows titlebar ──────────────────────────────────
   useEffect(() => {
@@ -888,13 +948,27 @@ export default function App() {
   }, []);
 
   const getMediaType = useCallback(
-    (item) => item.media_type || (item.first_air_date ? "tv" : "movie"),
+    (item) =>
+      item?.media_type ||
+      item?.type ||
+      (item?.first_air_date ? "tv" : "movie"),
     [],
   );
 
   const handleSelectResult = useCallback(
     (item) => {
-      navigate(item.media_type === "tv" ? "tv" : "movie", item);
+      if (!item) return;
+      const type =
+        item.media_type ||
+        item.type ||
+        (item.first_air_date ? "tv" : "movie");
+      navigate(type === "tv" ? "tv" : "movie", {
+        ...item,
+        media_type: type,
+        type,
+        poster_path: item.poster_path || item.poster || "",
+        poster: item.poster || item.poster_path || "",
+      });
     },
     [navigate],
   );
@@ -905,6 +979,8 @@ export default function App() {
         navigate("home");
       } else if (categoryId === "sport") {
         navigate("sport");
+      } else if (categoryId === "profile") {
+        navigate("profile");
       } else {
         navigate("category", { categoryId });
       }
@@ -914,8 +990,21 @@ export default function App() {
 
   const handleSignOut = useCallback(async () => {
     await signOutUser();
+    clearSyncedMark();
     setAuthUser(null);
-  }, []);
+    navigate("home");
+  }, [navigate]);
+
+  const handleForceSync = useCallback(async () => {
+    if (!canSync(authUser)) return;
+    showToast(t("syncingNow"));
+    try {
+      await syncControllerRef.current?.flushSync();
+      showToast(t("syncSuccess"));
+    } catch {
+      showToast(t("syncError"));
+    }
+  }, [authUser, showToast]);
 
   // Ref so toggleSave never needs `saved` as a dep (avoids recreation on every save)
   const savedRef = useRef(saved);
@@ -944,10 +1033,13 @@ export default function App() {
         next[id] = {
           id: item.id,
           title: item.title || item.name,
-          poster_path: item.poster_path,
+          poster_path: item.poster_path || item.poster,
+          poster: item.poster_path || item.poster,
           media_type: mt,
+          type: mt,
           vote_average: item.vote_average,
           year: (item.release_date || item.first_air_date || "").slice(0, 4),
+          addedAt: Date.now(),
         };
         showToast(t("addedToWatchlistToast"));
         setSavedOrder((prev) => {
@@ -959,6 +1051,7 @@ export default function App() {
       }
       setSaved(next);
       storage.set("saved", next);
+      syncControllerRef.current?.queueUserActionSync();
     },
     [showToast, getMediaType],
   );
@@ -975,16 +1068,24 @@ export default function App() {
     // Respect the "disable watch history" setting
     const historyEnabled = storage.get(STORAGE_KEYS.HISTORY_ENABLED);
     if (historyEnabled === 0 || historyEnabled === false) return;
+    const mt = getMediaType(item);
     const entry = {
       id: item.id,
       title: item.title || item.name,
-      poster_path: item.poster_path,
-      media_type: getMediaType(item),
+      poster_path: item.poster_path || item.poster,
+      poster: item.poster_path || item.poster,
+      media_type: mt,
+      type: mt,
       watchedAt: Date.now(),
+      updatedAt: Date.now(),
       // Store as numbers so the progress key always matches exactly
       season: item.season != null ? Number(item.season) : null,
       episode: item.episode != null ? Number(item.episode) : null,
       episodeName: item.episodeName || null,
+      server: item.server || null,
+      currentTime: item.currentTime || null,
+      duration: item.duration || null,
+      progressPercent: item.progressPercent != null ? Number(item.progressPercent) : null,
     };
     // Functional update - never reads stale history from closure
     setHistory((prev) => {
@@ -997,13 +1098,14 @@ export default function App() {
         }
         return false;
       });
-      const next = [entry, ...filtered].slice(0, 100);
+      const next = [entry, ...filtered].slice(0, 50);
       storage.set("history", next);
       return next;
     });
-  }, []); // no deps needed
+    syncControllerRef.current?.queueUserActionSync();
+  }, [getMediaType]);
 
-  const saveProgress = useCallback((key, pct) => {
+  const saveProgress = useCallback((key, pct, currentTime = null, duration = null) => {
     // Functional update - without this, TVPage's setInterval keeps spreading
     // the progress object from when the interval was created, overwriting
     // saves from other episodes (classic stale closure bug).
@@ -1013,6 +1115,39 @@ export default function App() {
       storage.set("progress", next);
       return next;
     });
+
+    // Update progressPercent in history item as well
+    setHistory((prev) => {
+      let changed = false;
+      const next = prev.map((h) => {
+        const mt = h.media_type || h.type || "movie";
+        const pk =
+          mt === "movie"
+            ? `movie_${h.id}`
+            : `tv_${h.id}_s${h.season}e${h.episode}`;
+        if (pk === key) {
+          changed = true;
+          return {
+            ...h,
+            media_type: mt,
+            type: mt,
+            progressPercent: pct,
+            currentTime: currentTime != null ? currentTime : h.currentTime,
+            duration: duration != null ? duration : h.duration,
+            updatedAt: Date.now(),
+          };
+        }
+        return h;
+      });
+      if (changed) {
+        storage.set("history", next);
+        return next;
+      }
+      return prev;
+    });
+
+    // Zero-spam progress recording (checkpointed every 3-5min or on hide/leave)
+    syncControllerRef.current?.recordProgressUpdate();
   }, []); // no deps needed
 
   const markWatched = useCallback((key) => {
@@ -1021,6 +1156,7 @@ export default function App() {
       storage.set("watched", next);
       return next;
     });
+    syncControllerRef.current?.queueUserActionSync();
   }, []);
 
   const markUnwatched = useCallback((key) => {
@@ -1030,13 +1166,16 @@ export default function App() {
       storage.set("watched", next);
       return next;
     });
+    syncControllerRef.current?.queueUserActionSync();
   }, []);
 
   const removeHistory = useCallback((item) => {
+    const itemType = item.media_type || item.type || "movie";
     setHistory((prev) => {
       const next = prev.filter((h) => {
-        if (h.id !== item.id || h.media_type !== item.media_type) return true;
-        if (item.media_type === "tv") {
+        const hType = h.media_type || h.type || "movie";
+        if (h.id !== item.id || hType !== itemType) return true;
+        if (itemType === "tv") {
           return !(h.season === item.season && h.episode === item.episode);
         }
         return false;
@@ -1044,6 +1183,7 @@ export default function App() {
       storage.set("history", next);
       return next;
     });
+    syncControllerRef.current?.queueUserActionSync();
   }, []);
 
   // Memoized, avoids re-filtering on every download-progress event
@@ -1052,17 +1192,26 @@ export default function App() {
     () =>
       history
         .filter((h) => {
-          if (h.media_type === "tv" && (h.season == null || h.episode == null))
+          const mt = h.media_type || h.type || "movie";
+          if (mt === "tv" && (h.season == null || h.episode == null))
             return false;
           return true;
         })
-        .map((h) => ({
-          ...h,
-          _pk:
-            h.media_type === "movie"
+        .map((h) => {
+          const mt = h.media_type || h.type || "movie";
+          const pk =
+            mt === "movie"
               ? `movie_${h.id}`
-              : `tv_${h.id}_s${h.season}e${h.episode}`,
-        })),
+              : `tv_${h.id}_s${h.season}e${h.episode}`;
+          return {
+            ...h,
+            media_type: mt,
+            type: mt,
+            poster_path: h.poster_path || h.poster || "",
+            poster: h.poster || h.poster_path || "",
+            _pk: pk,
+          };
+        }),
     [history],
   );
 
@@ -1071,7 +1220,7 @@ export default function App() {
     () =>
       historyWithKeys.filter((h) => {
         if (watched[h._pk]) return false;
-        const pct = progress[h._pk];
+        const pct = progress[h._pk] ?? h.progressPercent;
         return pct != null && pct > 2 && pct < 98;
       }),
     [historyWithKeys, progress, watched],
@@ -1124,7 +1273,9 @@ export default function App() {
         ? selected?.categoryId || "movies"
         : page === "home"
           ? "home"
-          : null;
+          : page === "profile"
+            ? "profile"
+            : null;
   const transitionGroup =
     page === "sport" || page === "anime"
       ? page
@@ -1179,6 +1330,7 @@ export default function App() {
                 onOpenSearch={() => setShowSearch(true)}
                 authUser={authUser}
                 onSignOut={handleSignOut}
+                onOpenProfile={() => navigate("profile")}
               />
             )}
 
@@ -1262,6 +1414,7 @@ export default function App() {
                 downloads={downloads}
                 onGoToDownloads={handleGoToDownloads}
                 onSelect={handleSelectResult}
+                onLeave={() => syncControllerRef.current?.flushSync()}
               />
             )}
             {page === "tv" && selected && (
@@ -1285,6 +1438,7 @@ export default function App() {
                 downloads={downloads}
                 onGoToDownloads={handleGoToDownloads}
                 onEpisodeChange={setWatchingEpisode}
+                onLeave={() => syncControllerRef.current?.flushSync()}
               />
             )}
             {page === "history" && (
@@ -1344,6 +1498,24 @@ export default function App() {
                   onBack={() =>
                     navStack.length > 0 ? navigateBack() : navigate("home")
                   }
+                />
+              )}
+              {page === "profile" && (
+                <ProfilePage
+                  authUser={authUser}
+                  onSignOut={handleSignOut}
+                  saved={saved}
+                  savedOrder={savedOrder}
+                  onRemoveSaved={toggleSave}
+                  history={history}
+                  onRemoveHistory={removeHistory}
+                  progress={progress}
+                  watched={watched}
+                  onMarkWatched={markWatched}
+                  onMarkUnwatched={markUnwatched}
+                  onSelect={handleSelectResult}
+                  onForceSync={handleForceSync}
+                  syncStatus={syncStatus}
                 />
               )}
             </Suspense>

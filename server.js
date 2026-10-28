@@ -29,6 +29,8 @@ const CF_WORKER_URL = (
 const tmdbHandler = require("./api/tmdb.js");
 const footballHandler = require("./api/football.js");
 const { handleVidcoreProxy } = require("./api/vidcore.js");
+const { handleVidlinkProxy } = require("./api/vidlink.js");
+const subtitlesHandler = require("./api/subtitles.js");
 
 const DIST_DIR = path.join(__dirname, "dist");
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -133,7 +135,12 @@ async function app(req, res) {
     return footballHandler(req, res);
   }
 
-  // 3. HLS API Proxy (dynamic import since api/hls.js uses ESM)
+  // 3. Subtitles API
+  if (pathname === "/api/subtitles") {
+    return subtitlesHandler(req, res);
+  }
+
+  // 4. HLS API Proxy (dynamic import since api/hls.js uses ESM)
   if (pathname === "/api/hls") {
     try {
       const { default: hlsHandler } = await import("./api/hls.js");
@@ -143,8 +150,17 @@ async function app(req, res) {
     }
   }
 
-  // 4. Explicit /api/vidcore or any VidCore / VidLink / Stream Proxy route
+  // 5. Explicit Vidlink Proxy route
+  if (pathname.startsWith("/vidlink/") || pathname === "/api/vidlink") {
+    return handleVidlinkProxy(req, res);
+  }
+
+  // 6. Explicit /api/vidcore or any VidCore / Stream Proxy route
   if (pathname === "/api/vidcore" || isProxyRoute(pathname, req)) {
+    const ref = String(req.headers["referer"] || "");
+    if (ref.includes("/vidlink/") && !pathname.startsWith("/vidcore/")) {
+      return handleVidlinkProxy(req, res);
+    }
     return handleVidcoreProxy(req, res);
   }
 
@@ -164,7 +180,14 @@ async function app(req, res) {
     }
   }
 
-  // 6. SPA Fallback to dist/index.html
+  // 6. Subtitles direct path fallback (return 404/remote subtitle instead of SPA index.html)
+  if (pathname.startsWith("/subtitles/")) {
+    req.url = `/api/subtitles?file=${encodeURIComponent(pathname)}`;
+    return subtitlesHandler(req, res);
+  }
+
+  // 7. SPA Fallback to dist/index.html
+
   const indexHtml = path.join(DIST_DIR, "index.html");
   if (fs.existsSync(indexHtml)) {
     res.writeHead(200, {

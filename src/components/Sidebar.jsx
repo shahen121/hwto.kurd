@@ -15,6 +15,7 @@ import {
   BackIcon,
   SportIcon,
   AnimeIcon,
+  UserIcon,
 } from "./Icons";
 
 export default function Sidebar({
@@ -234,6 +235,12 @@ export default function Sidebar({
       )}
 
       <div className="sidebar-bottom">
+        <SideBtn
+          active={page === "profile"}
+          onClick={() => onNavigate("profile")}
+          icon={<UserIcon />}
+          label={t("profile")}
+        />
         <SideBtn
           active={page === "settings"}
           onClick={() => onNavigate("settings")}
