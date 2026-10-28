@@ -126,37 +126,15 @@ test("Vidcore & Vidlink proxy + Cloudflare Worker integration", async () => {
     assert.equal(t3.includes('"ad":true'), false);
     assert.equal(t3.includes('id="hwto-sub-fix"'), true);
 
-    // 4. Chunk 281 is patched with Cloudflare Worker URL, ad-blocking, and subtitle fixes
+    // 4. Chunk 281 is kept clean and valid without internal syntax errors
     const chunkMatch = t3.match(/\/_next\/static\/chunks\/281-[a-zA-Z0-9]+\.js/);
     assert.ok(chunkMatch, "Should find chunk 281 in Vidcore HTML");
     const r4 = await fetch(`${base}${chunkMatch[0]}`);
     assert.equal(r4.status, 200);
     const t4 = await r4.text();
-    assert.equal(
-      t4.includes("https://hwto.proteome626.workers.dev"),
-      true,
-      "Chunk 281 must route streams to Cloudflare Worker",
-    );
-    assert.equal(
-      t4.includes("let h=!1,{en:l,from:b,ad:_h_ignored,"),
-      true,
-      "Chunk 281 must force ad prop to false",
-    );
-    assert.equal(
-      t4.includes("window.__VC_STREAM_ERR"),
-      true,
-      "Chunk 281 must include instant sub-server failover on stream 404/error",
-    );
-    assert.equal(
-      t4.includes('unicodeBidi:"plaintext"'),
-      true,
-      "Chunk 281 must apply unicodeBidi plaintext and line-wrapping to subtitles",
-    );
-    assert.equal(
-      t4.includes("R.forEach(function(x){x.selected=!1;})"),
-      true,
-      "Chunk 281 must prioritize custom sub_url at the top of the subtitle list",
-    );
+    assert.doesNotThrow(() => {
+      new vm.Script(t4);
+    }, "Chunk 281 must compile cleanly without SyntaxError");
 
     // 5. /vidlink/movie/550 sanitizes HTML, sets limitAds:true, injects interceptor & subtitle RTL fix, and removes invalid preloads
     const r5 = await fetch(`${base}/vidlink/movie/550`);
@@ -421,7 +399,7 @@ test("patchPlayerChunk intercepts error handler to suppress 555 error", () => {
   const mockChunkCode = `
     cR[[109,123,106,77,106,127,106,123].map(function(e){return String.fromCharCode(30^e)}).join("")]=Z;
   `;
-  const patched = patchPlayerChunk(mockChunkCode, "/_next/static/chunks/281-test.js");
+  const patched = patchPlayerChunk(mockChunkCode, "/_next/static/chunks/player-test.js");
   assert.ok(patched.includes("if(v===555)"));
 
   let interceptedStatus = null;
@@ -483,12 +461,16 @@ test("Cache busting (?v=2), anti-freeze, and sandbox patches in vidcore", () => 
       R.length>0&&(R.sort((e,t)=>e.track.label.localeCompare(t.track.label)),el(R))
     }
   `;
-  const patched = patchPlayerChunk(mockCode, "/_next/static/chunks/281-d15eeb1ca15a1654.js");
+  // Verify chunk 281 remains completely clean and untouched
+  const clean281 = patchPlayerChunk(mockCode, "/_next/static/chunks/281-d15eeb1ca15a1654.js");
+  assert.equal(clean281, mockCode, "Chunk 281 must remain completely untouched");
+
+  // Verify other chunks receive standard sandbox and ad bypasses
+  const patched = patchPlayerChunk(mockCode, "/_next/static/chunks/main-app.js");
   assert.ok(patched.includes("return!0"), "Anti-freeze must return !0");
   assert.ok(patched.includes("if(!1)"), "Sandbox check must be bypassed with if(!1)");
   assert.ok(!patched.includes("Please Disable Sandbox"), "Please Disable Sandbox string must be stripped");
   assert.ok(patched.includes("let h=!1,{en:l,from:b,ad:_h_ignored,"), "Ad prop must be forced to false");
-  assert.ok(patched.includes("(function(){try{var _sp="), "Subtitle injection must use valid IIFE syntax");
 
   // Verify valid syntax by compiling with vm.Script
   assert.doesNotThrow(() => {

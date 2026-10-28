@@ -454,13 +454,13 @@ export default function TVPage({
   const [githubSub, setGithubSub] = useState(null);
   const fetchedTvSubKeyRef = useRef("");
   const [playerSource, setPlayerSource] = useState(() => {
-    if (item.server && PLAYER_SOURCES.some((s) => s.id === item.server)) {
-      return item.server;
+    if (item.server) {
+      const match = PLAYER_SOURCES.find((s) => s.id === item.server || s.aliases?.includes(item.server));
+      if (match) return match.id;
     }
     const saved = storage.get("playerSource");
-    return PLAYER_SOURCES.some((s) => s.id === saved)
-      ? saved
-      : NON_ANIME_DEFAULT_SOURCE;
+    const matchSaved = PLAYER_SOURCES.find((s) => s.id === saved || s.aliases?.includes(saved));
+    return matchSaved ? matchSaved.id : NON_ANIME_DEFAULT_SOURCE;
   });
   // Accent colour + subtitle lang come from App-level state (via props),
   // so they are always fresh after Settings save without any extra storage reads.
@@ -956,11 +956,11 @@ export default function TVPage({
           setFailoverSource(epKey, "autoembed");
           setPlayerSource("autoembed");
         } else if (playerSource === "autoembed") {
-          setFailoverSource(epKey, "vidsrc_cc");
-          setPlayerSource("vidsrc_cc");
-        } else if (playerSource === "vidsrc_cc") {
-          setFailoverSource(epKey, "embedsu");
-          setPlayerSource("embedsu");
+          setFailoverSource(epKey, "vidsrc_me");
+          setPlayerSource("vidsrc_me");
+        } else if (playerSource === "vidsrc_me" || playerSource === "vidsrc_cc") {
+          setFailoverSource(epKey, "multiembed");
+          setPlayerSource("multiembed");
         }
 
       }

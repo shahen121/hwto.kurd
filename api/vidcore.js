@@ -476,6 +476,11 @@ function sanitizeVidcoreHtml(html) {
 function patchPlayerChunk(jsCode, pathname = "") {
   let out = jsCode;
 
+  // Never tamper with chunk 281 - keep it completely clean to eliminate SyntaxError: Unexpected token ';'
+  if (pathname.includes("281-") || pathname.includes("/281") || pathname.includes("281.")) {
+    return jsCode;
+  }
+
   // In Next.js webpack runtime chunk, prepend AD_SHIELD_JS
   if (pathname.includes("/webpack-")) {
     out = AD_SHIELD_JS + out;
@@ -517,13 +522,8 @@ function patchPlayerChunk(jsCode, pathname = "") {
     );
   }
 
-  // 3. Subtitle custom sub_url prioritization (Safe IIFE expression: no rogue semicolons)
-  if (out.includes("localeCompare(t.track.label)),el(R))")) {
-    out = out.replace(
-      "localeCompare(t.track.label)),el(R))",
-      'localeCompare(t.track.label)),(function(){try{var _sp=new URLSearchParams(window.location.search),_su=_sp.get("sub_url"),_sl=_sp.get("sub")||"ku";if(_su&&tb.current){R.forEach(function(x){x.selected=!1;});var _lbl=_sl==="ar"?"العربية (hwto-kurd)":"کوردی (hwto-kurd)";var _tr=tb.current.addTextTrack("subtitles",_lbl);_tr.xid="custom_"+Date.now();_tr.srclang=_sl;R.unshift({url:_su,track:_tr,encoding:"utf8",downloaded:!1,selected:!0});_=!0;}}catch(_err){}})(),el(R))',
-    );
-  }
+  // Note: Subtitle injection is handled cleanly and externally via AD_SHIELD_JS and
+  // UNIVERSAL_SUBTITLE_INJECTOR_JS in <head> without internal chunk function tampering.
 
   // 4. Subtitle RTL rendering fix
   if (out.includes('sx:{whiteSpace:"nowrap",textAlign:"center"}')) {

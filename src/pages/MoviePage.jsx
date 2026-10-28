@@ -111,13 +111,13 @@ export default function MoviePage({
   const [githubSub, setGithubSub] = useState(null);
   const fetchedMovieSubKeyRef = useRef("");
   const [playerSource, setPlayerSource] = useState(() => {
-    if (item.server && PLAYER_SOURCES.some((s) => s.id === item.server)) {
-      return item.server;
+    if (item.server) {
+      const match = PLAYER_SOURCES.find((s) => s.id === item.server || s.aliases?.includes(item.server));
+      if (match) return match.id;
     }
     const saved = storage.get("playerSource");
-    return PLAYER_SOURCES.some((s) => s.id === saved)
-      ? saved
-      : NON_ANIME_DEFAULT_SOURCE;
+    const matchSaved = PLAYER_SOURCES.find((s) => s.id === saved || s.aliases?.includes(saved));
+    return matchSaved ? matchSaved.id : NON_ANIME_DEFAULT_SOURCE;
   });
 
   // Accent colour + subtitle lang come from App-level state (via props),
@@ -541,11 +541,11 @@ export default function MoviePage({
           setFailoverSource(`movie_${item.id}`, "autoembed");
           setPlayerSource("autoembed");
         } else if (playerSource === "autoembed") {
-          setFailoverSource(`movie_${item.id}`, "vidsrc_cc");
-          setPlayerSource("vidsrc_cc");
-        } else if (playerSource === "vidsrc_cc") {
-          setFailoverSource(`movie_${item.id}`, "embedsu");
-          setPlayerSource("embedsu");
+          setFailoverSource(`movie_${item.id}`, "vidsrc_me");
+          setPlayerSource("vidsrc_me");
+        } else if (playerSource === "vidsrc_me" || playerSource === "vidsrc_cc") {
+          setFailoverSource(`movie_${item.id}`, "multiembed");
+          setPlayerSource("multiembed");
         }
 
       }

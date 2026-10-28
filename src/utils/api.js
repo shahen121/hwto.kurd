@@ -246,34 +246,35 @@ const ALL_PLAYER_SOURCES = [
       `https://player.autoembed.cc/embed/tv/${id}/${season}/${ep}`,
   },
   {
-    id: "vidsrc_cc",
-    label: "سيرفر 4: VidSrc Pro",
-    tag: "Pro",
-    note: null,
-    supportsProgress: false,
-    colorParam: null,
-    langParam: "ds_lang",
-    subUrlParam: "sub_url",
-    params: {
-      autoPlay: "false",
-    },
-    movieUrl: (id) => `https://vidsrc.cc/v2/embed/movie/${id}`,
-    tvUrl: (id, season, ep) =>
-      `https://vidsrc.cc/v2/embed/tv/${id}/${season}/${ep}`,
-  },
-  {
-    id: "embedsu",
-    label: "سيرفر 5: Embed.su",
-    tag: "Fast",
+    id: "vidsrc_me",
+    aliases: ["vidsrc_cc", "vidsrc"],
+    label: "سيرفر 4: VidSrc.me",
+    tag: "Me",
     note: null,
     supportsProgress: false,
     colorParam: null,
     langParam: "ds_lang",
     subUrlParam: "sub_url",
     params: {},
-    movieUrl: (id) => `https://embed.su/embed/movie/${id}`,
+    movieUrl: (id) => `https://vidsrc.me/embed/movie?tmdb=${id}`,
     tvUrl: (id, season, ep) =>
-      `https://embed.su/embed/tv/${id}/${season}/${ep}`,
+      `https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${ep}`,
+  },
+  {
+    id: "multiembed",
+    aliases: ["embedsu"],
+    label: "سيرفر 5: MultiEmbed",
+    tag: "Direct",
+    note: null,
+    supportsProgress: false,
+    colorParam: null,
+    langParam: "ds_lang",
+    subUrlParam: "sub_url",
+    params: {},
+    movieUrl: (id) =>
+      `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,
+    tvUrl: (id, season, ep) =>
+      `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${season}&e=${ep}`,
   },
 ];
 
@@ -287,7 +288,7 @@ export const PLAYER_SOURCES = IS_ELECTRON
     }));
 
 export const sourceSupportsExternalSubs = (sourceId) =>
-  !!PLAYER_SOURCES.find((s) => s.id === sourceId)?.subUrlParam;
+  !!PLAYER_SOURCES.find((s) => s.id === sourceId || s.aliases?.includes(sourceId))?.subUrlParam;
 
 export const getSourceUrl = (
   sourceId,
@@ -303,7 +304,8 @@ export const getSourceUrl = (
   subtitleUrl = null,
 ) => {
   const src =
-    PLAYER_SOURCES.find((s) => s.id === sourceId) ?? PLAYER_SOURCES[0];
+    PLAYER_SOURCES.find((s) => s.id === sourceId || s.aliases?.includes(sourceId)) ??
+    PLAYER_SOURCES[0];
   const baseUrl =
     type === "movie" ? src.movieUrl(id) : src.tvUrl(id, season, ep);
   const url = new URL(baseUrl);

@@ -200,13 +200,21 @@ test("getSourceUrl embeds universal subtitle parameters across all 5 servers", a
   assert.ok(s3.includes("sub_label="));
   assert.ok(s3.includes("ds_lang="));
 
-  const s4 = getSourceUrl("vidsrc_cc", "movie", 550, null, null, {}, "e50914", "ar");
+  const s4 = getSourceUrl("vidsrc_me", "movie", 550, null, null, {}, "e50914", "ar");
+  assert.ok(s4.includes("vidsrc.me"));
   assert.ok(s4.includes("sub_url="));
   assert.ok(s4.includes("ds_lang=ar"));
 
-  const s5 = getSourceUrl("embedsu", "movie", 550, null, null, {}, "e50914", "ku");
+  const s4Alias = getSourceUrl("vidsrc_cc", "movie", 550, null, null, {}, "e50914", "ar");
+  assert.ok(s4Alias.includes("vidsrc.me"));
+
+  const s5 = getSourceUrl("multiembed", "movie", 550, null, null, {}, "e50914", "ku");
+  assert.ok(s5.includes("multiembed.mov"));
   assert.ok(s5.includes("sub_url="));
   assert.ok(s5.includes("sub_label="));
+
+  const s5Alias = getSourceUrl("embedsu", "movie", 550, null, null, {}, "e50914", "ku");
+  assert.ok(s5Alias.includes("multiembed.mov"));
 });
 
 test("Subtitle 404 Prevention: missing TV subtitles return 200 OK with valid empty WEBVTT and CORS header, even with TV referer", async () => {
