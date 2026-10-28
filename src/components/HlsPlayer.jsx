@@ -300,14 +300,24 @@ export default function HlsPlayer({
       >
         {subtitles.map((sub, idx) => {
           const isKurdish = sub.lang === "ku" || sub.lang === "ckb";
+          const defaultIdx = subtitles.findIndex((s) => s.isDefault);
+          const fallbackIdx = subtitles.findIndex(
+            (s) => s.lang === "ku" || s.lang === "ckb",
+          );
+          const chosenIdx =
+            defaultIdx !== -1
+              ? defaultIdx
+              : fallbackIdx !== -1
+                ? fallbackIdx
+                : 0;
           return (
             <track
               key={sub.url || idx}
               kind="subtitles"
               src={sub.url}
               srcLang={sub.lang || (isKurdish ? "ku" : "ar")}
-              label={sub.label || (isKurdish ? "کوردی" : "العربية")}
-              default={isKurdish || idx === 0}
+              label={sub.label || (isKurdish ? "Kurdî" : "العربية")}
+              default={idx === chosenIdx}
             />
           );
         })}

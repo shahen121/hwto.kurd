@@ -277,7 +277,7 @@ export default function ProfilePage({
           </div>
         </div>
 
-        {/* Header Actions: Sync & Sign Out */}
+        {/* Header Actions: Sync & Auth Button */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           {!authUser?.isGuest && onForceSync && (
             <button
@@ -292,21 +292,102 @@ export default function ProfilePage({
             </button>
           )}
 
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={onSignOut}
-            style={{
-              padding: "10px 22px",
-              fontSize: 14,
-              fontWeight: 600,
-              background: "linear-gradient(135deg, #ed227b 0%, #ce197b 100%)",
-            }}
-          >
-            {t("signOut")}
-          </button>
+          {authUser?.isGuest ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={onSignOut}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 22px",
+                fontSize: 14,
+                fontWeight: 600,
+                background: "linear-gradient(135deg, #ed227b 0%, #ce197b 100%)",
+                boxShadow: "0 4px 15px rgba(237, 34, 123, 0.35)",
+              }}
+            >
+              <UserIcon />
+              <span>{t("signIn")}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn"
+              onClick={onSignOut}
+              style={{
+                padding: "10px 20px",
+                fontSize: 13,
+                fontWeight: 600,
+                background: "rgba(239, 68, 68, 0.12)",
+                color: "#ef4444",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: 8,
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#ef4444";
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(239, 68, 68, 0.12)";
+                e.currentTarget.style.color = "#ef4444";
+              }}
+            >
+              {t("signOut")}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* ── Guest Enhancement Banner ── */}
+      {authUser?.isGuest && (
+        <div
+          style={{
+            background: "linear-gradient(90deg, rgba(237, 34, 123, 0.12) 0%, rgba(36, 28, 58, 0.6) 100%)",
+            border: "1px solid rgba(237, 34, 123, 0.3)",
+            borderRadius: "14px",
+            padding: "18px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "16px",
+            marginBottom: "28px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <span style={{ fontSize: 24 }}>☁️</span>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 2 }}>
+                {t("guestBannerTitle")}
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text2)", maxWidth: 640 }}>
+                {t("guestBannerDesc")}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="btn btn-primary"
+            style={{
+              padding: "9px 20px",
+              fontSize: 13,
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "var(--hwto-gradient)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span>{t("guestSignInAction")}</span>
+          </button>
+        </div>
+      )}
 
       {/* ── Quick Stats Grid ── */}
       <div

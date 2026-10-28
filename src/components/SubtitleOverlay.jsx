@@ -208,19 +208,19 @@ export default function SubtitleOverlay({
     [externalSubtitles],
   );
 
-  // Synchronize availableSubs when externalSubtitles prop actually changes
+  // Synchronize availableSubs when externalSubtitles prop changes
   useEffect(() => {
-    if (externalSubtitles && externalSubtitles.length > 0) {
-      setAvailableSubs(externalSubtitles);
-    }
+    setAvailableSubs(externalSubtitles || []);
   }, [externalSubsKey]);
 
-  // Fetch available subtitles metadata for this media (only once per media key)
+  // Fetch available subtitles metadata for this media if not provided by parent
   useEffect(() => {
     let active = true;
     if (!tmdbId) return;
 
-    if (externalSubtitles && externalSubtitles.length > 0) {
+    // Parent provided subtitles (or explicit empty array)
+    if (Array.isArray(externalSubtitles)) {
+      setAvailableSubs(externalSubtitles);
       return;
     }
 
@@ -245,46 +245,12 @@ export default function SubtitleOverlay({
         if (data && data.ok && Array.isArray(data.subtitles)) {
           setAvailableSubs(data.subtitles);
         } else {
-          const itemPath =
-            type === "tv"
-              ? `tv/${tmdbId}/s${season || 1}e${episode || 1}`
-              : `movie/${tmdbId}`;
-          setAvailableSubs([
-            {
-              lang: "ku",
-              label: "کوردی (سۆرانی)",
-              flag: "☀️",
-              url: `/subtitles/${itemPath}/ku.vtt`,
-            },
-            {
-              lang: "ar",
-              label: "العربية",
-              flag: "🇸🇦",
-              url: `/subtitles/${itemPath}/ar.vtt`,
-            },
-          ]);
+          setAvailableSubs([]);
         }
       })
       .catch(() => {
         if (!active) return;
-        const itemPath =
-          type === "tv"
-            ? `tv/${tmdbId}/s${season || 1}e${episode || 1}`
-            : `movie/${tmdbId}`;
-        setAvailableSubs([
-          {
-            lang: "ku",
-            label: "کوردی (سۆرانی)",
-            flag: "☀️",
-            url: `/subtitles/${itemPath}/ku.vtt`,
-          },
-          {
-            lang: "ar",
-            label: "العربية",
-            flag: "🇸🇦",
-            url: `/subtitles/${itemPath}/ar.vtt`,
-          },
-        ]);
+        setAvailableSubs([]);
       })
       .finally(() => {
         if (active) setLoadingSubs(false);
@@ -293,7 +259,7 @@ export default function SubtitleOverlay({
     return () => {
       active = false;
     };
-  }, [type, tmdbId, season, episode]);
+  }, [type, tmdbId, season, episode, externalSubtitles]);
 
   // Fetch and parse subtitle file whenever selected language changes.
   // Depends only on primitives [tmdbId, season, episode, selectedLang, type].
@@ -326,11 +292,12 @@ export default function SubtitleOverlay({
     }
 
     const sub = availableSubs.find((s) => s.lang === selectedLang);
-    const targetUrl =
-      sub?.url ||
-      (type === "tv"
-        ? `/subtitles/tv/${tmdbId}/s${season || 1}e${episode || 1}/${selectedLang}.vtt`
-        : `/subtitles/movie/${tmdbId}/${selectedLang}.vtt`);
+    if (!sub?.url) {
+      setCues([]);
+      setLoadError(null);
+      return;
+    }
+    const targetUrl = sub.url;
 
     let active = true;
     setLoadError(null);

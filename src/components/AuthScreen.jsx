@@ -1,7 +1,5 @@
 import { useState } from "react";
 import {
-  signInWithEmail,
-  registerWithEmail,
   signInWithGoogle,
   signInAsGuest,
   isFirebaseConfigured,
@@ -9,10 +7,6 @@ import {
 import { t, isRTL } from "../utils/i18n";
 
 export default function AuthScreen({ onAuthenticated }) {
-  const [mode, setMode] = useState("login"); // "login" | "register"
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -22,28 +16,6 @@ export default function AuthScreen({ onAuthenticated }) {
     const code = err?.code || "";
     if (code === "app/firebase-not-configured") {
       return t("firebaseNotConfigured");
-    }
-    if (code === "app/email-password-required") {
-      return t("authEmailPasswordRequired");
-    }
-    if (code === "app/weak-password") {
-      return t("authWeakPassword");
-    }
-    if (
-      code === "auth/invalid-credential" ||
-      code === "auth/wrong-password" ||
-      code === "auth/user-not-found"
-    ) {
-      return t("authInvalidCredentials");
-    }
-    if (code === "auth/email-already-in-use") {
-      return t("authEmailInUse");
-    }
-    if (code === "auth/invalid-email") {
-      return t("authInvalidEmail");
-    }
-    if (code === "auth/weak-password") {
-      return t("authWeakPassword");
     }
     if (code === "auth/popup-closed-by-user") {
       return t("authPopupClosed");
@@ -66,23 +38,6 @@ export default function AuthScreen({ onAuthenticated }) {
     return t("authSignInFailed");
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const user =
-        mode === "register"
-          ? await registerWithEmail(email, password, displayName)
-          : await signInWithEmail(email, password);
-      onAuthenticated?.(user);
-    } catch (err) {
-      setError(formatFirebaseError(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleGoogleLogin = async () => {
     setError("");
     setLoading(true);
@@ -102,8 +57,13 @@ export default function AuthScreen({ onAuthenticated }) {
 
   const handleGuestLogin = async () => {
     setError("");
-    const user = await signInAsGuest();
-    onAuthenticated?.(user);
+    setLoading(true);
+    try {
+      const user = await signInAsGuest();
+      onAuthenticated?.(user);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -111,7 +71,7 @@ export default function AuthScreen({ onAuthenticated }) {
       <div className="auth-glow auth-glow-1" />
       <div className="auth-glow auth-glow-2" />
 
-      <div className="auth-card fade-in" dir={isRTL() ? "rtl" : "ltr"}>
+      <div className="auth-card fade-in" dir={isRTL() ? "rtl" : "ltr"} style={{ maxWidth: 420 }}>
         <div className="auth-logo-wrap">
           <img src="hwto-logo.svg" alt="hwto-kurd" className="auth-logo-img" />
           <div className="auth-brand-title">hwto-kurd</div>
@@ -120,109 +80,27 @@ export default function AuthScreen({ onAuthenticated }) {
           </div>
         </div>
 
-        {/* Mode Switcher */}
-        {!firebaseReady && (
-          <div className="auth-error" style={{ marginBottom: 14 }}>
-            {t("continueAsGuest")}
+        {error && (
+          <div className="auth-error" style={{ marginBottom: 16 }}>
+            {error}
           </div>
         )}
 
-        <div className="auth-tabs">
-          <button
-            type="button"
-            className={`auth-tab ${mode === "login" ? "active" : ""}`}
-            onClick={() => {
-              setMode("login");
-              setError("");
-            }}
-          >
-            {t("signIn")}
-          </button>
-          <button
-            type="button"
-            className={`auth-tab ${mode === "register" ? "active" : ""}`}
-            onClick={() => {
-              setMode("register");
-              setError("");
-            }}
-          >
-            {t("createAccount")}
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="auth-form">
-          {mode === "register" && (
-            <div className="auth-field">
-              <label className="auth-label">{t("displayName")}</label>
-              <input
-                type="text"
-                className="auth-input"
-                placeholder={t("displayName")}
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                autoComplete="name"
-              />
-            </div>
-          )}
-
-          <div className="auth-field">
-            <label className="auth-label">{t("email")}</label>
-            <input
-              type="email"
-              className="auth-input"
-              placeholder="name@example.com"
-              dir="ltr"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="auth-field">
-            <label className="auth-label">{t("password")}</label>
-            <input
-              type="password"
-              className="auth-input"
-              placeholder="••••••••"
-              dir="ltr"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete={
-                mode === "register" ? "new-password" : "current-password"
-              }
-            />
-          </div>
-
-          {error && <div className="auth-error">{error}</div>}
-
-          <button
-            type="submit"
-            className="auth-submit-btn"
-            disabled={loading}
-          >
-            {loading
-              ? t("loading")
-              : mode === "register"
-                ? t("createAccount")
-                : t("signIn")}
-          </button>
-        </form>
-
-        <div className="auth-divider">
-          <span>{t("orSignInWith")}</span>
-        </div>
-
-        <div className="auth-alt-actions">
+        <div className="auth-alt-actions" style={{ gap: 12 }}>
           {firebaseReady && (
             <button
               type="button"
               className="auth-google-btn"
               onClick={handleGoogleLogin}
               disabled={loading}
+              style={{
+                padding: "13px 18px",
+                fontSize: 14,
+                fontWeight: 600,
+                boxShadow: "0 4px 14px rgba(0, 0, 0, 0.25)",
+              }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24">
+              <svg width="20" height="20" viewBox="0 0 24 24">
                 <path
                   fill="#EA4335"
                   d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z"
@@ -240,7 +118,7 @@ export default function AuthScreen({ onAuthenticated }) {
                   d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.9C3.5 21.4 7.4 24 12 24z"
                 />
               </svg>
-              <span>{t("googleSignIn")}</span>
+              <span>{loading ? t("loading") : t("googleSignIn")}</span>
             </button>
           )}
 
@@ -248,9 +126,32 @@ export default function AuthScreen({ onAuthenticated }) {
             type="button"
             className="auth-guest-btn"
             onClick={handleGuestLogin}
+            disabled={loading}
+            style={{
+              padding: "13px 18px",
+              fontSize: 14,
+              fontWeight: 500,
+            }}
           >
             {t("continueAsGuest")}
           </button>
+        </div>
+
+        <div
+          style={{
+            marginTop: 22,
+            paddingTop: 16,
+            borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            fontSize: 12,
+            color: "var(--text3)",
+          }}
+        >
+          <span>🔒</span>
+          <span>{t("authFastSecure")}</span>
         </div>
       </div>
     </div>

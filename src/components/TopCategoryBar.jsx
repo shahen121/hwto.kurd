@@ -195,14 +195,6 @@ export default function TopCategoryBar({
                     : authUser.displayName || t("user")}
                 </span>
               </button>
-              <button
-                type="button"
-                className="top-cat-logout-btn"
-                onClick={onSignOut}
-                title={t("signOut")}
-              >
-                {t("signOut")}
-              </button>
             </div>
           )}
         </div>

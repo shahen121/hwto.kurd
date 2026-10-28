@@ -324,11 +324,7 @@ export const getSourceUrl = (
       ? window.location.origin
       : "http://localhost:3000";
 
-  const subBasePath =
-    type === "movie"
-      ? `/subtitles/movie/${id}`
-      : `/subtitles/tv/${id}/s${season || 1}e${ep || 1}`;
-
+  const R2_BASE = "https://pub-d1bbd0e1dd5d4e81b55c524af70a17e0.r2.dev";
   const normLang = subtitleLang === "ar" ? "ar" : "ku";
 
   if (src.langParam) {
@@ -341,7 +337,10 @@ export const getSourceUrl = (
   // Ensure subtitle URL is an absolute URL for external players
   let effectiveSubUrl = subtitleUrl;
   if (!effectiveSubUrl) {
-    effectiveSubUrl = `${origin}${subBasePath}/${normLang}.vtt`;
+    effectiveSubUrl =
+      type === "movie"
+        ? `${R2_BASE}/movie/${id}/${normLang}.vtt`
+        : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_${normLang}.vtt`;
   } else if (!effectiveSubUrl.startsWith("http")) {
     effectiveSubUrl = `${origin}${effectiveSubUrl.startsWith("/") ? "" : "/"}${effectiveSubUrl}`;
   }
@@ -352,14 +351,23 @@ export const getSourceUrl = (
       normLang === "ar"
         ? "العربية"
         : src.id === "vidlink"
-          ? "کوردی"
+          ? "Kurdî"
           : "Kurdish";
     url.searchParams.set("sub_label", subLabel);
   }
 
-  // Provide separate ku and ar subtitle URLs for all compatible players
-  url.searchParams.set("sub_url_ku", `${origin}${subBasePath}/ku.vtt`);
-  url.searchParams.set("sub_url_ar", `${origin}${subBasePath}/ar.vtt`);
+  // Provide separate ku and ar subtitle URLs for all compatible players via R2
+  const r2Ku =
+    type === "movie"
+      ? `${R2_BASE}/movie/${id}/ku.vtt`
+      : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_ku.vtt`;
+  const r2Ar =
+    type === "movie"
+      ? `${R2_BASE}/movie/${id}/ar.vtt`
+      : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_ar.vtt`;
+
+  url.searchParams.set("sub_url_ku", r2Ku);
+  url.searchParams.set("sub_url_ar", r2Ar);
 
 
   Object.entries(extraParams).forEach(([key, value]) => {
