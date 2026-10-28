@@ -240,9 +240,14 @@ const ALL_PLAYER_SOURCES = [
     langParam: null,
     subUrlParam: null,
     params: {},
-    movieUrl: (id) => `https://vidsrc.me/embed/movie?tmdb=${id}`,
+    movieUrl: (id) =>
+      resolvePlayerBaseUrl(
+        `/embed-proxy?url=${encodeURIComponent(`https://vidsrc.me/embed/movie?tmdb=${id}`)}`,
+      ),
     tvUrl: (id, season, ep) =>
-      `https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${ep}`,
+      resolvePlayerBaseUrl(
+        `/embed-proxy?url=${encodeURIComponent(`https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${ep}`)}`,
+      ),
   },
   {
     id: "multiembed",
@@ -255,9 +260,14 @@ const ALL_PLAYER_SOURCES = [
     langParam: null,
     subUrlParam: null,
     params: {},
-    movieUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
+    movieUrl: (id) =>
+      resolvePlayerBaseUrl(
+        `/embed-proxy?url=${encodeURIComponent(`https://multiembed.mov/?video_id=${id}&tmdb=1`)}`,
+      ),
     tvUrl: (id, season, ep) =>
-      `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${ep}`,
+      resolvePlayerBaseUrl(
+        `/embed-proxy?url=${encodeURIComponent(`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${ep}`)}`,
+      ),
   },
   {
     id: "2embed",
@@ -270,9 +280,14 @@ const ALL_PLAYER_SOURCES = [
     langParam: null,
     subUrlParam: null,
     params: {},
-    movieUrl: (id) => `https://www.2embed.cc/embed/${id}`,
+    movieUrl: (id) =>
+      resolvePlayerBaseUrl(
+        `/embed-proxy?url=${encodeURIComponent(`https://www.2embed.cc/embed/${id}`)}`,
+      ),
     tvUrl: (id, season, ep) =>
-      `https://www.2embed.cc/embedtv/${id}&s=${season}&e=${ep}`,
+      resolvePlayerBaseUrl(
+        `/embed-proxy?url=${encodeURIComponent(`https://www.2embed.cc/embedtv/${id}&s=${season}&e=${ep}`)}`,
+      ),
   },
 ];
 

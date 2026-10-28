@@ -197,32 +197,38 @@ test("getSourceUrl correctly generates clean URLs for all 5 servers and aliases 
   assert.ok(s2.includes("sub_file="));
   assert.ok(s2.includes("sub_label="));
 
-  // Server 3: VidSrc.me (clean URL without unsupported sub_url params or debugger traps)
+  // Server 3: VidSrc.me routed through /embed-proxy
   const s3Movie = getSourceUrl("vidsrc_me", "movie", 550, null, null, {}, "e50914", "ar");
-  assert.equal(s3Movie, "https://vidsrc.me/embed/movie?tmdb=550");
+  assert.ok(s3Movie.includes("/embed-proxy?url="));
+  assert.ok(s3Movie.includes(encodeURIComponent("https://vidsrc.me/embed/movie?tmdb=550")));
   const s3Tv = getSourceUrl("vidsrc_me", "tv", 220542, 1, 1, {}, "e50914", "ar");
-  assert.equal(s3Tv, "https://vidsrc.me/embed/tv?tmdb=220542&season=1&episode=1");
+  assert.ok(s3Tv.includes("/embed-proxy?url="));
+  assert.ok(s3Tv.includes(encodeURIComponent("https://vidsrc.me/embed/tv?tmdb=220542&season=1&episode=1")));
   const s3Alias = getSourceUrl("vidsrc_cc", "movie", 550, null, null, {}, "e50914", "ar");
-  assert.equal(s3Alias, "https://vidsrc.me/embed/movie?tmdb=550");
+  assert.ok(s3Alias.includes("/embed-proxy?url="));
   assert.ok(!s3Movie.includes("sub_url_ku"));
 
-  // Server 4: MultiEmbed (fixed: no directstream.php, clean query parameters)
+  // Server 4: MultiEmbed routed through /embed-proxy
   const s4Movie = getSourceUrl("multiembed", "movie", 550, null, null, {}, "e50914", "ku");
-  assert.equal(s4Movie, "https://multiembed.mov/?video_id=550&tmdb=1");
+  assert.ok(s4Movie.includes("/embed-proxy?url="));
+  assert.ok(s4Movie.includes(encodeURIComponent("https://multiembed.mov/?video_id=550&tmdb=1")));
   const s4Tv = getSourceUrl("multiembed", "tv", 220542, 1, 1, {}, "e50914", "ku");
-  assert.equal(s4Tv, "https://multiembed.mov/?video_id=220542&tmdb=1&s=1&e=1");
+  assert.ok(s4Tv.includes("/embed-proxy?url="));
+  assert.ok(s4Tv.includes(encodeURIComponent("https://multiembed.mov/?video_id=220542&tmdb=1&s=1&e=1")));
   const s4Alias = getSourceUrl("embedsu", "movie", 550, null, null, {}, "e50914", "ku");
-  assert.equal(s4Alias, "https://multiembed.mov/?video_id=550&tmdb=1");
+  assert.ok(s4Alias.includes("/embed-proxy?url="));
   assert.ok(!s4Movie.includes("directstream.php"));
   assert.ok(!s4Movie.includes("sub_url_ku"));
 
-  // Server 5: 2Embed (replaces broken autoembed with working 2embed)
+  // Server 5: 2Embed routed through /embed-proxy
   const s5Movie = getSourceUrl("2embed", "movie", 550, null, null, {}, "e50914", "ku");
-  assert.equal(s5Movie, "https://www.2embed.cc/embed/550");
+  assert.ok(s5Movie.includes("/embed-proxy?url="));
+  assert.ok(s5Movie.includes(encodeURIComponent("https://www.2embed.cc/embed/550")));
   const s5Tv = getSourceUrl("2embed", "tv", 220542, 1, 1, {}, "e50914", "ku");
-  assert.equal(s5Tv, "https://www.2embed.cc/embedtv/220542&s=1&e=1");
+  assert.ok(s5Tv.includes("/embed-proxy?url="));
+  assert.ok(s5Tv.includes(encodeURIComponent("https://www.2embed.cc/embedtv/220542&s=1&e=1")));
   const s5Alias = getSourceUrl("autoembed", "movie", 550, null, null, {}, "e50914", "ku");
-  assert.equal(s5Alias, "https://www.2embed.cc/embed/550");
+  assert.ok(s5Alias.includes("/embed-proxy?url="));
   assert.ok(!s5Movie.includes("sub_url_ku"));
 });
 
