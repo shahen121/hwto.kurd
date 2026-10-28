@@ -230,31 +230,15 @@ const ALL_PLAYER_SOURCES = [
       resolvePlayerBaseUrl(`/vidlink/tv/${id}/${season}/${ep}`),
   },
   {
-    id: "autoembed",
-    label: "سيرفر 3: AutoEmbed FHD",
-    tag: "FHD",
-    note: null,
-    supportsProgress: false,
-    colorParam: null,
-    langParam: "ds_lang",
-    subUrlParam: "sub_url",
-    params: {
-      server: "1",
-    },
-    movieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}`,
-    tvUrl: (id, season, ep) =>
-      `https://player.autoembed.cc/embed/tv/${id}/${season}/${ep}`,
-  },
-  {
     id: "vidsrc_me",
     aliases: ["vidsrc_cc", "vidsrc"],
-    label: "سيرفر 4: VidSrc.me",
+    label: "سيرفر 3: VidSrc.me",
     tag: "Me",
     note: null,
     supportsProgress: false,
     colorParam: null,
-    langParam: "ds_lang",
-    subUrlParam: "sub_url",
+    langParam: null,
+    subUrlParam: null,
     params: {},
     movieUrl: (id) => `https://vidsrc.me/embed/movie?tmdb=${id}`,
     tvUrl: (id, season, ep) =>
@@ -263,18 +247,32 @@ const ALL_PLAYER_SOURCES = [
   {
     id: "multiembed",
     aliases: ["embedsu"],
-    label: "سيرفر 5: MultiEmbed",
+    label: "سيرفر 4: MultiEmbed",
     tag: "Direct",
     note: null,
     supportsProgress: false,
     colorParam: null,
-    langParam: "ds_lang",
-    subUrlParam: "sub_url",
+    langParam: null,
+    subUrlParam: null,
     params: {},
-    movieUrl: (id) =>
-      `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,
+    movieUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
     tvUrl: (id, season, ep) =>
-      `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1&s=${season}&e=${ep}`,
+      `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${ep}`,
+  },
+  {
+    id: "2embed",
+    aliases: ["autoembed"],
+    label: "سيرفر 5: 2Embed",
+    tag: "2Embed",
+    note: null,
+    supportsProgress: false,
+    colorParam: null,
+    langParam: null,
+    subUrlParam: null,
+    params: {},
+    movieUrl: (id) => `https://www.2embed.cc/embed/${id}`,
+    tvUrl: (id, season, ep) =>
+      `https://www.2embed.cc/embedtv/${id}&s=${season}&e=${ep}`,
   },
 ];
 
@@ -358,18 +356,21 @@ export const getSourceUrl = (
     url.searchParams.set("sub_label", subLabel);
   }
 
-  // Provide separate ku and ar subtitle URLs for all compatible players via R2
-  const r2Ku =
-    type === "movie"
-      ? `${R2_BASE}/movie/${id}/ku.vtt`
-      : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_ku.vtt`;
-  const r2Ar =
-    type === "movie"
-      ? `${R2_BASE}/movie/${id}/ar.vtt`
-      : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_ar.vtt`;
+  // Provide separate ku and ar subtitle URLs ONLY for internal proxied players (Vidcore)
+  // External players (VidSrc, MultiEmbed, 2Embed) reject long subtitle params or trigger debugger traps
+  if (src.id === "vidcore") {
+    const r2Ku =
+      type === "movie"
+        ? `${R2_BASE}/movie/${id}/ku.vtt`
+        : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_ku.vtt`;
+    const r2Ar =
+      type === "movie"
+        ? `${R2_BASE}/movie/${id}/ar.vtt`
+        : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_ar.vtt`;
 
-  url.searchParams.set("sub_url_ku", r2Ku);
-  url.searchParams.set("sub_url_ar", r2Ar);
+    url.searchParams.set("sub_url_ku", r2Ku);
+    url.searchParams.set("sub_url_ar", r2Ar);
+  }
 
 
   Object.entries(extraParams).forEach(([key, value]) => {

@@ -953,14 +953,17 @@ export default function TVPage({
           setFailoverSource(epKey, "vidlink");
           setPlayerSource("vidlink");
         } else if (playerSource === "vidlink") {
-          setFailoverSource(epKey, "autoembed");
-          setPlayerSource("autoembed");
-        } else if (playerSource === "autoembed") {
           setFailoverSource(epKey, "vidsrc_me");
           setPlayerSource("vidsrc_me");
         } else if (playerSource === "vidsrc_me" || playerSource === "vidsrc_cc") {
           setFailoverSource(epKey, "multiembed");
           setPlayerSource("multiembed");
+        } else if (playerSource === "multiembed" || playerSource === "embedsu") {
+          setFailoverSource(epKey, "2embed");
+          setPlayerSource("2embed");
+        } else if (playerSource === "autoembed") {
+          setFailoverSource(epKey, "2embed");
+          setPlayerSource("2embed");
         }
 
       }
@@ -2340,7 +2343,7 @@ export default function TVPage({
                     }
                     partition="persist:player"
                     allowpopups="false"
-                    sandbox="allow-scripts allow-same-origin allow-forms"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
                     style={{
                       position: "absolute",
                       inset: 0,
@@ -2376,6 +2379,7 @@ export default function TVPage({
                     allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                     allowFullScreen
                     referrerPolicy="origin"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
                     onLoad={() => setWebviewLoading(false)}
                     style={{
                       position: "absolute",
