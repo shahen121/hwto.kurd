@@ -753,6 +753,87 @@ test("VidCore session_number pinning across HTML and APA91 POST + .m3u8 steelpea
   assert.ok(capturedFetchUrl.includes(encodeURIComponent("https://steelpeak.store/live/chunk.m3u8")));
 });
 
+test("WHATWG URL standard compliance and raw binary body forwarding for POST /APA91... decryption", async () => {
+  const { handleVidcoreProxy } = require("./vidcore.js");
+
+  let capturedScrapeUrl = "";
+  let capturedOpts = null;
+
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    capturedScrapeUrl = String(url);
+    capturedOpts = opts;
+    return new Response(JSON.stringify({ key: "decrypted_stream_token_123" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  const savedToken = process.env.SCRAPE_DO_TOKEN_1;
+  process.env.SCRAPE_DO_TOKEN_1 = "test_token_scrape_do";
+
+  try {
+    const rawBinaryPayload = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0xaa, 0x55]);
+
+    const req = {
+      method: "POST",
+      url: "/vidcore/APA91ywFtestBinaryKey",
+      headers: {
+        host: "hwto-kurd.vercel.app",
+        referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
+        "content-type": "application/octet-stream",
+        "x-hwto-media-id": "1283515",
+        "x-forwarded-for": "198.51.100.42",
+      },
+      rawBody: rawBinaryPayload,
+    };
+
+    let responseCode = null;
+    let responseHeaders = {};
+    let responseBody = null;
+
+    const res = {
+      writeHead(code, headers) {
+        responseCode = code;
+        responseHeaders = headers;
+      },
+      end(data) {
+        responseBody = data;
+      },
+    };
+
+    await handleVidcoreProxy(req, res);
+
+    assert.equal(responseCode, 200);
+    assert.ok(capturedScrapeUrl.includes("https://api.scrape.do/"));
+    assert.ok(capturedScrapeUrl.includes("customHeaders=true"));
+    assert.ok(capturedScrapeUrl.includes("session_number="));
+    assert.ok(capturedScrapeUrl.includes(encodeURIComponent("https://vidcore.io/APA91ywFtestBinaryKey")));
+
+    // Verify session_number matches deterministic seed for IP 198.51.100.42 + 1283515
+    const expectedSession = getScrapeDoSessionId(req, "/APA91ywFtestBinaryKey");
+    assert.ok(capturedScrapeUrl.includes(`session_number=${expectedSession}`));
+
+    // Verify options and binary body
+    assert.equal(capturedOpts.method, "POST");
+    assert.equal(capturedOpts.headers["Origin"], "https://vidcore.io");
+    assert.equal(capturedOpts.headers["Referer"], "https://vidcore.io/");
+    assert.equal(capturedOpts.headers["Content-Type"], "application/octet-stream");
+    assert.equal(capturedOpts.headers["Content-Length"], String(rawBinaryPayload.length));
+    assert.deepEqual(capturedOpts.body, rawBinaryPayload);
+
+    // Verify internal x-hwto header was stripped before sending upstream
+    assert.equal(capturedOpts.headers["x-hwto-media-id"], undefined);
+
+    // Verify buffered response
+    assert.ok(responseBody.toString().includes("decrypted_stream_token_123"));
+  } finally {
+    global.fetch = originalFetch;
+    if (savedToken !== undefined) process.env.SCRAPE_DO_TOKEN_1 = savedToken;
+    else delete process.env.SCRAPE_DO_TOKEN_1;
+  }
+});
+
 
 
 

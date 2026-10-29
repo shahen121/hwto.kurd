@@ -300,19 +300,35 @@ export const getSourceUrl = (
       : `${origin}/subtitles/series/${id}/s${season || 1}/e${ep || 1}_ar.vtt`;
 
   let effectiveSubUrl = subtitleUrl;
-  if (!effectiveSubUrl) {
+  if (
+    !effectiveSubUrl ||
+    typeof effectiveSubUrl !== "string" ||
+    effectiveSubUrl.includes("blob:")
+  ) {
     effectiveSubUrl = normLang === "ar" ? localAr : localKu;
   } else if (!effectiveSubUrl.startsWith("http")) {
-    effectiveSubUrl = `${origin}${effectiveSubUrl.startsWith("/") ? "" : "/"}${effectiveSubUrl}`;
-  } else if (effectiveSubUrl.includes("r2.dev")) {
-    // Convert any external R2 URL to same-origin /subtitles/*
+    const cleanPath = effectiveSubUrl.replace(/^\/?subtitles\/?/i, "");
+    effectiveSubUrl = `${origin}/subtitles/${cleanPath.replace(/^\/+/, "")}`;
+  } else if (
+    effectiveSubUrl.includes("r2.dev") ||
+    effectiveSubUrl.includes("pub-")
+  ) {
+    // Convert any external R2 URL to clean same-origin /subtitles/*
     try {
       const u = new URL(effectiveSubUrl);
-      effectiveSubUrl = `${origin}/subtitles${u.pathname.replace(/^\/subtitles/, "")}`;
-    } catch (_e) {}
+      const cleanPath = u.pathname.replace(/^\/?subtitles\/?/i, "");
+      effectiveSubUrl = `${origin}/subtitles/${cleanPath.replace(/^\/+/, "")}`;
+    } catch (_e) {
+      effectiveSubUrl = normLang === "ar" ? localAr : localKu;
+    }
   }
 
-  if (effectiveSubUrl && src.subUrlParam) {
+  // Ensure effectiveSubUrl is strictly clean HTTP same-origin and never contains blob:
+  if (
+    effectiveSubUrl &&
+    src.subUrlParam &&
+    !effectiveSubUrl.includes("blob:")
+  ) {
     url.searchParams.set(src.subUrlParam, effectiveSubUrl);
     const subLabel =
       normLang === "ar"

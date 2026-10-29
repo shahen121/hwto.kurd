@@ -30,6 +30,7 @@ function getSubtitlesDirectory() {
 function sanitizeSubtitleRelPath(rawFile) {
   if (!rawFile || typeof rawFile !== "string") return "";
   let clean = rawFile.replace(/\\/g, "/").trim();
+  if (clean.includes("blob:")) return "";
   if (/^https?:\/\//i.test(clean)) {
     try {
       clean = new URL(clean).pathname;
@@ -57,6 +58,12 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
     var clean = url.trim();
     if (!clean) return "";
 
+    // If it is already a Blob URL, return it directly
+    if (clean.indexOf("blob:") === 0) return clean;
+    if (clean.indexOf("blob:") !== -1) {
+      return clean.slice(clean.indexOf("blob:"));
+    }
+
     // Convert external R2 or other domain subtitle URLs to local /subtitles/... bridge
     if (clean.indexOf("r2.dev") !== -1 || clean.indexOf("pub-") !== -1) {
       try {
@@ -83,8 +90,16 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
       return clean;
     }
 
-    if (clean.indexOf("/") === 0) {
+    if (origin && clean.indexOf(origin + "/subtitles/") === 0) {
+      return clean;
+    }
+
+    if (clean.indexOf("/subtitles/") === 0) {
       return origin + clean;
+    }
+
+    if (clean.indexOf("/") === 0) {
+      return origin + "/subtitles" + clean;
     }
     return origin + "/subtitles/" + clean;
   }
@@ -102,6 +117,9 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
             var raw = String(val || "");
             if (raw.indexOf("blob:") === 0) {
               return trackSrcDesc.set.call(this, raw);
+            }
+            if (raw.indexOf("blob:") !== -1) {
+              return trackSrcDesc.set.call(this, raw.slice(raw.indexOf("blob:")));
             }
             var normalized = toSameOriginSubUrl(raw);
             return trackSrcDesc.set.call(this, normalized);
@@ -121,11 +139,14 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
   }
 
   var subUrl = getQueryParam("sub_url") || getQueryParam("sub_file") || "";
+  if (subUrl.indexOf("blob:") !== -1) subUrl = "";
   var subLang = (getQueryParam("sub") || getQueryParam("ds_lang") || getQueryParam("lang") || "ku").toLowerCase();
   if (subLang === "ckb") subLang = "ku";
 
   var kuUrl = getQueryParam("sub_url_ku");
+  if (kuUrl && kuUrl.indexOf("blob:") !== -1) kuUrl = "";
   var arUrl = getQueryParam("sub_url_ar");
+  if (arUrl && arUrl.indexOf("blob:") !== -1) arUrl = "";
 
   if (subUrl) {
     if (subLang === "ar" && !arUrl) arUrl = subUrl;
@@ -155,8 +176,17 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
   var blobMap = {};
 
   function fetchSubtitleBlob(rawUrl, onBlobReady) {
+    if (!rawUrl || typeof rawUrl !== "string") return;
+    if (rawUrl.indexOf("blob:") === 0) {
+      if (onBlobReady) onBlobReady(rawUrl);
+      return;
+    }
     var url = toSameOriginSubUrl(rawUrl);
     if (!url) return;
+    if (url.indexOf("blob:") === 0) {
+      if (onBlobReady) onBlobReady(url);
+      return;
+    }
     if (blobMap[url]) {
       if (onBlobReady) onBlobReady(blobMap[url]);
       return;
@@ -404,6 +434,14 @@ async function subtitlesHandler(req, res) {
       : "");
 
   if (rawFileParam) {
+    if (typeof rawFileParam === "string" && rawFileParam.includes("blob:")) {
+      res.writeHead(200, {
+        "Content-Type": "text/vtt; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "public, max-age=3600",
+      });
+      return res.end("WEBVTT\n\n");
+    }
     let cleanRaw = rawFileParam;
     if (/^https?:\/\//i.test(cleanRaw)) {
       try {

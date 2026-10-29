@@ -219,6 +219,35 @@ test("getSourceUrl correctly generates clean URLs for active servers (VidCore & 
   // Legacy/obsolete server keys safely fall back to the default server (vidcore)
   const fallback = getSourceUrl("vidsrc_me", "movie", 550, null, null, {}, "e50914", "ku");
   assert.ok(fallback.includes("/vidcore/movie/550"));
+
+  // Disallow blob: URL in subtitleUrl - MUST discard and use clean same-origin HTTP path
+  const sBlob = getSourceUrl(
+    "vidcore",
+    "movie",
+    1283515,
+    null,
+    null,
+    {},
+    "e50914",
+    "ku",
+    "blob:https://hwto-kurd.vercel.app/bad-blob-id",
+  );
+  assert.ok(!sBlob.includes("blob:"), "Must NOT pass blob: URLs to iframe query parameters");
+  assert.ok(decodeURIComponent(sBlob).includes("/subtitles/movie/1283515/ku.vtt"));
+
+  const s2Blob = getSourceUrl(
+    "vidlink",
+    "movie",
+    1283515,
+    null,
+    null,
+    {},
+    "e50914",
+    "ku",
+    "blob:https://hwto-kurd.vercel.app/bad-blob-id",
+  );
+  assert.ok(!s2Blob.includes("blob:"), "Must NOT pass blob: URLs to iframe query parameters");
+  assert.ok(decodeURIComponent(s2Blob).includes("/subtitles/movie/1283515/ku.vtt"));
 });
 
 test("Subtitle 404 Prevention: missing TV subtitles return 200 OK with valid empty WEBVTT and CORS header, even with TV referer", async () => {
@@ -245,6 +274,12 @@ test("Subtitle 404 Prevention: missing TV subtitles return 200 OK with valid emp
     assert.ok(arRes.headers.get("content-type").includes("text/vtt"));
     assert.equal(arRes.headers.get("access-control-allow-origin"), "*");
     assert.equal(await arRes.text(), "WEBVTT\n\n");
+
+    // 3. Stale request containing blob: URL returns 200 OK with WEBVTT\n\n without 404
+    const blobRes = await fetch(`${base}/subtitles/blob:https://hwto-kurd.vercel.app/test-uuid`);
+    assert.equal(blobRes.status, 200);
+    assert.ok(blobRes.headers.get("content-type").includes("text/vtt"));
+    assert.equal(await blobRes.text(), "WEBVTT\n\n");
   } finally {
     server.close();
   }

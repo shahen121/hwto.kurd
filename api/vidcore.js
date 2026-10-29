@@ -68,8 +68,8 @@ function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionId =
 
 function getScrapeDoSessionId(req, targetPathAndQuery = "") {
   if (!req) return "884422";
-  if (req.query && (req.query.sessionId || req.query.session_number || req.query.sid)) {
-    const s = String(req.query.sessionId || req.query.session_number || req.query.sid).trim().slice(0, 10);
+  if (req.query && (req.query.sessionId || req.query.session_number || req.query.sid || req.query.media_id)) {
+    const s = String(req.query.sessionId || req.query.session_number || req.query.sid || req.query.media_id).trim().slice(0, 10);
     if (s) return s;
   }
 
@@ -84,6 +84,11 @@ function getScrapeDoSessionId(req, targetPathAndQuery = "") {
     if (refMatch) {
       mediaId = refMatch[2];
     }
+  }
+
+  // Check custom header if present
+  if (!mediaId && req.headers && req.headers["x-hwto-media-id"]) {
+    mediaId = String(req.headers["x-hwto-media-id"]).trim();
   }
 
   // 2. Extract Client IP
@@ -341,6 +346,11 @@ const AD_SHIELD_JS = `(function() {
           var slashIdx = apaClean.indexOf("/", 8);
           apaClean = slashIdx !== -1 ? apaClean.slice(slashIdx) : apaClean;
         }
+      } else {
+        try {
+          var parsedRel = new URL(apaClean, locOrigin || "http://localhost");
+          apaClean = parsedRel.pathname + (parsedRel.search || "");
+        } catch (_e) {}
       }
       while (apaClean.charAt(0) === "/") {
         apaClean = apaClean.slice(1);
@@ -482,7 +492,7 @@ const AD_SHIELD_JS = `(function() {
     if (!isStream) return null;
 
     try {
-      var parsed = new URL(rawUrl);
+      var parsed = new URL(rawUrl, locOrigin || "http://localhost");
       if (/\\.mpd(\\?|$)/i.test(parsed.pathname)) {
         lastMpdOrigin = parsed.origin;
         var lastSlash = parsed.pathname.lastIndexOf("/");
@@ -785,7 +795,8 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
       (lower.startsWith("x-") || lower === "cookie") &&
       !forwardHeaders[lower] &&
       !lower.startsWith("x-forwarded") &&
-      !lower.startsWith("x-vercel")
+      !lower.startsWith("x-vercel") &&
+      !lower.startsWith("x-hwto")
     ) {
       forwardHeaders[k] = v;
     }
@@ -794,11 +805,13 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
   if (method === "POST" || targetPathAndQuery.startsWith("/APA91") || targetPathAndQuery.includes("APA91")) {
     forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
     forwardHeaders["Origin"] = VIDCORE_ORIGIN;
-    if (req.headers && req.headers["content-type"]) {
-      forwardHeaders["Content-Type"] = req.headers["content-type"];
+    delete forwardHeaders["content-type"];
+    if (req.headers && (req.headers["content-type"] || req.headers["Content-Type"])) {
+      forwardHeaders["Content-Type"] = req.headers["content-type"] || req.headers["Content-Type"];
     } else {
       forwardHeaders["Content-Type"] = "application/octet-stream";
     }
+    delete forwardHeaders["content-length"];
     if (bodyBuffer && bodyBuffer.length > 0) {
       forwardHeaders["Content-Length"] = String(bodyBuffer.length);
     } else {
@@ -834,7 +847,11 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     hasScrapeTokens &&
     config.mode !== "direct"
   ) {
-    return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
+    try {
+      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
+    } catch (_err) {
+      // If Scrape.do fails, fall through to direct fetch attempt
+    }
   }
 
   // 2. Direct Fetch with 2500ms timeout for static assets and other routes
@@ -873,9 +890,12 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
 
 function readRequestBody(req) {
   if (req.method === "GET" || req.method === "HEAD") return Promise.resolve(null);
+  if (req.rawBody && Buffer.isBuffer(req.rawBody)) return Promise.resolve(req.rawBody);
+  if (req.rawBody && typeof req.rawBody === "string") return Promise.resolve(Buffer.from(req.rawBody));
   if (req.body && Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
   if (req.body && typeof req.body === "string") return Promise.resolve(Buffer.from(req.body));
   if (req.body && typeof req.body === "object") return Promise.resolve(Buffer.from(JSON.stringify(req.body)));
+  if (req.readableEnded) return Promise.resolve(Buffer.alloc(0));
   return new Promise((resolve, reject) => {
     const chunks = [];
     req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
@@ -890,6 +910,9 @@ async function handleVidcoreProxy(req, res) {
     const parsedUrl = new URL(req.url || "/", `http://${host}`);
     let pathname = parsedUrl.pathname;
     const search = parsedUrl.search || "";
+    if (!req.query) {
+      req.query = Object.fromEntries(parsedUrl.searchParams.entries());
+    }
 
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
@@ -1078,7 +1101,7 @@ async function handleVidcoreProxy(req, res) {
       responseHeaders["Cache-Control"] = "public, max-age=3600";
     }
 
-    if (upstreamRes.body && typeof Readable.fromWeb === "function" && req.method !== "HEAD") {
+    if (isMediaSegment && upstreamRes.body && typeof Readable.fromWeb === "function" && req.method !== "HEAD") {
       res.writeHead(upstreamRes.status, responseHeaders);
       return Readable.fromWeb(upstreamRes.body).pipe(res);
     }
