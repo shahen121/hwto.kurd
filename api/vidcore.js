@@ -51,59 +51,36 @@ function advanceSessionToken(sessionId, tokensCount) {
   _sessionTokenMap.set(sessionId, (current + 1) % tokensCount);
 }
 
-function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionNumber = "884422") {
+function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionId = "884422") {
   const api = new URL("https://api.scrape.do/");
   api.searchParams.set("token", token);
   api.searchParams.set("url", targetUrl);
-  api.searchParams.set("customHeaders", useCustomHeaders ? "true" : "false");
-  const cleanSessionNumber = String(sessionNumber || "884422").trim().slice(0, 10);
-  if (cleanSessionNumber) {
-    // Scrape.do sticky-session param is `session_number`; only send it.
-    api.searchParams.set("session_number", cleanSessionNumber);
+  if (useCustomHeaders) api.searchParams.set("customHeaders", "true");
+  if (sessionId) {
+    const cleanSessionId = String(sessionId).trim().slice(0, 10);
+    if (cleanSessionId) api.searchParams.set("sessionId", cleanSessionId);
   }
   return api.toString();
 }
 
-function getScrapeDoSessionId(req, targetPathAndQuery = "") {
+function getScrapeDoSessionId(req) {
   if (!req) return "884422";
-
-  // Explicit media context wins (AD_SHIELD-proxied APA91 URLs append ?media_id=<id>,
-  // captured from window.location.pathname on the player page).
-  let mediaId = "";
-  if (req.query && req.query.media_id) {
-    mediaId = String(req.query.media_id);
-  } else {
-    const pathMatch = String(targetPathAndQuery || req.url || "").match(/\/(movie|tv)\/(\d+)/i);
-    if (pathMatch) {
-      mediaId = pathMatch[2];
-    } else {
-      const ref = String((req.headers && req.headers.referer) || "");
-      const refMatch = ref.match(/\/(movie|tv)\/(\d+)/i);
-      if (refMatch) {
-        mediaId = refMatch[2];
-      }
-    }
+  if (req.query && req.query.sessionId) {
+    const s = String(req.query.sessionId).trim().slice(0, 10);
+    if (s) return s;
   }
-
-  if (!mediaId && req.headers && req.headers["x-hwto-media-id"]) {
-    mediaId = String(req.headers["x-hwto-media-id"]).trim();
-  }
-
   const rawHeader =
-    (req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) || "";
+    (req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) ||
+    "";
   const clientIp = rawHeader
     ? rawHeader.split(",")[0].trim()
     : (req.socket && req.socket.remoteAddress) || "";
-
-  if (!clientIp && !mediaId) {
+  if (!clientIp || clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "localhost") {
     return "884422";
   }
-
-  const seed = `${clientIp || "client"}_${mediaId || "vidcore"}`;
+  const raw = String(clientIp);
   let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  }
+  for (let i = 0; i < raw.length; i++) hash = (hash * 31 + raw.charCodeAt(i)) >>> 0;
   return String((hash % 900000) + 100000);
 }
 
@@ -166,17 +143,6 @@ async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, option
       }
       if (res.status < 500) return res;
       lastRes = res;
-
-      // Scrape.do may reject sticky-session decryption with 555 / 502 when
-      // custom headers interfere. Retry the SAME token with a clean header set
-      // before rotating to the next token.
-      if (res.status === 555 || res.status === 502) {
-        const retryUrl = buildScrapeDoUrl(targetUrl, token, false, effectiveSessionId);
-        const retryRes = await fetchImpl(retryUrl, fetchOpts);
-        if (retryRes && retryRes.status < 500) {
-          return retryRes;
-        }
-      }
     } catch (err) {
       lastErr = err;
       advanceSessionToken(sessionId, tokens.length);
@@ -193,12 +159,6 @@ const AD_SHIELD_JS = `(function() {
   var lastMpdOrigin = "https://surge.flooderrr.store";
   var lastMpdBaseDir = "";
   var lastMpdQuery = "";
-  var currentMediaId = "";
-  try {
-    var locPathRaw = (typeof window !== "undefined" && window.location) ? String(window.location.pathname || "") : "";
-    var mediaMatch = locPathRaw.match(/\\/(movie|tv)\\/(\\d+)/i);
-    if (mediaMatch) currentMediaId = mediaMatch[2];
-  } catch (_e) {}
 
   try {
     var __fakeLoc = new Proxy(window.location, {
@@ -334,17 +294,10 @@ const AD_SHIELD_JS = `(function() {
     } catch (_e) {}
 
     var proxiedUrl = "";
-    var apaTarget = rawUrl;
-    // Pin the upstream decryption context via media_id so the Scrape.do
-    // session_number stays identical between the player page and the APA91 POST.
-    if (/APA91/i.test(rawUrl) && currentMediaId) {
-      var mediaSep = apaTarget.indexOf("?") === -1 ? "?" : "&";
-      apaTarget = apaTarget + mediaSep + "media_id=" + encodeURIComponent(currentMediaId);
-    }
     if (isVidcore) {
-      proxiedUrl = CF_WORKER + "/stream-proxy/ref/" + encodeURIComponent(apaTarget);
+      proxiedUrl = CF_WORKER + "/stream-proxy/ref/" + encodeURIComponent(rawUrl);
     } else {
-      proxiedUrl = CF_WORKER + "/?ref=vidlink&url=" + encodeURIComponent(apaTarget);
+      proxiedUrl = CF_WORKER + "/?ref=vidlink&url=" + encodeURIComponent(rawUrl);
     }
 
     return {
@@ -652,7 +605,7 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     }
   }
 
-  if (targetPathAndQuery.startsWith("/APA91") || targetPathAndQuery.includes("APA91")) {
+  if (targetPathAndQuery.startsWith("/APA91ywF")) {
     forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
     forwardHeaders["Origin"] = VIDCORE_ORIGIN;
   }
@@ -662,11 +615,10 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     targetPathAndQuery.startsWith("/tv/");
 
   const isDecryptionRoute =
-    targetPathAndQuery.startsWith("/APA91") ||
-    targetPathAndQuery.includes("APA91") ||
+    targetPathAndQuery.startsWith("/APA91ywF") ||
     targetPathAndQuery.startsWith("/servers");
 
-  const sessionId = getScrapeDoSessionId(req, targetPathAndQuery);
+  const sessionId = getScrapeDoSessionId(req);
   const hasScrapeTokens = getScrapeDoTokens().length > 0;
   const scrapeOptions = {
     method,
@@ -677,16 +629,12 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     scrapeOptions.body = bodyBuffer;
   }
 
-  const scrapeTargetPath = stripMediaIdParam(targetPathAndQuery);
-
   if (
     config.mode !== "direct" &&
     hasScrapeTokens &&
     (isHtmlNavigation || isDecryptionRoute)
   ) {
-    // Movie/TV pages and decryption (APA91) POSTs MUST share the same Scrape.do
-    // sticky session; `media_id` is stripped before the request reaches upstream.
-    return await fetchViaScrapeDoWithRotation(origin + scrapeTargetPath, fetch, scrapeOptions);
+    return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
   }
 
   try {
@@ -705,26 +653,15 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
       (method === "GET" || method === "POST") &&
       hasScrapeTokens
     ) {
-      return await fetchViaScrapeDoWithRotation(origin + scrapeTargetPath, fetch, scrapeOptions);
+      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
     }
     return directRes;
   } catch (err) {
     if (useScrapeDoFallback && config.mode !== "direct" && (method === "GET" || method === "POST") && hasScrapeTokens) {
-      return await fetchViaScrapeDoWithRotation(origin + scrapeTargetPath, fetch, scrapeOptions);
+      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
     }
     throw err;
   }
-}
-
-// Remove the `media_id` tracking param before the target reaches vidcore.io.
-function stripMediaIdParam(targetPathAndQuery) {
-  if (!targetPathAndQuery) return targetPathAndQuery;
-  const qIndex = targetPathAndQuery.indexOf("?");
-  const base = qIndex === -1 ? targetPathAndQuery : targetPathAndQuery.slice(0, qIndex);
-  const params = new URLSearchParams(qIndex === -1 ? "" : targetPathAndQuery.slice(qIndex + 1));
-  if (params.has("media_id")) params.delete("media_id");
-  const qs = params.toString();
-  return qs ? `${base}?${qs}` : base;
 }
 
 function readRequestBody(req) {
