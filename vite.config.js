@@ -120,15 +120,13 @@ function localVidcoreProxyPlugin(env) {
         pathname.startsWith("/embed/") ||
         pathname.startsWith("/_next/") ||
         pathname.startsWith("/stream-proxy/") ||
-        pathname.startsWith("/APA91") ||
-        pathname.includes("APA91") ||
+        pathname.startsWith("/APA91ywF") ||
         pathname.startsWith("/wyzie") ||
         pathname.startsWith("/servers") ||
         pathname.startsWith("/api/b/") ||
         pathname === "/api/skip-events" ||
         pathname === "/api/vidcore" ||
         pathname === "/gtag-shield.js" ||
-        pathname.startsWith("/gtag-shield") ||
         pathname === "/script.js" ||
         pathname === "/fu.wasm" ||
         pathname === "/decrypter-worker.js" ||

@@ -7,18 +7,12 @@ const {
   fetchViaScrapeDoWithRotation,
   getScrapeDoSessionId,
   CF_WORKER_URL,
-  UNIVERSAL_SUBTITLE_INJECTOR_JS,
-  SOURCE_BUFFER_MUTE_JS,
 } = require("./vidcore.js");
 
 const VIDLINK_ORIGIN = process.env.VIDLINK_ORIGIN || "https://vidlink.pro";
 
 // Strong in-memory cache for static chunks & assets
 const vidlinkStaticCache = new Map();
-const vidlinkHtmlCache = new Map();
-const HTML_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
-const CHUNK_CACHE_CONTROL = "public, max-age=31536000, immutable";
-const HTML_CACHE_CONTROL = "public, max-age=1200, s-maxage=1200, stale-while-revalidate=86400";
 
 function getCleanUserAgent(rawUa) {
   if (!rawUa || /node|curl|python|axios|undici/i.test(rawUa)) {
@@ -55,20 +49,8 @@ async function fetchVidlinkHtmlFast(targetUrl, req, bodyBuffer = null) {
     Connection: "keep-alive",
   };
 
-  // Next.js RSC, Server Action, and flight streaming headers
-  const rscHeaders = [
-    "rsc",
-    "next-router-state-tree",
-    "next-router-prefetch",
-    "next-url",
-    "next-action",
-    "content-type",
-    "x-csrf-token",
-  ];
-  for (const h of rscHeaders) {
-    if (req?.headers?.[h]) {
-      headers[h] = req.headers[h];
-    }
+  if (req?.headers?.["content-type"]) {
+    headers["Content-Type"] = req.headers["content-type"];
   }
 
   // Forward cookies or x- headers if present
@@ -92,28 +74,25 @@ async function fetchVidlinkHtmlFast(targetUrl, req, bodyBuffer = null) {
     headers["Content-Length"] = String(bodyBuffer.length);
   }
 
-  // 1. Try direct fetch first with 2500ms timeout
+  // 1. Try direct fetch first with 3s timeout
   try {
-    const directRes = await fetchWithTimeout(targetUrl, fetchOpts, 2500);
+    const directRes = await fetchWithTimeout(targetUrl, fetchOpts, 3000);
     if (directRes && directRes.status >= 200 && directRes.status < 400) {
       return directRes;
     }
   } catch (_directErr) {
-    // Timeout or network error, proceed
+    // Timeout or network error, proceed to worker
   }
 
-  // 2. Try via Cloudflare Worker ONLY for video media segments / streams
-  const isVideoMedia = /\.(m3u8|mpd|m4s|ts|mp4|m4a|m4v)(\?|$)/i.test(targetUrl);
-  if (isVideoMedia) {
-    try {
-      const workerTarget = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(targetUrl)}`;
-      const workerRes = await fetchWithTimeout(workerTarget, fetchOpts, 3000);
-      if (workerRes && workerRes.status >= 200 && workerRes.status < 400) {
-        return workerRes;
-      }
-    } catch (_workerErr) {
-      // Proceed to Scrape.do fallback
+  // 2. Try via Cloudflare Worker with 3s timeout
+  try {
+    const workerTarget = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(targetUrl)}`;
+    const workerRes = await fetchWithTimeout(workerTarget, fetchOpts, 3000);
+    if (workerRes && workerRes.status >= 200 && workerRes.status < 400) {
+      return workerRes;
     }
+  } catch (_workerErr) {
+    // Proceed to Scrape.do fallback
   }
 
   // 3. Fallback to Scrape.do rotation
@@ -156,28 +135,6 @@ async function handleVidlinkProxy(req, res) {
     const parsedUrl = new URL(req.url || "/", `http://${host}`);
     let pathname = parsedUrl.pathname;
     const search = parsedUrl.search || "";
-    if (!req.query) {
-      req.query = Object.fromEntries(parsedUrl.searchParams.entries());
-    }
-
-    if (pathname === "/api/vidlink" || pathname === "/api/vidlink/") {
-      const origPath =
-        (req.query && req.query.__orig_path) ||
-        (req.headers && (req.headers["x-matched-path"] || req.headers["x-invoke-path"]));
-      if (origPath && typeof origPath === "string" && origPath !== "/api/vidlink" && origPath !== "/api/vidlink/") {
-        try {
-          const matchedParsed = new URL(origPath, `http://${host}`);
-          pathname = matchedParsed.pathname;
-          for (const [k, v] of matchedParsed.searchParams.entries()) {
-            if (!parsedUrl.searchParams.has(k)) {
-              parsedUrl.searchParams.set(k, v);
-            }
-          }
-        } catch (_e) {
-          pathname = origPath.split("?")[0];
-        }
-      }
-    }
 
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
@@ -191,22 +148,13 @@ async function handleVidlinkProxy(req, res) {
 
     // 0. Vital Proxy Utilities
     // Gtag shield / ad protector script
-    if (pathname === "/gtag-shield.js" || pathname.startsWith("/gtag-shield")) {
-      res.writeHead(200, {
-        "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
-        "Access-Control-Allow-Origin": "*",
-      });
-      return res.end(AD_SHIELD_JS, "utf8");
-    }
-
-    if (pathname === "/hwto-subtitles.js") {
+    if (pathname === "/gtag-shield.js") {
       res.writeHead(200, {
         "Content-Type": "application/javascript; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable",
         "Access-Control-Allow-Origin": "*",
       });
-      return res.end(UNIVERSAL_SUBTITLE_INJECTOR_JS, "utf8");
+      return res.end(AD_SHIELD_JS, "utf8");
     }
 
     // Stream proxy routes redirection to Cloudflare Worker
@@ -258,42 +206,12 @@ async function handleVidlinkProxy(req, res) {
       return res.end();
     }
 
-    if (pathname.startsWith("/subtitles/") || pathname === "/api/subtitles") {
-      const subtitlesHandler = require("./subtitles.js");
-      return subtitlesHandler(req, res);
-    }
-
     // Normalize path by stripping /vidlink prefix if present
     let targetPath = pathname;
     if (pathname.startsWith("/vidlink/")) {
       targetPath = pathname.slice("/vidlink".length) || "/";
     } else if (pathname === "/vidlink") {
       targetPath = "/";
-    }
-
-    const isHtmlRoute =
-      targetPath.startsWith("/movie/") ||
-      targetPath.startsWith("/tv/") ||
-      targetPath.startsWith("/embed/") ||
-      (req.headers?.accept && req.headers.accept.includes("text/html"));
-
-    // Check in-memory HTML cache for instantaneous responses (< 1ms)
-    if (isHtmlRoute && req.method === "GET") {
-      const cacheKey = targetPath + search;
-      if (vidlinkHtmlCache.has(cacheKey)) {
-        const entry = vidlinkHtmlCache.get(cacheKey);
-        if (Date.now() - entry.timestamp < HTML_CACHE_TTL) {
-          res.writeHead(200, {
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": HTML_CACHE_CONTROL,
-            "Access-Control-Allow-Origin": "*",
-            "X-Vidlink-Cache": "HIT",
-            "X-Vidlink-Speed": "Instant",
-          });
-          return res.end(entry.html, "utf8");
-        }
-        vidlinkHtmlCache.delete(cacheKey);
-      }
     }
 
     // 1. Static chunks & assets (/_next/static/*, .js, .css, .woff2, images, wasm)
@@ -309,7 +227,7 @@ async function handleVidlinkProxy(req, res) {
         const cached = vidlinkStaticCache.get(cacheKey);
         res.writeHead(200, {
           "Content-Type": cached.contentType,
-          "Cache-Control": CHUNK_CACHE_CONTROL,
+          "Cache-Control": "public, max-age=31536000, immutable",
           "Access-Control-Allow-Origin": "*",
         });
         return res.end(cached.body);
@@ -339,16 +257,17 @@ async function handleVidlinkProxy(req, res) {
 
           if (contentType.includes("javascript")) {
             const rawJs = await staticRes.text();
+            const patchedJs = patchPlayerChunk(rawJs, targetPath);
             vidlinkStaticCache.set(cacheKey, {
-              body: rawJs,
+              body: patchedJs,
               contentType,
             });
             res.writeHead(200, {
               "Content-Type": contentType,
-              "Cache-Control": CHUNK_CACHE_CONTROL,
+              "Cache-Control": "public, max-age=31536000, immutable",
               "Access-Control-Allow-Origin": "*",
             });
-            return res.end(rawJs, "utf8");
+            return res.end(patchedJs, "utf8");
           }
 
           const arrayBuffer = await staticRes.arrayBuffer();
@@ -359,34 +278,24 @@ async function handleVidlinkProxy(req, res) {
           });
           res.writeHead(200, {
             "Content-Type": contentType,
-            "Cache-Control": CHUNK_CACHE_CONTROL,
+            "Cache-Control": "public, max-age=31536000, immutable",
             "Access-Control-Allow-Origin": "*",
           });
           return res.end(buffer);
-        } else if (staticRes && staticRes.status === 404) {
-          res.writeHead(404, {
-            "Content-Type": "text/plain",
-            "Access-Control-Allow-Origin": "*",
-          });
-          return res.end("Not Found");
-        } else if (staticRes) {
-          res.writeHead(staticRes.status, {
-            "Content-Type": "text/plain",
-            "Access-Control-Allow-Origin": "*",
-          });
-          return res.end(`Upstream status ${staticRes.status}`);
         }
       } catch (_err) {
-        res.writeHead(502, {
-          "Content-Type": "text/plain",
-          "Access-Control-Allow-Origin": "*",
-        });
-        return res.end("Bad Gateway - Static chunk fetch failed");
+        // Fall through to full upstream fetch if direct static fetch failed
       }
     }
 
     const bodyBuffer = await readRequestBody(req);
     const targetUrl = `${VIDLINK_ORIGIN}${targetPath}${search}`;
+
+    const isHtmlRoute =
+      targetPath.startsWith("/movie/") ||
+      targetPath.startsWith("/tv/") ||
+      targetPath.startsWith("/embed/") ||
+      (req.headers?.accept && req.headers.accept.includes("text/html"));
 
     // 2. HTML navigation: fast direct/worker fetch with Scrape.do fallback
     if (isHtmlRoute) {
@@ -394,13 +303,9 @@ async function handleVidlinkProxy(req, res) {
       const rawHtml = await upstreamRes.text();
       const sanitizedHtml = sanitizeVidlinkHtml(rawHtml);
 
-      if (upstreamRes.status === 200 || !upstreamRes.status) {
-        vidlinkHtmlCache.set(targetPath + search, { html: sanitizedHtml, timestamp: Date.now() });
-      }
-
       res.writeHead(upstreamRes.status || 200, {
         "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": HTML_CACHE_CONTROL,
+        "Cache-Control": "no-cache",
         "Access-Control-Allow-Origin": "*",
         "X-Vidlink-Speed": "Fast",
       });
@@ -419,12 +324,13 @@ async function handleVidlinkProxy(req, res) {
 
     // If it was a static chunk that reached fallback, cache it now for subsequent instant access
     if (isStaticPath && req.method === "GET" && upstreamRes.ok) {
-      responseHeaders["Cache-Control"] = CHUNK_CACHE_CONTROL;
+      responseHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
       if (contentType.includes("javascript")) {
         const rawJs = await upstreamRes.text();
-        vidlinkStaticCache.set(targetPath, { body: rawJs, contentType });
+        const patchedJs = patchPlayerChunk(rawJs, targetPath);
+        vidlinkStaticCache.set(targetPath, { body: patchedJs, contentType });
         res.writeHead(upstreamRes.status, responseHeaders);
-        return res.end(rawJs, "utf8");
+        return res.end(patchedJs, "utf8");
       }
       const arrayBuffer = await upstreamRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
@@ -466,8 +372,4 @@ module.exports.config = vercelConfig;
 module.exports.handleVidlinkProxy = handleVidlinkProxy;
 module.exports.fetchVidlinkHtmlFast = fetchVidlinkHtmlFast;
 module.exports.vidlinkStaticCache = vidlinkStaticCache;
-module.exports.vidlinkHtmlCache = vidlinkHtmlCache;
-module.exports.CHUNK_CACHE_CONTROL = CHUNK_CACHE_CONTROL;
-module.exports.HTML_CACHE_CONTROL = HTML_CACHE_CONTROL;
 module.exports.VIDLINK_ORIGIN = VIDLINK_ORIGIN;
-module.exports.SOURCE_BUFFER_MUTE_JS = SOURCE_BUFFER_MUTE_JS;

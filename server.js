@@ -1,7 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const URL = globalThis.URL || require("url").URL;
+const { URL } = require("url");
 
 // Load .env manually (zero external dependencies)
 const envPath = path.join(__dirname, ".env");
@@ -31,6 +31,7 @@ const footballHandler = require("./api/football.js");
 const { handleVidcoreProxy } = require("./api/vidcore.js");
 const { handleVidlinkProxy } = require("./api/vidlink.js");
 const subtitlesHandler = require("./api/subtitles.js");
+const handleEmbedProxy = require("./api/embed-proxy.js");
 
 const DIST_DIR = path.join(__dirname, "dist");
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -83,15 +84,12 @@ function isProxyRoute(pathname, req) {
     pathname.startsWith("/embed/") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/stream-proxy/") ||
-    pathname.startsWith("/APA91") ||
-    pathname.includes("APA91") ||
+    pathname.startsWith("/APA91ywF") ||
     pathname.startsWith("/wyzie") ||
     pathname.startsWith("/servers") ||
     pathname.startsWith("/api/b/") ||
     pathname === "/api/skip-events" ||
     pathname === "/gtag-shield.js" ||
-    pathname.startsWith("/gtag-shield") ||
-    pathname === "/hwto-subtitles.js" ||
     pathname === "/script.js" ||
     pathname === "/fu.wasm" ||
     pathname === "/decrypter-worker.js" ||
@@ -113,6 +111,8 @@ function isProxyRoute(pathname, req) {
       !pathname.startsWith("/api/football") &&
       !pathname.startsWith("/api/hls") &&
       !pathname.startsWith("/api/subtitles") &&
+      !pathname.startsWith("/api/embed-proxy") &&
+      pathname !== "/embed-proxy" &&
       !pathname.startsWith("/subtitles/") &&
       !pathname.startsWith("/assets/")
     ) {
@@ -161,15 +161,20 @@ async function app(req, res) {
     }
   }
 
-  // 5. Explicit Vidlink Proxy route
+  // 5. Universal Embed Proxy for external servers (VidSrc.me, MultiEmbed, 2Embed)
+  if (pathname === "/embed-proxy" || pathname === "/api/embed-proxy") {
+    return handleEmbedProxy(req, res);
+  }
+
+  // 6. Explicit Vidlink Proxy route
   if (pathname.startsWith("/vidlink/") || pathname === "/api/vidlink") {
     return handleVidlinkProxy(req, res);
   }
 
-  // 6. Explicit /api/vidcore or any VidCore / Stream Proxy route
+  // 7. Explicit /api/vidcore or any VidCore / Stream Proxy route
   if (pathname === "/api/vidcore" || isProxyRoute(pathname, req)) {
     const ref = String(req.headers["referer"] || "");
-    if (ref.includes("/vidlink/") && !pathname.startsWith("/vidcore/") && !pathname.includes("APA91")) {
+    if (ref.includes("/vidlink/") && !pathname.startsWith("/vidcore/")) {
       return handleVidlinkProxy(req, res);
     }
     return handleVidcoreProxy(req, res);

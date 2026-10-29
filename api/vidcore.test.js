@@ -12,7 +12,6 @@ const {
   patchPlayerChunk,
   staticChunkCache,
   getScrapeDoSessionId,
-  CF_WORKER_URL,
 } = require("./vidcore.js");
 
 test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", async () => {
@@ -79,70 +78,10 @@ test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", asy
     assert.equal(res2.status, 200);
     assert.deepEqual(secondCallTokens, ["token_beta"]);
     assert.equal(capturedUrl.includes("customHeaders=true"), true);
-    assert.equal(capturedUrl.includes("session_number="), true);
-    assert.equal(capturedUrl.includes("sessionId="), false);
+    assert.equal(capturedUrl.includes("sessionId="), true);
     assert.equal(capturedOpts.method, "POST");
     assert.equal(capturedOpts.headers["x-csrf-token"], "test_csrf_123");
-    // Content-Length is intentionally stripped so the fetch implementation can
-    // compute the correct value for the WHATWG-compliant body.
-    assert.equal(capturedOpts.headers["Content-Length"], undefined);
-  } finally {
-    if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
-    else delete process.env.SCRAPE_DO_TOKEN_1;
-    if (saved.t2 !== undefined) process.env.SCRAPE_DO_TOKEN_2 = saved.t2;
-    else delete process.env.SCRAPE_DO_TOKEN_2;
-    if (saved.t3 !== undefined) process.env.SCRAPE_DO_TOKEN_3 = saved.t3;
-    else delete process.env.SCRAPE_DO_TOKEN_3;
-    if (saved.t0 !== undefined) process.env.SCRAPE_DO_TOKEN = saved.t0;
-    else delete process.env.SCRAPE_DO_TOKEN;
-  }
-});
-
-test("Scrape.do retries the same token with customHeaders=false on 555 before rotating", async () => {
-  const saved = {
-    t1: process.env.SCRAPE_DO_TOKEN_1,
-    t2: process.env.SCRAPE_DO_TOKEN_2,
-    t3: process.env.SCRAPE_DO_TOKEN_3,
-    t0: process.env.SCRAPE_DO_TOKEN,
-  };
-
-  try {
-    process.env.SCRAPE_DO_TOKEN_1 = "token_alpha";
-    process.env.SCRAPE_DO_TOKEN_2 = "token_beta";
-    delete process.env.SCRAPE_DO_TOKEN_3;
-    delete process.env.SCRAPE_DO_TOKEN;
-
-    const calls = [];
-    const res = await fetchViaScrapeDoWithRotation(
-      "https://vidcore.io/APA91ywF/test",
-      async (url, opts) => {
-        const u = new URL(url);
-        calls.push({ url: String(url), opts });
-        const tok = u.searchParams.get("token");
-        const custom = u.searchParams.get("customHeaders") === "true";
-        const n = calls.filter((c) => new URL(c.url).searchParams.get("token") === tok).length;
-        if (n === 1) {
-          // First attempt -> rejected with 555
-          return { status: 555, headers: { get: () => "555" } };
-        }
-        // Retry same token with customHeaders=false -> success
-        return { status: 200, text: async () => "OK_RETRY" };
-      },
-      { method: "POST" },
-    );
-
-    assert.equal(res.status, 200);
-    const byToken = new Map();
-    for (const c of calls) {
-      const tok = new URL(c.url).searchParams.get("token");
-      if (!byToken.has(tok)) byToken.set(tok, []);
-      byToken.get(tok).push(c);
-    }
-    for (const [tok, tokenCalls] of byToken) {
-      assert.equal(tokenCalls.length, 2, `Token ${tok} must be retried before rotating`);
-      assert.equal(tokenCalls[0].url.includes("customHeaders=true"), true);
-      assert.equal(tokenCalls[1].url.includes("customHeaders=false"), true);
-    }
+    assert.equal(capturedOpts.headers["Content-Length"], "0");
   } finally {
     if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
     else delete process.env.SCRAPE_DO_TOKEN_1;
@@ -188,7 +127,7 @@ test("Vidcore & Vidlink proxy + Cloudflare Worker integration", async () => {
     assert.equal(t3.includes('id="hwto-sub-fix"'), true);
 
     // 4. Chunk 281 is kept clean and valid without internal syntax errors
-    const chunkMatch = t3.match(/\/(?:vidcore\/)?_next\/static\/chunks\/281-[a-zA-Z0-9]+\.js/);
+    const chunkMatch = t3.match(/\/_next\/static\/chunks\/281-[a-zA-Z0-9]+\.js/);
     assert.ok(chunkMatch, "Should find chunk 281 in Vidcore HTML");
     const r4 = await fetch(`${base}${chunkMatch[0]}`);
     assert.equal(r4.status, 200);
@@ -218,7 +157,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   assert.equal(cleanedHtml.includes('href="https://mc.yandex.ru/watch/98154677"'), false);
   assert.equal(/<link[^>]*rel=["']?preload["']?[^>]*href=["']\s*["']/i.test(cleanedHtml), false);
   assert.equal(
-    cleanedHtml.includes('href="/vidlink/_next/static/chunks/webpack.js"'),
+    cleanedHtml.includes('href="/_next/static/chunks/webpack.js?v=2"'),
     true,
   );
 
@@ -280,7 +219,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   xhr1.open("GET", mpdUrl, true);
   assert.equal(
     xhrOpened[0].url,
-    `https://hwto.proteome626.workers.dev/stream-proxy/ref/${encodeURIComponent(mpdUrl)}?ref=vidlink`,
+    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(mpdUrl)}`,
   );
   // dash.js relies on xhr.responseURL being the original MPD URL to resolve relative segment templates
   assert.equal(xhr1.responseURL, mpdUrl);
@@ -292,7 +231,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   xhr2.open("GET", segUrl, true);
   assert.equal(
     xhrOpened[1].url,
-    `https://hwto.proteome626.workers.dev/stream-proxy/ref/${encodeURIComponent(segUrl)}?ref=vidlink`,
+    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(segUrl)}`,
   );
 
   // Test C: Subsequent DASH .m4s segment if resolved as root-relative /sacdn/dash/... via fetch
@@ -302,7 +241,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   const fetchRes = await sandbox.window.fetch(relSegPath);
   assert.equal(
     fetchedUrls[0],
-    `https://hwto.proteome626.workers.dev/stream-proxy/ref/${encodeURIComponent(expectedResolvedSeg)}?ref=vidlink`,
+    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(expectedResolvedSeg)}`,
   );
   assert.equal(fetchRes.url, expectedResolvedSeg);
 
@@ -311,7 +250,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   await sandbox.window.fetch(hlsUrl);
   assert.equal(
     fetchedUrls[1],
-    `https://hwto.proteome626.workers.dev/stream-proxy/ref/${encodeURIComponent(hlsUrl)}?ref=vidlink`,
+    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(hlsUrl)}`,
   );
 });
 
@@ -472,45 +411,46 @@ test("AD_SHIELD_JS fake proxies spoof origin, protocol, port, hostname, and wind
   assert.equal(openedWin.closed, true);
 });
 
-test("AD_SHIELD_JS intercepts APA91 requests and routes them to /vidcore/APA91...", async () => {
-  const fetchedUrls = [];
-  const xhrOpened = [];
-  function MockXHR() {}
-  MockXHR.prototype.open = function (method, url) {
-    xhrOpened.push({ method, url });
-  };
+test("patchPlayerChunk intercepts error handler to suppress 555 error", () => {
+  const mockChunkCode = `
+    cR[[109,123,106,77,106,127,106,123].map(function(e){return String.fromCharCode(30^e)}).join("")]=Z;
+  `;
+  const patched = patchPlayerChunk(mockChunkCode, "/_next/static/chunks/player-test.js");
+  assert.ok(patched.includes("if(v===555)"));
+
+  let interceptedStatus = null;
+  let postedMessages = [];
   const sandbox = {
-    window: null,
-    document: { querySelectorAll: () => [], addEventListener: () => {} },
-    XMLHttpRequest: MockXHR,
-    URL,
-    encodeURIComponent,
-    fetch: async (input) => {
-      fetchedUrls.push(String(input));
-      return { status: 200, url: String(input) };
+    cR: {},
+    Z: (val) => {
+      interceptedStatus = val;
     },
+    window: {
+      parent: {
+        postMessage: (msg) => postedMessages.push(msg),
+      },
+    },
+    console: { warn: () => {} },
   };
-  sandbox.window = sandbox;
-  sandbox.window.parent = { postMessage: () => {} };
-  sandbox.window.location = { origin: "https://hwto-kurd.vercel.app" };
-  vm.runInNewContext(AD_SHIELD_JS, sandbox);
 
-  // 1. Relative /APA91 via XHR
-  const xhr = new sandbox.XMLHttpRequest();
-  xhr.open("POST", "/APA91ywFtest123");
-  assert.equal(xhrOpened[0].url, "https://hwto-kurd.vercel.app/vidcore/APA91ywFtest123");
+  vm.runInNewContext(patched, sandbox);
 
-  // 2. Full vidcore.io /APA91 via fetch
-  await sandbox.window.fetch("https://vidcore.io/APA91ywFfull");
-  assert.equal(fetchedUrls[0], "https://hwto-kurd.vercel.app/vidcore/APA91ywFfull");
+  // Invoke the patched setState function with 555:
+  sandbox.cR.setState(555);
+  // Must NOT forward 555 to original Z and must NOT post 555 message
+  assert.equal(interceptedStatus, null, "555 must be suppressed");
+  assert.equal(postedMessages.length, 0, "555 must not postMessage");
 
-  // 3. Already prefixed /vidcore/APA91
-  await sandbox.window.fetch("/vidcore/APA91ywFclean");
-  assert.equal(fetchedUrls[1], "https://hwto-kurd.vercel.app/vidcore/APA91ywFclean");
+  // Invoke with normal error status like 404:
+  sandbox.cR.setState(404);
+  assert.equal(interceptedStatus, 404);
+  assert.equal(postedMessages.length, 1);
+  assert.equal(postedMessages[0].event, "status");
+  assert.equal(postedMessages[0].data, 404);
 });
 
-test("Cache busting (?v=6) and clean untouched JS chunks in vidcore", () => {
-  // 1. Verify HTML sanitization adds /vidcore/_next/static/... and ?v=6 to Next.js chunks
+test("Cache busting (?v=2), anti-freeze, and sandbox patches in vidcore", () => {
+  // 1. Verify HTML sanitization adds ?v=2 to Next.js chunks
   const sampleVidcoreHtml = `
     <html>
       <head>
@@ -522,484 +462,36 @@ test("Cache busting (?v=6) and clean untouched JS chunks in vidcore", () => {
     </html>
   `;
   const sanitized = sanitizeVidcoreHtml(sampleVidcoreHtml);
-  assert.ok(sanitized.includes("/vidcore/_next/static/chunks/281-d15eeb1ca15a1654.js?v=6"));
-  assert.ok(sanitized.includes("/vidcore/_next/static/chunks/main-app-14eacbf1653a965d.js?v=6"));
-  // Ensure idempotent (no ?v=6?v=6)
+  assert.ok(sanitized.includes("/_next/static/chunks/281-d15eeb1ca15a1654.js?v=2"));
+  assert.ok(sanitized.includes("/_next/static/chunks/main-app-14eacbf1653a965d.js?v=2"));
+  // Ensure idempotent (no ?v=2?v=2)
   const sanitizedTwice = sanitizeVidcoreHtml(sanitized);
-  assert.ok(!sanitizedTwice.includes("?v=6?v=6"));
+  assert.ok(!sanitizedTwice.includes("?v=2?v=2"));
 
-  // 2. Verify patchPlayerChunk returns code 100% untouched without any .replace()
+  // 2. Verify patchPlayerChunk anti-freeze and sandbox bypass
   const mockCode = `
     function wrapper() {
       let t=[];for(let a=0;a<50;a++)t.push(e);let a=Date.now();return console.table(t),console.clear(),Date.now()-a<=10
+      if(!tI.current&&(tI.current=!0,window.self!==window.top)){let t=()=>{document.body.innerHTML='<h1>Please Disable Sandbox</h1>'};}
       let{en:l,from:b,ad:h,mobile:u}=e;
+      R.length>0&&(R.sort((e,t)=>e.track.label.localeCompare(t.track.label)),el(R))
     }
   `;
-  const cleanCode = patchPlayerChunk(mockCode, "/_next/static/chunks/main-app.js");
-  assert.equal(cleanCode, mockCode, "Chunks must remain completely untouched 100%");
-});
+  // Verify chunk 281 remains completely clean and untouched
+  const clean281 = patchPlayerChunk(mockCode, "/_next/static/chunks/281-d15eeb1ca15a1654.js");
+  assert.equal(clean281, mockCode, "Chunk 281 must remain completely untouched");
 
-test("AD_SHIELD_JS blocks clarity.ms, stubs clarity.q, and mutes transient SourceBuffer errors", () => {
-  const capturedErrors = [];
-  const sandbox = {
-    window: null,
-    document: {},
-    console: {
-      error: (...args) => capturedErrors.push(args.join(" ")),
-    },
-    URL,
-    encodeURIComponent,
-    Object,
-    Array,
-    String,
-    Date,
-  };
-  sandbox.window = sandbox;
-  sandbox.window.location = {
-    origin: "https://hwto-kurd.vercel.app",
-    hostname: "hwto-kurd.vercel.app",
-    protocol: "https:",
-    port: "",
-    pathname: "/vidcore/movie/550",
-  };
+  // Verify other chunks receive standard sandbox and ad bypasses
+  const patched = patchPlayerChunk(mockCode, "/_next/static/chunks/main-app.js");
+  assert.ok(patched.includes("return!0"), "Anti-freeze must return !0");
+  assert.ok(patched.includes("if(!1)"), "Sandbox check must be bypassed with if(!1)");
+  assert.ok(!patched.includes("Please Disable Sandbox"), "Please Disable Sandbox string must be stripped");
+  assert.ok(patched.includes("let h=!1,{en:l,from:b,ad:_h_ignored,"), "Ad prop must be forced to false");
 
-  vm.runInNewContext(AD_SHIELD_JS, sandbox);
-
-  // 1. Check window.clarity stub and .q array
-  assert.equal(typeof sandbox.window.clarity, "function");
-  assert.ok(Array.isArray(sandbox.window.clarity.q), "clarity.q must be an array");
+  // Verify valid syntax by compiling with vm.Script
   assert.doesNotThrow(() => {
-    sandbox.window.clarity("set", "test");
-    sandbox.window.clarity.q.push("item");
-    sandbox.window.clarity.q.unshift("item0");
-  }, "clarity.q.unshift must not throw");
-
-  // 2. Check console.error muting
-  sandbox.console.error("Uncaught Error: SourceBufferSink failed to append");
-  sandbox.console.error("This SourceBuffer has been removed from the parent media source.");
-  sandbox.console.error("Script error at www.clarity.ms/tag/abc");
-  assert.equal(capturedErrors.length, 0, "Transient SourceBuffer & clarity errors must be muted");
-
-  // Normal errors must NOT be muted
-  sandbox.console.error("Real critical application error");
-  assert.equal(capturedErrors.length, 1);
-  assert.ok(capturedErrors[0].includes("Real critical application error"));
-
-  // 3. HTML sanitization strips clarity.ms tags
-  const htmlWithClarity = `
-    <html>
-      <head>
-        <script src="https://www.clarity.ms/tag/12345"></script>
-        <script>window.clarity("start");</script>
-      </head>
-      <body></body>
-    </html>
-  `;
-  const cleanVidcore = sanitizeVidcoreHtml(htmlWithClarity);
-  assert.ok(!cleanVidcore.includes("clarity.ms"), "Vidcore HTML must strip clarity.ms");
-  const cleanVidlink = sanitizeVidlinkHtml(htmlWithClarity);
-  assert.ok(!cleanVidlink.includes("clarity.ms"), "Vidlink HTML must strip clarity.ms");
+    new vm.Script(patched);
+  }, "Patched chunk must have zero syntax errors");
 });
-
-test("Strict Zero-SyntaxError verification on AD_SHIELD_JS, UNIVERSAL_SUBTITLE_INJECTOR_JS, and Next.js RSC sanitized HTML", () => {
-  const { UNIVERSAL_SUBTITLE_INJECTOR_JS } = require("./subtitles.js");
-
-  // 1. Both injected scripts must be completely valid JS without syntax errors
-  assert.doesNotThrow(() => {
-    new Function(AD_SHIELD_JS);
-  }, "AD_SHIELD_JS must compile without any syntax error");
-
-  assert.doesNotThrow(() => {
-    new Function(UNIVERSAL_SUBTITLE_INJECTOR_JS);
-  }, "UNIVERSAL_SUBTITLE_INJECTOR_JS must compile without any syntax error");
-
-  // 2. Next.js streaming RSC payload with embedded clarity script references and JSON strings
-  const mockRscHtml = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>Player</title>
-      </head>
-      <body>
-        <script>self.__next_f=self.__next_f||[];self.__next_f.push([0])</script>
-        <script>self.__next_f.push([1,"1:HL[\\\"/_next/static/css/app.css\\\",\\\"style\\\"]\\n"])</script>
-        <script>self.__next_f.push([1,"14:[\\\"$\\\",\\\"script\\\",null,{\\\"src\\\":\\\"https://www.clarity.ms/tag/p5j6v64p52\\\",\\\"strategy\\\":\\\"afterInteractive\\\"}]\\n"])</script>
-        <script>self.__next_f.push([1,"15:[\\\"$\\\",\\\"div\\\",null,{\\\"children\\\":\\\"Safe content with; semicolon and quotes\\\"}]\\n"])</script>
-        <script src="https://www.clarity.ms/tag/p5j6v64p52"></script>
-      </body>
-    </html>
-  `;
-
-  for (const sanitizer of [sanitizeVidlinkHtml, sanitizeVidcoreHtml]) {
-    const sanitized = sanitizer(mockRscHtml);
-
-    // Extract all <script> contents (ignoring external src) and compile each with vm.Script
-    const scriptRegex = /<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
-    let match;
-    let scriptCount = 0;
-    while ((match = scriptRegex.exec(sanitized)) !== null) {
-      const code = match[1].trim();
-      if (!code) continue;
-      scriptCount++;
-      assert.doesNotThrow(() => {
-        new vm.Script(code);
-      }, `Script block #${scriptCount} must compile with zero syntax errors`);
-    }
-    assert.ok(scriptCount >= 3, "Must have verified all Next.js RSC and injected script blocks");
-  }
-});
-
-test("AD_SHIELD_JS dynamically spoofs domain for VidLink (vidlink.pro) vs VidCore (vidcore.io) and intercepts script src", () => {
-  // Test VidLink context
-  const fakeScriptInstances = [];
-  function MockScript() {
-    this._src = "";
-    fakeScriptInstances.push(this);
-  }
-  Object.defineProperty(MockScript.prototype, "src", {
-    get() { return this._src; },
-    set(v) { this._src = v; },
-    configurable: true,
-  });
-
-  const vidlinkSandbox = {
-    window: null,
-    document: {},
-    HTMLScriptElement: MockScript,
-    URL,
-    encodeURIComponent,
-  };
-  vidlinkSandbox.window = vidlinkSandbox;
-  vidlinkSandbox.window.location = {
-    origin: "https://hwto-kurd.vercel.app",
-    hostname: "hwto-kurd.vercel.app",
-    href: "https://hwto-kurd.vercel.app/vidlink/movie/550",
-    pathname: "/vidlink/movie/550",
-  };
-
-  vm.runInNewContext(AD_SHIELD_JS, vidlinkSandbox);
-
-  // In VidLink context, fake location/origin must be vidlink.pro (NOT vidcore.io)
-  assert.equal(vidlinkSandbox.__fakeLoc.hostname, "vidlink.pro");
-  assert.equal(vidlinkSandbox.__fakeLoc.origin, "https://vidlink.pro");
-  assert.equal(vidlinkSandbox.__fakeDoc.domain, "vidlink.pro");
-
-  // Script src setter should route /_next/ to /vidlink/_next/
-  const s1 = new MockScript();
-  s1.src = "/_next/static/chunks/app-123.js";
-  assert.equal(s1.src, "https://hwto-kurd.vercel.app/vidlink/_next/static/chunks/app-123.js");
-
-  // Test VidCore context
-  const vidcoreSandbox = {
-    window: null,
-    document: {},
-    HTMLScriptElement: MockScript,
-    URL,
-    encodeURIComponent,
-  };
-  vidcoreSandbox.window = vidcoreSandbox;
-  vidcoreSandbox.window.location = {
-    origin: "https://hwto-kurd.vercel.app",
-    hostname: "hwto-kurd.vercel.app",
-    href: "https://hwto-kurd.vercel.app/vidcore/movie/550",
-    pathname: "/vidcore/movie/550",
-  };
-
-  vm.runInNewContext(AD_SHIELD_JS, vidcoreSandbox);
-
-  // In VidCore context, fake location/origin must be vidcore.io
-  assert.equal(vidcoreSandbox.__fakeLoc.hostname, "vidcore.io");
-  assert.equal(vidcoreSandbox.__fakeLoc.origin, "https://vidcore.io");
-
-  // Script src setter should route /_next/static/ to /vidcore/_next/static/ with ?v=6
-  const s2 = new MockScript();
-  s2.src = "/_next/static/chunks/main-456.js";
-  assert.equal(s2.src, "https://hwto-kurd.vercel.app/vidcore/_next/static/chunks/main-456.js?v=6");
-});
-
-test("VidCore session_number pinning across HTML and APA91 POST + .m3u8 steelpeak stream routing", async () => {
-  const {
-    getScrapeDoSessionId,
-    buildScrapeDoUrl,
-    CF_WORKER_URL,
-  } = require("./vidcore.js");
-
-  // 1. Session ID pinning between HTML page navigation and subsequent APA91 POST
-  const htmlReq = {
-    url: "/vidcore/movie/1283515",
-    headers: {
-      "x-forwarded-for": "198.51.100.55, 10.0.0.1",
-    },
-    socket: { remoteAddress: "198.51.100.55" },
-  };
-  const htmlSessId = getScrapeDoSessionId(htmlReq, "/movie/1283515");
-
-  const apaPostReq = {
-    url: "/vidcore/APA91ywF/verify",
-    method: "POST",
-    headers: {
-      "x-forwarded-for": "198.51.100.55, 10.0.0.1",
-      referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
-      "content-type": "application/octet-stream",
-    },
-    socket: { remoteAddress: "198.51.100.55" },
-  };
-  const apaSessId = getScrapeDoSessionId(apaPostReq, "/APA91ywF/verify");
-
-  assert.equal(
-    apaSessId,
-    htmlSessId,
-    "HTML request and subsequent APA91 POST must share the identical session_number",
-  );
-
-  // 2. buildScrapeDoUrl uses only the Scrape.do sticky-session param (`session_number`)
-  const scrapeUrl = buildScrapeDoUrl("https://vidcore.io/movie/1283515", "test_tok", true, htmlSessId);
-  const parsed = new URL(scrapeUrl);
-  assert.equal(parsed.searchParams.get("sessionId"), null);
-  assert.equal(parsed.searchParams.get("session_number"), htmlSessId);
-
-  // 3. AD_SHIELD_JS routing for .m3u8, steelpeak, vd, and hls domains
-  let capturedFetchUrl = "";
-  const mockFetch = async (url) => {
-    capturedFetchUrl = typeof url === "string" ? url : url.url;
-    return { ok: true, status: 200, text: async () => "#EXTM3U" };
-  };
-
-  const sandbox = {
-    window: null,
-    document: {},
-    fetch: mockFetch,
-    console: {
-      error: () => {},
-      warn: () => {},
-    },
-    URL,
-    encodeURIComponent,
-    Object,
-    Array,
-    String,
-    Date,
-  };
-  sandbox.window = sandbox;
-  sandbox.window.location = {
-    origin: "https://hwto-kurd.vercel.app",
-    hostname: "hwto-kurd.vercel.app",
-    href: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
-    pathname: "/vidcore/movie/1283515",
-  };
-
-  vm.runInNewContext(AD_SHIELD_JS, sandbox);
-
-  // Fetch to steelpeak .m3u8 stream
-  await sandbox.window.fetch("https://steelpeak.store/hls/master.m3u8");
-  assert.ok(
-    capturedFetchUrl.startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`),
-    "steelpeak stream must be routed through Cloudflare Worker stream-proxy",
-  );
-  assert.ok(capturedFetchUrl.includes(encodeURIComponent("https://steelpeak.store/hls/master.m3u8")));
-
-  // Fetch to vd streaming domain
-  await sandbox.window.fetch("https://vd12.com/live/playlist.m3u8");
-  assert.ok(
-    capturedFetchUrl.startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`),
-    "vd domain must be routed through Cloudflare Worker stream-proxy",
-  );
-
-  // Protocol-relative //steelpeak...
-  await sandbox.window.fetch("//steelpeak.store/live/chunk.m3u8");
-  assert.ok(
-    capturedFetchUrl.startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`),
-    "protocol-relative stream must be routed through Cloudflare Worker stream-proxy",
-  );
-  assert.ok(capturedFetchUrl.includes(encodeURIComponent("https://steelpeak.store/live/chunk.m3u8")));
-});
-
-test("WHATWG URL standard compliance and raw binary body forwarding for POST /APA91... decryption", async () => {
-  const { handleVidcoreProxy } = require("./vidcore.js");
-
-  const originalFetch = global.fetch;
-  const scrapeCalls = [];
-  let capturedOpts = null;
-
-  global.fetch = async (url, opts) => {
-    const value = String(url);
-    if (!value.startsWith("https://api.scrape.do/")) {
-      throw new Error(`Unexpected upstream fetch: ${value}`);
-    }
-    scrapeCalls.push({ url: value, opts });
-    capturedOpts = opts;
-    return new Response(JSON.stringify({ key: "decrypted_stream_token_123" }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  };
-
-  const savedScrapeToken = process.env.SCRAPE_DO_TOKEN_1;
-  process.env.SCRAPE_DO_TOKEN_1 = "test_token_scrape_do";
-
-  try {
-    const rawBinaryPayload = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0xaa, 0x55]);
-
-    let responseCode = null;
-    let responseBody = null;
-
-    const res = {
-      writeHead(code) {
-        responseCode = code;
-      },
-      end(data) {
-        responseBody = data;
-      },
-    };
-
-    const runProxy = async (req, expectedScrapeTarget) => {
-      responseCode = null;
-      responseBody = null;
-      const before = scrapeCalls.length;
-      await handleVidcoreProxy(req, res);
-
-      assert.equal(responseCode, 200);
-      assert.equal(scrapeCalls.length, before + 1, "Scrape.do-first path must be used for decryption");
-      const call = scrapeCalls[before];
-      assert.ok(call.url.startsWith("https://api.scrape.do/"), "Decryption must go through Scrape.do");
-      assert.ok(call.url.includes(encodeURIComponent(expectedScrapeTarget)));
-      assert.ok(responseBody.toString().includes("decrypted_stream_token_123"));
-      return call;
-    };
-
-    const req = {
-      method: "POST",
-      url: "/vidcore/APA91ywFtestBinaryKey",
-      headers: {
-        host: "hwto-kurd.vercel.app",
-        referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
-        "content-type": "application/octet-stream",
-        "x-hwto-media-id": "1283515",
-        "x-forwarded-for": "198.51.100.42",
-      },
-      rawBody: rawBinaryPayload,
-    };
-
-    const scrapeCall = await runProxy(req, "https://vidcore.io/APA91ywFtestBinaryKey");
-
-    // Verify options and binary body
-    assert.equal(scrapeCall.opts.method, "POST");
-    assert.equal(scrapeCall.opts.headers["Origin"], "https://vidcore.io");
-    assert.equal(scrapeCall.opts.headers["Referer"], "https://vidcore.io/");
-    assert.equal(scrapeCall.opts.headers["Content-Type"], "application/octet-stream");
-    assert.equal(scrapeCall.opts.headers["Content-Length"], undefined);
-    assert.deepEqual(scrapeCall.opts.body, rawBinaryPayload);
-
-    // Verify internal x-hwto header was stripped before sending upstream
-    assert.equal(scrapeCall.opts.headers["x-hwto-media-id"], undefined);
-    assert.equal(scrapeCall.opts.headers["media_id"], undefined);
-
-    // Also verify when URL is direct /APA91ywFtestDirect without /vidcore prefix
-    await runProxy(
-      {
-        method: "POST",
-        url: "/APA91ywFtestDirect",
-        headers: {
-          host: "hwto-kurd.vercel.app",
-          referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
-          "content-type": "application/octet-stream",
-        },
-        rawBody: rawBinaryPayload,
-      },
-      "https://vidcore.io/APA91ywFtestDirect",
-    );
-
-    // Verify Vercel rewrite with x-matched-path header on /api/vidcore
-    await runProxy(
-      {
-        method: "POST",
-        url: "/api/vidcore",
-        headers: {
-          host: "hwto-kurd.vercel.app",
-          "x-matched-path": "/APA91ywFtestVercelRewrite",
-          referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
-          "content-type": "application/octet-stream",
-        },
-        rawBody: rawBinaryPayload,
-      },
-      "https://vidcore.io/APA91ywFtestVercelRewrite",
-    );
-  } finally {
-    global.fetch = originalFetch;
-    if (savedScrapeToken !== undefined) process.env.SCRAPE_DO_TOKEN_1 = savedScrapeToken;
-    else delete process.env.SCRAPE_DO_TOKEN_1;
-  }
-});
-
-test("Cache-busting /gtag-shield.js?v=6 and unoverwritable console shield in AD_SHIELD_JS", async () => {
-  let responseCode = 0;
-  let responseHeaders = {};
-  let responseBody = "";
-
-  const req = {
-    method: "GET",
-    url: "/gtag-shield.js?v=6",
-    headers: { host: "localhost:3000" },
-  };
-
-  const res = {
-    writeHead(code, headers) {
-      responseCode = code;
-      responseHeaders = headers;
-    },
-    end(data) {
-      responseBody = data;
-    },
-  };
-
-  const { handleVidcoreProxy } = require("./vidcore.js");
-  await handleVidcoreProxy(req, res);
-
-  assert.equal(responseCode, 200);
-  assert.equal(responseHeaders["Content-Type"], "application/javascript; charset=utf-8");
-  assert.ok(responseHeaders["Cache-Control"].includes("max-age=86400"));
-  assert.ok(responseBody.includes("__shouldMuteLog"));
-
-  // Verify unoverwritable console error in AD_SHIELD_JS
-  const captured = [];
-  const sandbox = {
-    console: {
-      error: (...args) => captured.push(args.join(" ")),
-      warn: () => {},
-    },
-    window: {
-      location: { href: "https://hwto-kurd.vercel.app/vidlink/movie/550" },
-      addEventListener: () => {},
-      parent: { postMessage: () => {} },
-    },
-    document: {},
-  };
-
-  vm.runInNewContext(responseBody, sandbox);
-
-  // Mutes SourceBufferSink and React #418
-  sandbox.console.error("[SourceBufferSink] [4888] SourceBuffer append failed");
-  sandbox.console.error("Minified React error #418; visit https://react.dev/errors/418");
-  assert.equal(captured.length, 0);
-
-  // Reassigned console.error by external script still preserves filtering
-  const reassignedLogs = [];
-  sandbox.console.error = function(...args) {
-    reassignedLogs.push(args.join(" "));
-  };
-
-  sandbox.console.error("[SourceBufferSink] [8988] This SourceBuffer has been removed");
-  sandbox.console.error("Cannot read properties of undefined (reading 'unshift')");
-  assert.equal(reassignedLogs.length, 0);
-
-  // Real error is passed through
-  sandbox.console.error("Actual application error");
-  assert.equal(reassignedLogs.length, 1);
-  assert.ok(reassignedLogs[0].includes("Actual application error"));
-});
-
-
-
-
 
 

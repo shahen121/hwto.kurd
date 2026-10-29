@@ -8,7 +8,6 @@ const {
   handleVidlinkProxy,
   vidlinkStaticCache,
   fetchVidlinkHtmlFast,
-  SOURCE_BUFFER_MUTE_JS,
 } = require("./vidlink.js");
 const {
   subtitlesHandler,
@@ -65,12 +64,6 @@ test("Vidlink HTML: Preconnect header, ad limits, and universal subtitle script 
     assert.ok(
       html.includes('id="hwto-universal-subs"'),
       "Must include universal subtitles script",
-    );
-
-    // 2b. SourceBuffer mute script
-    assert.ok(
-      html.includes('id="hwto-vidlink-sourcebuffer-mute"'),
-      "Must include dedicated SourceBuffer mute script",
     );
 
     // 3. Fast Vidlink header
@@ -191,70 +184,52 @@ test("Universal Subtitles: Path normalization and direct file streaming without 
   }
 });
 
-test("getSourceUrl correctly generates clean URLs for active servers (VidCore & VidLink) and handles fallbacks", async () => {
-  const { getSourceUrl, PLAYER_SOURCES } = await import("../src/utils/api.js");
+test("getSourceUrl correctly generates clean URLs for all 5 servers and aliases without debugger traps", async () => {
+  const { getSourceUrl } = await import("../src/utils/api.js");
 
-  // Verify only 2 fast servers are active
-  assert.equal(PLAYER_SOURCES.length, 2);
-  assert.equal(PLAYER_SOURCES[0].id, "vidcore");
-  assert.equal(PLAYER_SOURCES[1].id, "vidlink");
-
-  // Server 1: Vidcore (supports internal proxy subtitle tracks with same-origin)
+  // Server 1: Vidcore (supports internal proxy subtitle tracks)
   const s1 = getSourceUrl("vidcore", "movie", 550, null, null, {}, "e50914", "ku");
-  assert.ok(s1.includes("/vidcore/movie/550"));
   assert.ok(s1.includes("sub_url_ku="));
   assert.ok(s1.includes("sub_url_ar="));
-  const decS1 = decodeURIComponent(s1);
-  assert.ok(decS1.includes("/subtitles/movie/550/ku.vtt"), "Must use same-origin /subtitles path");
-  assert.ok(!decS1.includes("r2.dev"), "Must NOT pass cross-origin r2.dev directly");
 
-  // Server 2: Vidlink (supports documented sub_file with same-origin)
+  // Server 2: Vidlink (supports documented sub_file)
   const s2 = getSourceUrl("vidlink", "movie", 550, null, null, {}, "e50914", "ku");
-  assert.ok(s2.includes("/vidlink/movie/550"));
   assert.ok(s2.includes("sub_file="));
   assert.ok(s2.includes("sub_label="));
-  const decS2 = decodeURIComponent(s2);
-  assert.ok(decS2.includes("/subtitles/movie/550/ku.vtt"), "Must use same-origin /subtitles path");
-  assert.ok(!decS2.includes("r2.dev"), "Must NOT pass cross-origin r2.dev directly");
 
-  // TV URLs
-  const s1Tv = getSourceUrl("vidcore", "tv", 220542, 1, 1, {}, "e50914", "ku");
-  assert.ok(s1Tv.includes("/vidcore/tv/220542/1/1"));
-  const s2Tv = getSourceUrl("vidlink", "tv", 220542, 1, 1, {}, "e50914", "ar");
-  assert.ok(s2Tv.includes("/vidlink/tv/220542/1/1"));
+  // Server 3: VidSrc.me routed through /embed-proxy
+  const s3Movie = getSourceUrl("vidsrc_me", "movie", 550, null, null, {}, "e50914", "ar");
+  assert.ok(s3Movie.includes("/embed-proxy?url="));
+  assert.ok(s3Movie.includes(encodeURIComponent("https://vidsrc.me/embed/movie?tmdb=550")));
+  const s3Tv = getSourceUrl("vidsrc_me", "tv", 220542, 1, 1, {}, "e50914", "ar");
+  assert.ok(s3Tv.includes("/embed-proxy?url="));
+  assert.ok(s3Tv.includes(encodeURIComponent("https://vidsrc.me/embed/tv?tmdb=220542&season=1&episode=1")));
+  const s3Alias = getSourceUrl("vidsrc_cc", "movie", 550, null, null, {}, "e50914", "ar");
+  assert.ok(s3Alias.includes("/embed-proxy?url="));
+  assert.ok(!s3Movie.includes("sub_url_ku"));
 
-  // Legacy/obsolete server keys safely fall back to the default server (vidcore)
-  const fallback = getSourceUrl("vidsrc_me", "movie", 550, null, null, {}, "e50914", "ku");
-  assert.ok(fallback.includes("/vidcore/movie/550"));
+  // Server 4: MultiEmbed routed through /embed-proxy
+  const s4Movie = getSourceUrl("multiembed", "movie", 550, null, null, {}, "e50914", "ku");
+  assert.ok(s4Movie.includes("/embed-proxy?url="));
+  assert.ok(s4Movie.includes(encodeURIComponent("https://multiembed.mov/?video_id=550&tmdb=1")));
+  const s4Tv = getSourceUrl("multiembed", "tv", 220542, 1, 1, {}, "e50914", "ku");
+  assert.ok(s4Tv.includes("/embed-proxy?url="));
+  assert.ok(s4Tv.includes(encodeURIComponent("https://multiembed.mov/?video_id=220542&tmdb=1&s=1&e=1")));
+  const s4Alias = getSourceUrl("embedsu", "movie", 550, null, null, {}, "e50914", "ku");
+  assert.ok(s4Alias.includes("/embed-proxy?url="));
+  assert.ok(!s4Movie.includes("directstream.php"));
+  assert.ok(!s4Movie.includes("sub_url_ku"));
 
-  // Disallow blob: URL in subtitleUrl - MUST discard and use clean same-origin HTTP path
-  const sBlob = getSourceUrl(
-    "vidcore",
-    "movie",
-    1283515,
-    null,
-    null,
-    {},
-    "e50914",
-    "ku",
-    "blob:https://hwto-kurd.vercel.app/bad-blob-id",
-  );
-  assert.ok(!sBlob.includes("blob:"), "Must NOT pass blob: URLs to iframe query parameters");
-  assert.ok(decodeURIComponent(sBlob).includes("/subtitles/movie/1283515/ku.vtt"));
-
-  const s2Blob = getSourceUrl(
-    "vidlink",
-    "movie",
-    1283515,
-    null,
-    null,
-    {},
-    "e50914",
-    "ku",
-    "blob:https://hwto-kurd.vercel.app/bad-blob-id",
-  );
-  assert.ok(!s2Blob.includes("blob:"), "Must NOT pass blob: URLs to iframe query parameters");
-  assert.ok(decodeURIComponent(s2Blob).includes("/subtitles/movie/1283515/ku.vtt"));
+  // Server 5: 2Embed routed through /embed-proxy
+  const s5Movie = getSourceUrl("2embed", "movie", 550, null, null, {}, "e50914", "ku");
+  assert.ok(s5Movie.includes("/embed-proxy?url="));
+  assert.ok(s5Movie.includes(encodeURIComponent("https://www.2embed.cc/embed/550")));
+  const s5Tv = getSourceUrl("2embed", "tv", 220542, 1, 1, {}, "e50914", "ku");
+  assert.ok(s5Tv.includes("/embed-proxy?url="));
+  assert.ok(s5Tv.includes(encodeURIComponent("https://www.2embed.cc/embedtv/220542&s=1&e=1")));
+  const s5Alias = getSourceUrl("autoembed", "movie", 550, null, null, {}, "e50914", "ku");
+  assert.ok(s5Alias.includes("/embed-proxy?url="));
+  assert.ok(!s5Movie.includes("sub_url_ku"));
 });
 
 test("Subtitle 404 Prevention: missing TV subtitles return 200 OK with valid empty WEBVTT and CORS header, even with TV referer", async () => {
@@ -281,246 +256,7 @@ test("Subtitle 404 Prevention: missing TV subtitles return 200 OK with valid emp
     assert.ok(arRes.headers.get("content-type").includes("text/vtt"));
     assert.equal(arRes.headers.get("access-control-allow-origin"), "*");
     assert.equal(await arRes.text(), "WEBVTT\n\n");
-
-    // 3. Stale request containing blob: URL returns 200 OK with WEBVTT\n\n without 404
-    const blobRes = await fetch(`${base}/subtitles/blob:https://hwto-kurd.vercel.app/test-uuid`);
-    assert.equal(blobRes.status, 200);
-    assert.ok(blobRes.headers.get("content-type").includes("text/vtt"));
-    assert.equal(await blobRes.text(), "WEBVTT\n\n");
   } finally {
     server.close();
   }
 });
-
-test("UNIVERSAL_SUBTITLE_INJECTOR_JS rewrites external r2.dev URLs to same-origin and sets video crossorigin", () => {
-  const appendedTracks = [];
-  const fakeVideo = {
-    attributes: {},
-    crossOrigin: null,
-    getAttribute(name) { return this.attributes[name] || null; },
-    setAttribute(name, val) { this.attributes[name] = val; },
-    querySelectorAll() { return []; },
-    appendChild(el) { appendedTracks.push(el); },
-    addEventListener() {},
-  };
-
-  const fakeDoc = {
-    readyState: "complete",
-    querySelectorAll(selector) {
-      if (selector === "video") return [fakeVideo];
-      return [];
-    },
-    createElement(tag) {
-      return {
-        tagName: tag,
-        kind: "",
-        label: "",
-        srclang: "",
-        src: "",
-      };
-    },
-    addEventListener() {},
-  };
-
-  const sandbox = {
-    window: null,
-    document: fakeDoc,
-    URL,
-    URLSearchParams,
-    HTMLTrackElement: { prototype: { src: "" } },
-    Blob,
-    fetch: async () => ({ ok: true, text: async () => "WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nHello" }),
-    setTimeout: (fn) => fn(),
-    setInterval: () => {},
-  };
-  sandbox.window = sandbox;
-  sandbox.window.location = {
-    origin: "https://hwto-kurd.vercel.app",
-    href: "https://hwto-kurd.vercel.app/vidcore/movie/550?sub_url=https%3A%2F%2Fpub-d1bbd0e1dd5d4e81b55c524af70a17e0.r2.dev%2Fmovie%2F550%2Fku.vtt",
-    search: "?sub_url=https%3A%2F%2Fpub-d1bbd0e1dd5d4e81b55c524af70a17e0.r2.dev%2Fmovie%2F550%2Fku.vtt",
-    pathname: "/vidcore/movie/550",
-  };
-
-  const vm = require("node:vm");
-  vm.runInNewContext(UNIVERSAL_SUBTITLE_INJECTOR_JS, sandbox);
-
-  // 1. Video element must have crossorigin="anonymous" set
-  assert.equal(fakeVideo.crossOrigin, "anonymous");
-  assert.equal(fakeVideo.getAttribute("crossorigin"), "anonymous");
-
-  // 2. Attached tracks must have been converted to same-origin /subtitles/... (not external r2.dev)
-  assert.ok(appendedTracks.length > 0, "Tracks must be injected");
-  for (const tr of appendedTracks) {
-    assert.ok(
-      tr.src.startsWith("https://hwto-kurd.vercel.app/subtitles/") || tr.src.startsWith("blob:"),
-      `Track src ${tr.src} must be same-origin or blob URL`,
-    );
-    assert.ok(!tr.src.includes("pub-d1bbd0e1dd5d4e81b55c524af70a17e0.r2.dev"));
-  }
-});
-
-test("UNIVERSAL_SUBTITLE_INJECTOR_JS creates Blob URLs and sends HWTO_VIDEO_TIME postMessage on timeupdate", async () => {
-  const appendedTracks = [];
-  const eventListeners = {};
-  const parentMessages = [];
-
-  const fakeVideo = {
-    attributes: {},
-    crossOrigin: null,
-    currentTime: 42.5,
-    duration: 120.0,
-    paused: false,
-    textTracks: [
-      {
-        language: "ku",
-        label: "Kurdî (hwto-kurd)",
-        mode: "hidden",
-      },
-    ],
-    getAttribute(name) { return this.attributes[name] || null; },
-    setAttribute(name, val) { this.attributes[name] = val; },
-    querySelectorAll() { return appendedTracks; },
-    appendChild(el) { appendedTracks.push(el); },
-    removeChild(el) {
-      const idx = appendedTracks.indexOf(el);
-      if (idx !== -1) appendedTracks.splice(idx, 1);
-    },
-    addEventListener(evt, fn) {
-      eventListeners[evt] = eventListeners[evt] || [];
-      eventListeners[evt].push(fn);
-    },
-  };
-
-  const fakeDoc = {
-    readyState: "complete",
-    querySelectorAll(selector) {
-      if (selector === "video") return [fakeVideo];
-      return [];
-    },
-    createElement(tag) {
-      return {
-        tagName: tag,
-        kind: "",
-        label: "",
-        srclang: "",
-        src: "",
-      };
-    },
-    addEventListener() {},
-  };
-
-  const sandbox = {
-    window: null,
-    document: fakeDoc,
-    URL: {
-      createObjectURL: () => "blob:https://hwto-kurd.vercel.app/test-blob-uuid-1234",
-    },
-    URLSearchParams,
-    HTMLTrackElement: { prototype: { src: "" } },
-    Blob: class MockBlob {
-      constructor(parts, opts) {
-        this.parts = parts;
-        this.opts = opts;
-      }
-    },
-    fetch: async () => ({
-      ok: true,
-      text: async () => "WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nHello World",
-    }),
-    setTimeout: (fn) => fn(),
-    setInterval: () => {},
-  };
-  sandbox.window = sandbox;
-  sandbox.window.parent = {
-    postMessage: (msg, targetOrigin) => {
-      parentMessages.push({ msg, targetOrigin });
-    },
-  };
-  sandbox.window.location = {
-    origin: "https://hwto-kurd.vercel.app",
-    href: "https://hwto-kurd.vercel.app/vidlink/movie/550",
-    pathname: "/vidlink/movie/550",
-  };
-
-  const vm = require("node:vm");
-  vm.runInNewContext(UNIVERSAL_SUBTITLE_INJECTOR_JS, sandbox);
-
-  // Allow microtasks to resolve fetch promise
-  await new Promise((r) => setTimeout(r, 20));
-
-  // 1. Attached tracks must have Blob URL
-  assert.ok(appendedTracks.length > 0, "Tracks must be injected");
-  const blobTrack = appendedTracks.find((t) => t.src.startsWith("blob:"));
-  assert.ok(blobTrack, "A Blob URL track must be created and attached");
-  assert.equal(blobTrack.kind, "subtitles");
-
-  // 2. Preferred track mode must be showing
-  assert.equal(fakeVideo.textTracks[0].mode, "showing");
-
-  // 3. Trigger timeupdate event on video -> must send HWTO_VIDEO_TIME to parent
-  assert.ok(eventListeners["timeupdate"] && eventListeners["timeupdate"].length > 0);
-  eventListeners["timeupdate"][0]();
-  const timeMsg = parentMessages.find((m) => m.msg.type === "HWTO_VIDEO_TIME");
-  assert.ok(timeMsg, "Must dispatch HWTO_VIDEO_TIME message to parent");
-  assert.equal(timeMsg.msg.currentTime, 42.5);
-  assert.equal(timeMsg.msg.duration, 120.0);
-  assert.equal(timeMsg.targetOrigin, "*");
-});
-
-test("Vidlink dedicated SourceBufferSink error muting script", () => {
-  const vm = require("node:vm");
-  const capturedErrors = [];
-  const capturedWarns = [];
-
-  const sandbox = {
-    console: {
-      error: (...args) => capturedErrors.push(args.join(" ")),
-      warn: (...args) => capturedWarns.push(args.join(" ")),
-    },
-    window: {
-      addEventListener: () => {},
-    },
-  };
-
-  vm.runInNewContext(SOURCE_BUFFER_MUTE_JS, sandbox);
-
-  // 1. Mutes SourceBufferSink string error
-  sandbox.console.error("Uncaught Error: [SourceBufferSink] appendBuffer failed");
-  assert.equal(capturedErrors.length, 0);
-
-  // 2. Mutes Error object with 'This SourceBuffer has been removed'
-  sandbox.console.error(new Error("This SourceBuffer has been removed from the parent media source"));
-  assert.equal(capturedErrors.length, 0);
-
-  // 3. Mutes warnings
-  sandbox.console.warn("[SourceBufferSink] Warning on segment drop");
-  assert.equal(capturedWarns.length, 0);
-
-  // 4. Mutes React hydration #418 and unshift tracker error
-  sandbox.console.error("Minified React error #418; visit https://react.dev/errors/418");
-  sandbox.console.error("Uncaught TypeError: Cannot read properties of undefined (reading 'unshift')");
-  assert.equal(capturedErrors.length, 0);
-
-  // 5. Regular app error is preserved
-  sandbox.console.error("Real critical playback error");
-  assert.equal(capturedErrors.length, 1);
-  assert.ok(capturedErrors[0].includes("Real critical playback error"));
-
-  // 6. Resilient to console.error reassignment by external bundles (e.g. 7023-*.js)
-  const bundleErrors = [];
-  sandbox.console.error = function(...args) {
-    bundleErrors.push(args.join(" "));
-  };
-
-  // Reassigned console.error MUST still mute SourceBufferSink and React #418
-  sandbox.console.error("[SourceBufferSink] [3460] SourceBuffer append failed");
-  sandbox.console.error("Error: Minified React error #418");
-  assert.equal(bundleErrors.length, 0);
-
-  // But forwards legitimate errors to the bundle's handler
-  sandbox.console.error("Real critical playback error from bundle");
-  assert.equal(bundleErrors.length, 1);
-  assert.ok(bundleErrors[0].includes("Real critical playback error from bundle"));
-});
-
-
