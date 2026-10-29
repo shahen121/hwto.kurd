@@ -369,7 +369,6 @@ const AD_SHIELD_JS = `(function() {
             msg.indexOf("Hydration failed") !== -1
           ) {
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-            if (e.stopPropagation) e.stopPropagation();
             if (e.preventDefault) e.preventDefault();
             return true;
           }
@@ -965,7 +964,6 @@ function getCleanUserAgent(rawUa) {
   return rawUa;
 }
 
-// جلب عبر Cloudflare Worker مع مهلة زمنية قصيرة (يُستخدم لتجاوز خطأ 555 من Scrape.do)
 async function fetchViaCfWorker(targetUrl, method, headers, bodyBuffer, ms = 8000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
@@ -1033,16 +1031,7 @@ async function fetchFromUpstream(
   delete forwardHeaders["connection"];
   delete forwardHeaders["Connection"];
 
-  const fetchOptions = {
-    method,
-    headers: forwardHeaders,
-  };
-  if (method === "POST" && bodyBuffer && bodyBuffer.length > 0) {
-    fetchOptions.body = bodyBuffer;
-  }
-
-  // 0. FOR APA91 DECRYPTION & POST REQUESTS: TRY THE CLOUDFLARE WORKER FIRST
-  //    (Scrape.do يعيّن خطأ 555 على مسارات الفك والتشفير، لذا نمررها عبر الـ Worker مباشرة عند الإمكان)
+  // 0. FOR APA91 DECRYPTION & POST REQUESTS: TRY THE CLOUDFLARE WORKER FIRST TO AVOID 555
   if ((isDecryptionRoute || method === "POST") && config.mode !== "scrapedo") {
     try {
       const workerTargetUrl = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(targetUrl)}`;
@@ -1059,7 +1048,7 @@ async function fetchFromUpstream(
     } catch (_e) {}
   }
 
-  // 1. FOR APA91 DECRYPTION & POST REQUESTS: ALWAYS USE SCRAPE.DO FIRST TO PREVENT 502
+  // 1. FOR APA91 DECRYPTION & POST REQUESTS: USE SCRAPE.DO
   if ((isDecryptionRoute || method === "POST") && hasScrapeTokens && config.mode !== "direct") {
     try {
       const scrapeRes = await fetchViaScrapeDoWithRotation(targetUrl, fetch, {
@@ -1076,14 +1065,14 @@ async function fetchFromUpstream(
 
   // 2. Direct fetch for static assets and other standard GET routes
   try {
-    const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 6000);
+    const directRes = await fetchWithTimeoutSignal(targetUrl, { method, headers: forwardHeaders }, 6000);
     const status = directRes?.status;
     if (directRes && status >= 200 && status < 400 && status !== 555) {
       return directRes;
     }
   } catch (_err) {}
 
-  // 3. Fallback to Scrape.do for anything else if direct fetch failed
+  // 3. Fallback to Scrape.do for anything else
   if (useScrapeDoFallback && config.mode !== "direct" && hasScrapeTokens) {
     try {
       const scrapeRes = await fetchViaScrapeDoWithRotation(targetUrl, fetch, {
@@ -1098,7 +1087,11 @@ async function fetchFromUpstream(
     } catch (_err) {}
   }
 
-  return await fetch(targetUrl, fetchOptions);
+  return await fetch(targetUrl, {
+    method,
+    headers: forwardHeaders,
+    body: method === "POST" ? bodyBuffer : undefined,
+  });
 }
 
 function readRequestBody(req) {
