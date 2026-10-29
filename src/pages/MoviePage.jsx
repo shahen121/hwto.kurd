@@ -664,10 +664,10 @@ export default function MoviePage({
   useEffect(() => {
     const handler = () =>
       setGamepadEnabled(storage.get(STORAGE_KEYS.GAMEPAD_ENABLED) !== false);
-    window.addEventListener("streambert:gamepad-settings-changed", handler);
+    window.addEventListener("hwto:gamepad-settings-changed", handler);
     return () =>
       window.removeEventListener(
-        "streambert:gamepad-settings-changed",
+        "hwto:gamepad-settings-changed",
         handler,
       );
   }, []);

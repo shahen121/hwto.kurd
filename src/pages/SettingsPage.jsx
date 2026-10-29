@@ -75,7 +75,7 @@ export default function SettingsPage({ onTriggerLanguageChange }) {
     setAccent(id);
     storage.set(STORAGE_KEYS.ACCENT_COLOR, id);
     applyAccentColor(id);
-    window.dispatchEvent(new CustomEvent("streambert:accent-changed"));
+    window.dispatchEvent(new CustomEvent("hwto:accent-changed"));
     flash();
   };
 

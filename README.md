@@ -68,6 +68,43 @@ git push -u origin main
 
 للتشغيل المحلي، ضع `API_FOOTBALL_KEY` في `.env` (انسخ أسماء المتغيرات من `.env.example`) ثم أعد تشغيل Vite. يتطلب إصدار Electron المنشور رابط proxy عامّاً في `VITE_API_FOOTBALL_PROXY_URL` وقت البناء؛ ضع الرابط فقط، وليس المفتاح. لا تضمّن المفتاح في `VITE_*` أو في كود الواجهة لأن محتوياتها تكون عامة.
 
+### 3. المرجع الكامل لمتغيرات البيئة
+
+انسخ `.env.example` إلى `.env` محلياً، وأضف القيم نفسها في **Vercel → Project Settings → Environment Variables** عند النشر.
+
+| المتغير | النطاق | الوظيفة |
+|---|---|---|
+| `TMDB_TOKEN` | خادم فقط | رمز TMDB Read Access Token. لا تستخدم بادئة `VITE_`. |
+| `API_FOOTBALL_KEY` | خادم فقط | مفتاح API-Football. لا تستخدم بادئة `VITE_`. |
+| `CF_WORKER_URL` | خادم فقط | رابط Cloudflare Worker المستخدم لتمرير البث والملفات الثابتة. |
+| `SCRAPE_DO_TOKEN` / `SCRAPE_DO_TOKEN_1..3` | خادم فقط | رموز Scrape.do الاحتياطية مع تبديل تلقائي. |
+| `HLS_PROVIDER_URL` | خادم فقط | نقطة نهاية مزوّد HLS المرخّص. |
+| `HLS_PROVIDER_TOKEN` | خادم فقط | رمز مزوّد HLS. |
+| `HLS_ALLOWED_HOSTS` | خادم فقط | قائمة مضيفي البث المسموحين مفصولة بفواصل. |
+| `HLS_ENABLE_PROXY` | خادم فقط | `true` فقط إذا أردت تمرير مقاطع الفيديو عبر الخادم. |
+| `VITE_SUBTITLES_BASE_URL` | واجهة | القاعدة العامة لمستودع الترجمات (رابط عام وليس سراً). |
+| `VITE_FIREBASE_*` | واجهة | إعداد Firebase العام. يمكن تركها فارغة واستخدام `firebase.txt`. |
+| `VITE_API_FOOTBALL_PROXY_URL` | واجهة/Electron | رابط proxy عام لـ API-Football في نسخة Electron. |
+| `PIP_ALLOWED_ORIGINS` | Electron | مضيفون إضافيون مسموحون لنافذة PiP، مفصولون بفواصل. |
+
+> [!IMPORTANT]
+> أي متغير يبدأ بـ `VITE_` يصبح جزءاً من حزمة الواجهة ويمكن للمستخدم رؤيته. لا تضع `TMDB_TOKEN` أو `API_FOOTBALL_KEY` أو `HLS_PROVIDER_TOKEN` أو رموز Scrape.do في متغيرات `VITE_`.
+
+### 4. ملف `firebase.txt` الاختياري
+
+بدلاً من متغيرات `VITE_FIREBASE_*`، يمكنك وضع إعداد Firebase في ملف `firebase.txt` بجذر المشروع. الملف مستبعد من Git تلقائياً. الصيغة المدعومة:
+
+```text
+apiKey: AIza...
+authDomain: your-project.firebaseapp.com
+projectId: your-project
+storageBucket: your-project.firebasestorage.app
+messagingSenderId: 1234567890
+appId: 1:1234567890:web:abcdef
+```
+
+أو بصيغة JSON بالمفاتيح نفسها. لا تضع `firebase.txt` في مستودع عام.
+
 ---
 
 ## 📝 إعداد قواعد أمان Firebase Firestore
@@ -134,15 +171,30 @@ subtitles/
 
 ## 🛠️ التشغيل والتطوير المحلي (Local Development)
 
+> [!NOTE]
+> يتطلب المشروع **Node.js 24.12.0 أو أحدث** (انظر `.nvmrc` و`engines` في `package.json`).
+
 ```bash
 # تثبيت الحزم
-npm install
+npm ci
+
+# تشغيل الاختبارات
+npm test
+
+# بناء نسخة الإنتاج
+npm run build
 
 # تشغيل خادم التطوير المحلي
 npm run dev
 ```
 
 افتح المتصفح على: `http://localhost:5173`
+
+لتشغيل نسخة Electron محلياً:
+
+```bash
+npm run start:electron
+```
 
 ---
 

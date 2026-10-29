@@ -1,5 +1,5 @@
 /**
- * Seasonal / event-based logo overlays for the Streambert sidebar.
+ * Seasonal / event-based logo overlays for the hwto-kurd sidebar.
  *
  * To add a new event:
  *   1. Add an entry to EVENTS below.

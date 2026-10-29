@@ -1762,10 +1762,10 @@ export default function TVPage({
   useEffect(() => {
     const handler = () =>
       setGamepadEnabled(storage.get(STORAGE_KEYS.GAMEPAD_ENABLED) !== false);
-    window.addEventListener("streambert:gamepad-settings-changed", handler);
+    window.addEventListener("hwto:gamepad-settings-changed", handler);
     return () =>
       window.removeEventListener(
-        "streambert:gamepad-settings-changed",
+        "hwto:gamepad-settings-changed",
         handler,
       );
   }, []);
@@ -2739,7 +2739,7 @@ export default function TVPage({
 
                 {/* Skip controls are injected directly into the webview DOM*/}
 
-                {/* AniSkip manual prompt, rendered in streambert UI, outside webview */}
+                {/* AniSkip manual prompt, rendered in hwto-kurd UI, outside webview */}
                 {skipPrompt && (
                   <button
                     onClick={handleManualSkip}

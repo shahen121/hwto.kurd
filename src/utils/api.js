@@ -5,7 +5,9 @@ const IMG_BASE = "https://image.tmdb.org/t/p";
 // Falls back to "en-US".
 function getTmdbLanguage() {
   try {
-    const appLang = localStorage.getItem("streambert_hwto_app_language");
+    const appLang =
+      localStorage.getItem("hwto_app_language") ??
+      localStorage.getItem("streambert_hwto_app_language");
     if (appLang) {
       const clean = JSON.parse(appLang);
       if (clean === "en") return "en-US";
@@ -15,7 +17,9 @@ function getTmdbLanguage() {
   } catch {}
 
   try {
-    const raw = localStorage.getItem("streambert_tmdbLang");
+    const raw =
+      localStorage.getItem("hwto_tmdbLang") ??
+      localStorage.getItem("streambert_tmdbLang");
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed) return parsed;
@@ -54,12 +58,13 @@ const TMDB_CACHE_TTL = 5 * 60 * 1000;
 export function clearTmdbCache() {
   _tmdbCache.clear();
   try {
+    localStorage.removeItem("hwto_trendingCache");
     localStorage.removeItem("streambert_trendingCache");
   } catch {}
 }
 
 if (typeof window !== "undefined") {
-  window.addEventListener("streambert:tmdb-lang-changed", () => {
+  window.addEventListener("hwto:tmdb-lang-changed", () => {
     clearTmdbCache();
   });
 }
@@ -440,7 +445,7 @@ query ($search: String, $type: MediaType) {
 }`;
 
 // ── AniList cache (localStorage + in-memory) ──────────────────────────────────
-const ANILIST_CACHE_KEY = "streambert_anilistCache";
+const ANILIST_CACHE_KEY = "hwto_anilistCache";
 const ANILIST_CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 // loaded once on first use, flushed to localStorage on write.
@@ -595,7 +600,7 @@ export const ANIME_DEFAULT_SOURCE = "vidcore";
 
 // ── Episode Group fetch (localStorage + in-memory cache, 7-day TTL) ─────────
 // Episode groups almost never change -> cache aggressively across sessions.
-const EG_CACHE_KEY = "streambert_episodeGroupCache";
+const EG_CACHE_KEY = "hwto_episodeGroupCache";
 const EG_CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 let _egCache = null;

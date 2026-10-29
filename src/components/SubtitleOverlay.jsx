@@ -85,10 +85,22 @@ export function parseSubtitleText(text) {
 }
 
 const STORAGE_KEYS = {
-  SUB_OVERLAY_LANG: "streambert:sub_overlay_lang",
-  SUB_OVERLAY_SIZE: "streambert:sub_overlay_size",
-  SUB_OVERLAY_OFFSET: "streambert:sub_overlay_offset",
+  SUB_OVERLAY_LANG: "hwto:sub_overlay_lang",
+  SUB_OVERLAY_SIZE: "hwto:sub_overlay_size",
+  SUB_OVERLAY_OFFSET: "hwto:sub_overlay_offset",
 };
+
+// Keep preferences written by older Streambert-branded builds readable.
+function readPref(key) {
+  try {
+    return (
+      localStorage.getItem(key) ??
+      localStorage.getItem(key.replace(/^hwto:/, "streambert:"))
+    );
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Universal Subtitle Overlay Component
@@ -106,7 +118,7 @@ export default function SubtitleOverlay({
 }) {
   const [selectedLang, setSelectedLang] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEYS.SUB_OVERLAY_LANG) || "ku";
+      return readPref(STORAGE_KEYS.SUB_OVERLAY_LANG) || "ku";
     } catch {
       return "ku";
     }
@@ -114,7 +126,7 @@ export default function SubtitleOverlay({
 
   const [fontSize, setFontSize] = useState(() => {
     try {
-      const saved = Number(localStorage.getItem(STORAGE_KEYS.SUB_OVERLAY_SIZE));
+      const saved = Number(readPref(STORAGE_KEYS.SUB_OVERLAY_SIZE));
       return saved >= 14 && saved <= 36 ? saved : 22;
     } catch {
       return 22;
@@ -123,9 +135,7 @@ export default function SubtitleOverlay({
 
   const [offsetSec, setOffsetSec] = useState(() => {
     try {
-      const saved = parseFloat(
-        localStorage.getItem(STORAGE_KEYS.SUB_OVERLAY_OFFSET),
-      );
+      const saved = parseFloat(readPref(STORAGE_KEYS.SUB_OVERLAY_OFFSET));
       return isNaN(saved) ? 0 : saved;
     } catch {
       return 0;

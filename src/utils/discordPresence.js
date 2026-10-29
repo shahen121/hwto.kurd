@@ -6,8 +6,9 @@ import { storage, STORAGE_KEYS, isElectron } from "./storage";
 
 // Small badge shown as the "small_image" next to the cover.
 const APP_ICON_URL =
-  "https://raw.githubusercontent.com/truelockmc/streambert/main/public/icon.png";
-const GITHUB_URL = "https://github.com/truelockmc/streambert";
+  "https://raw.githubusercontent.com/shahen121/hwto.kurd/main/public/icon.png";
+const GITHUB_URL = "https://github.com/shahen121/hwto.kurd";
+const APP_NAME = "hwto-kurd";
 
 export function readDiscordRpcSettings() {
   return {
@@ -30,7 +31,7 @@ function baseAssets(posterUrl, settings) {
   if (settings.showCover && posterUrl) {
     assets.large_image = posterUrl;
     assets.small_image = APP_ICON_URL;
-    assets.small_text = "Streambert";
+    assets.small_text = APP_NAME;
   } else {
     assets.large_image = APP_ICON_URL;
   }
@@ -56,11 +57,11 @@ export function sendWatchingActivity(info, settings) {
 
   const activity = {
     type: 3, // "Watching"
-    details: info.title?.slice(0, 128) || "Streambert",
-    state: (info.subtitle || "Streambert").slice(0, 128),
+    details: info.title?.slice(0, 128) || APP_NAME,
+    state: (info.subtitle || APP_NAME).slice(0, 128),
     assets: {
       ...baseAssets(info.posterUrl, settings),
-      large_text: info.title?.slice(0, 128) || "Streambert",
+      large_text: info.title?.slice(0, 128) || APP_NAME,
     },
   };
   if (settings.showTimestamp && info.startedAt) {
@@ -79,7 +80,7 @@ export function sendIdleActivity(settings) {
   const activity = {
     type: 3,
     details: "Idling",
-    assets: { large_image: APP_ICON_URL, large_text: "Streambert" },
+    assets: { large_image: APP_ICON_URL, large_text: APP_NAME },
   };
   const btns = buttons(settings);
   if (btns) activity.buttons = btns;

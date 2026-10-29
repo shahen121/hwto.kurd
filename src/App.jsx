@@ -196,11 +196,13 @@ export default function App() {
   useEffect(() => {
     if (!window.electron?.getAppVersion) return;
     window.electron.getAppVersion().then((version) => {
-      const lastVersion = localStorage.getItem("streambert_lastVersion");
+      const lastVersion =
+        localStorage.getItem("hwto_lastVersion") ??
+        localStorage.getItem("streambert_lastVersion");
       if (lastVersion && lastVersion !== version) {
         clearAppCaches();
       }
-      localStorage.setItem("streambert_lastVersion", version);
+      localStorage.setItem("hwto_lastVersion", version);
     });
   }, []);
 
@@ -702,9 +704,9 @@ export default function App() {
   useEffect(() => {
     fetchTrending();
     const handleLangChange = () => fetchTrending();
-    window.addEventListener("streambert:tmdb-lang-changed", handleLangChange);
+    window.addEventListener("hwto:tmdb-lang-changed", handleLangChange);
     return () =>
-      window.removeEventListener("streambert:tmdb-lang-changed", handleLangChange);
+      window.removeEventListener("hwto:tmdb-lang-changed", handleLangChange);
   }, [fetchTrending]);
 
   const retryHome = useCallback(() => {
@@ -715,25 +717,25 @@ export default function App() {
   // ── Sync librarySort when changed from Settings ───────────────────────────
   useEffect(() => {
     const handler = (e) => setLibrarySort(e.detail);
-    window.addEventListener("streambert:library-sort-changed", handler);
+    window.addEventListener("hwto:library-sort-changed", handler);
     return () =>
-      window.removeEventListener("streambert:library-sort-changed", handler);
+      window.removeEventListener("hwto:library-sort-changed", handler);
   }, []);
 
   // ── Re-fetch trending immediately when metadata language changes ──────────
   useEffect(() => {
     const handler = () => fetchTrending();
-    window.addEventListener("streambert:tmdb-lang-changed", handler);
+    window.addEventListener("hwto:tmdb-lang-changed", handler);
     return () =>
-      window.removeEventListener("streambert:tmdb-lang-changed", handler);
+      window.removeEventListener("hwto:tmdb-lang-changed", handler);
   }, [fetchTrending]);
 
   // ── Refresh player settings (accent + subtitle lang) after save ───────────
   useEffect(() => {
     const handler = () => setPlayerSettings(readPlayerSettings());
-    window.addEventListener("streambert:player-settings-changed", handler);
+    window.addEventListener("hwto:player-settings-changed", handler);
     return () =>
-      window.removeEventListener("streambert:player-settings-changed", handler);
+      window.removeEventListener("hwto:player-settings-changed", handler);
   }, []);
 
   // ── Discord Rich Presence: sync settings + connect/disconnect ─────────────
@@ -744,10 +746,10 @@ export default function App() {
 
   useEffect(() => {
     const handler = () => setDiscordSettings(readDiscordRpcSettings());
-    window.addEventListener("streambert:discord-rpc-settings-changed", handler);
+    window.addEventListener("hwto:discord-rpc-settings-changed", handler);
     return () =>
       window.removeEventListener(
-        "streambert:discord-rpc-settings-changed",
+        "hwto:discord-rpc-settings-changed",
         handler,
       );
   }, []);
@@ -914,10 +916,10 @@ export default function App() {
   useEffect(() => {
     const handler = () =>
       setGamepadEnabled(storage.get(STORAGE_KEYS.GAMEPAD_ENABLED) !== false);
-    window.addEventListener("streambert:gamepad-settings-changed", handler);
+    window.addEventListener("hwto:gamepad-settings-changed", handler);
     return () =>
       window.removeEventListener(
-        "streambert:gamepad-settings-changed",
+        "hwto:gamepad-settings-changed",
         handler,
       );
   }, []);

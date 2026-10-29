@@ -1,4 +1,4 @@
-// -- Streambert main process entry point ---------------------------------------
+// -- hwto-kurd main process entry point ---------------------------------------
 // Responsible for: window creation, session setup, ad-blocking, scheduled
 // backup trigger, and app lifecycle. All heavy IPC logic lives in src/ipc/.
 
@@ -7,10 +7,12 @@ const {
   BrowserWindow,
   ipcMain,
   session,
+  shell,
   webContents,
   Notification,
 } = require("electron");
 const path = require("path");
+const { pathToFileURL } = require("url");
 
 // -- RAM / performance flags ---------------------------------------------------
 app.commandLine.appendSwitch(
@@ -105,6 +107,54 @@ const BLOCKED_HOSTS = [
 // -- Module-level state --------------------------------------------------------
 let mainWindow = null;
 const getMainWindow = () => mainWindow;
+
+const DIST_FILE_URL = pathToFileURL(path.join(__dirname, "dist")).href;
+
+function isInternalAppUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === "file:" && rawUrl.startsWith(DIST_FILE_URL);
+  } catch {
+    return false;
+  }
+}
+
+function openExternalHttpUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      shell.openExternal(rawUrl);
+    }
+  } catch {}
+}
+
+// The pop-out player only needs the local player proxy. Extra hosts can be
+// added explicitly through PIP_ALLOWED_ORIGINS (comma-separated).
+const PIP_ALLOWED_HOSTS = new Set([
+  "localhost:3000",
+  "127.0.0.1:3000",
+  "[::1]:3000",
+  // Default deployed player proxy used by packaged builds.
+  "hwto-kurd.vercel.app",
+]);
+
+for (const entry of String(process.env.PIP_ALLOWED_ORIGINS || "").split(",")) {
+  const value = entry.trim();
+  if (!value) continue;
+  try {
+    PIP_ALLOWED_HOSTS.add(new URL(value).host);
+  } catch {}
+}
+
+function isAllowedPipUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    return PIP_ALLOWED_HOSTS.has(parsed.host);
+  } catch {
+    return false;
+  }
+}
 
 const playerWcIds = new Set();
 let sessionsConfigured = false;
@@ -277,6 +327,19 @@ function createWindow() {
     );
   });
 
+  // Never let the trusted renderer navigate to, or spawn, a remote page with
+  // the privileged preload attached. External links go to the system browser.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalHttpUrl(url);
+    return { action: "deny" };
+  });
+
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (isInternalAppUrl(url)) return;
+    event.preventDefault();
+    openExternalHttpUrl(url);
+  });
+
   mainWindow.loadFile(path.join(__dirname, "dist/index.html"));
 
   // Trigger scheduled backup after load
@@ -397,6 +460,7 @@ const getPipWindow = () => pipWindow;
 
 ipcMain.handle("open-pip-window", (_, { url, title }) => {
   if (!url || url === "about:blank") return { ok: false, reason: "no-url" };
+  if (!isAllowedPipUrl(url)) return { ok: false, reason: "blocked-url" };
 
   // Guarantee tracker/ad blocking is active in persist:player before any load
   if (!sessionsConfigured) {
@@ -507,6 +571,9 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
+    if (process.platform === "win32") {
+      app.setAppUserModelId("com.hwtokurd.app");
+    }
     _bench("app ready");
     createWindow();
   });

@@ -12,6 +12,7 @@ const {
   patchPlayerChunk,
   staticChunkCache,
   getScrapeDoSessionId,
+  CF_WORKER_URL,
 } = require("./vidcore.js");
 
 test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", async () => {
@@ -81,7 +82,9 @@ test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", asy
     assert.equal(capturedUrl.includes("sessionId="), true);
     assert.equal(capturedOpts.method, "POST");
     assert.equal(capturedOpts.headers["x-csrf-token"], "test_csrf_123");
-    assert.equal(capturedOpts.headers["Content-Length"], "0");
+    // Content-Length is intentionally stripped so the fetch implementation can
+    // compute the correct value for the WHATWG-compliant body.
+    assert.equal(capturedOpts.headers["Content-Length"], undefined);
   } finally {
     if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
     else delete process.env.SCRAPE_DO_TOKEN_1;
@@ -448,8 +451,8 @@ test("AD_SHIELD_JS intercepts APA91 requests and routes them to /vidcore/APA91..
   assert.equal(fetchedUrls[1], "https://hwto-kurd.vercel.app/vidcore/APA91ywFclean");
 });
 
-test("Cache busting (?v=4) and clean untouched JS chunks in vidcore", () => {
-  // 1. Verify HTML sanitization adds /vidcore/_next/static/... and ?v=4 to Next.js chunks
+test("Cache busting (?v=6) and clean untouched JS chunks in vidcore", () => {
+  // 1. Verify HTML sanitization adds /vidcore/_next/static/... and ?v=6 to Next.js chunks
   const sampleVidcoreHtml = `
     <html>
       <head>
@@ -461,11 +464,11 @@ test("Cache busting (?v=4) and clean untouched JS chunks in vidcore", () => {
     </html>
   `;
   const sanitized = sanitizeVidcoreHtml(sampleVidcoreHtml);
-  assert.ok(sanitized.includes("/vidcore/_next/static/chunks/281-d15eeb1ca15a1654.js?v=4"));
-  assert.ok(sanitized.includes("/vidcore/_next/static/chunks/main-app-14eacbf1653a965d.js?v=4"));
-  // Ensure idempotent (no ?v=4?v=4)
+  assert.ok(sanitized.includes("/vidcore/_next/static/chunks/281-d15eeb1ca15a1654.js?v=6"));
+  assert.ok(sanitized.includes("/vidcore/_next/static/chunks/main-app-14eacbf1653a965d.js?v=6"));
+  // Ensure idempotent (no ?v=6?v=6)
   const sanitizedTwice = sanitizeVidcoreHtml(sanitized);
-  assert.ok(!sanitizedTwice.includes("?v=4?v=4"));
+  assert.ok(!sanitizedTwice.includes("?v=6?v=6"));
 
   // 2. Verify patchPlayerChunk returns code 100% untouched without any .replace()
   const mockCode = `
@@ -650,10 +653,10 @@ test("AD_SHIELD_JS dynamically spoofs domain for VidLink (vidlink.pro) vs VidCor
   assert.equal(vidcoreSandbox.__fakeLoc.hostname, "vidcore.io");
   assert.equal(vidcoreSandbox.__fakeLoc.origin, "https://vidcore.io");
 
-  // Script src setter should route /_next/static/ to /vidcore/_next/static/ with ?v=4
+  // Script src setter should route /_next/static/ to /vidcore/_next/static/ with ?v=6
   const s2 = new MockScript();
   s2.src = "/_next/static/chunks/main-456.js";
-  assert.equal(s2.src, "https://hwto-kurd.vercel.app/vidcore/_next/static/chunks/main-456.js?v=4");
+  assert.equal(s2.src, "https://hwto-kurd.vercel.app/vidcore/_next/static/chunks/main-456.js?v=6");
 });
 
 test("VidCore session_number pinning across HTML and APA91 POST + .m3u8 steelpeak stream routing", async () => {
@@ -756,12 +759,16 @@ test("VidCore session_number pinning across HTML and APA91 POST + .m3u8 steelpea
 test("WHATWG URL standard compliance and raw binary body forwarding for POST /APA91... decryption", async () => {
   const { handleVidcoreProxy } = require("./vidcore.js");
 
-  let capturedScrapeUrl = "";
+  const originalFetch = global.fetch;
+  const workerCalls = [];
   let capturedOpts = null;
 
-  const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    capturedScrapeUrl = String(url);
+    const value = String(url);
+    if (!value.startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`)) {
+      throw new Error(`Unexpected upstream fetch: ${value}`);
+    }
+    workerCalls.push(value);
     capturedOpts = opts;
     return new Response(JSON.stringify({ key: "decrypted_stream_token_123" }), {
       status: 200,
@@ -769,11 +776,38 @@ test("WHATWG URL standard compliance and raw binary body forwarding for POST /AP
     });
   };
 
-  const savedToken = process.env.SCRAPE_DO_TOKEN_1;
-  process.env.SCRAPE_DO_TOKEN_1 = "test_token_scrape_do";
-
   try {
     const rawBinaryPayload = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0xaa, 0x55]);
+
+    let responseCode = null;
+    let responseBody = null;
+
+    const res = {
+      writeHead(code) {
+        responseCode = code;
+      },
+      end(data) {
+        responseBody = data;
+      },
+    };
+
+    const runProxy = async (req, expectedTarget) => {
+      responseCode = null;
+      responseBody = null;
+      const before = workerCalls.length;
+      await handleVidcoreProxy(req, res);
+
+      assert.equal(responseCode, 200);
+      assert.equal(workerCalls.length, before + 1, "Worker-first path must be used");
+      assert.ok(
+        workerCalls[before].startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`),
+      );
+      assert.ok(
+        workerCalls[before].includes(encodeURIComponent(expectedTarget)),
+        "Encoded upstream target must be forwarded to the worker",
+      );
+      assert.ok(responseBody.toString().includes("decrypted_stream_token_123"));
+    };
 
     const req = {
       method: "POST",
@@ -788,80 +822,51 @@ test("WHATWG URL standard compliance and raw binary body forwarding for POST /AP
       rawBody: rawBinaryPayload,
     };
 
-    let responseCode = null;
-    let responseHeaders = {};
-    let responseBody = null;
-
-    const res = {
-      writeHead(code, headers) {
-        responseCode = code;
-        responseHeaders = headers;
-      },
-      end(data) {
-        responseBody = data;
-      },
-    };
-
-    await handleVidcoreProxy(req, res);
-
-    assert.equal(responseCode, 200);
-    assert.ok(capturedScrapeUrl.includes("https://api.scrape.do/"));
-    assert.ok(capturedScrapeUrl.includes("customHeaders=true"));
-    assert.ok(capturedScrapeUrl.includes("session_number="));
-    assert.ok(capturedScrapeUrl.includes(encodeURIComponent("https://vidcore.io/APA91ywFtestBinaryKey")));
-
-    // Verify session_number matches deterministic seed for IP 198.51.100.42 + 1283515
-    const expectedSession = getScrapeDoSessionId(req, "/APA91ywFtestBinaryKey");
-    assert.ok(capturedScrapeUrl.includes(`session_number=${expectedSession}`));
+    await runProxy(req, "https://vidcore.io/APA91ywFtestBinaryKey");
 
     // Verify options and binary body
     assert.equal(capturedOpts.method, "POST");
     assert.equal(capturedOpts.headers["Origin"], "https://vidcore.io");
     assert.equal(capturedOpts.headers["Referer"], "https://vidcore.io/");
     assert.equal(capturedOpts.headers["Content-Type"], "application/octet-stream");
-    assert.equal(capturedOpts.headers["Content-Length"], String(rawBinaryPayload.length));
+    assert.equal(capturedOpts.headers["Content-Length"], undefined);
     assert.deepEqual(capturedOpts.body, rawBinaryPayload);
 
     // Verify internal x-hwto header was stripped before sending upstream
     assert.equal(capturedOpts.headers["x-hwto-media-id"], undefined);
 
-    // Verify buffered response
-    assert.ok(responseBody.toString().includes("decrypted_stream_token_123"));
-
     // Also verify when URL is direct /APA91ywFtestDirect without /vidcore prefix
-    const reqDirect = {
-      method: "POST",
-      url: "/APA91ywFtestDirect",
-      headers: {
-        host: "hwto-kurd.vercel.app",
-        referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
-        "content-type": "application/octet-stream",
+    await runProxy(
+      {
+        method: "POST",
+        url: "/APA91ywFtestDirect",
+        headers: {
+          host: "hwto-kurd.vercel.app",
+          referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
+          "content-type": "application/octet-stream",
+        },
+        rawBody: rawBinaryPayload,
       },
-      rawBody: rawBinaryPayload,
-    };
-    await handleVidcoreProxy(reqDirect, res);
-    assert.equal(responseCode, 200);
-    assert.ok(capturedScrapeUrl.includes(encodeURIComponent("https://vidcore.io/APA91ywFtestDirect")));
+      "https://vidcore.io/APA91ywFtestDirect",
+    );
 
     // Verify Vercel rewrite with x-matched-path header on /api/vidcore
-    const reqVercelRewritten = {
-      method: "POST",
-      url: "/api/vidcore",
-      headers: {
-        host: "hwto-kurd.vercel.app",
-        "x-matched-path": "/APA91ywFtestVercelRewrite",
-        referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
-        "content-type": "application/octet-stream",
+    await runProxy(
+      {
+        method: "POST",
+        url: "/api/vidcore",
+        headers: {
+          host: "hwto-kurd.vercel.app",
+          "x-matched-path": "/APA91ywFtestVercelRewrite",
+          referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
+          "content-type": "application/octet-stream",
+        },
+        rawBody: rawBinaryPayload,
       },
-      rawBody: rawBinaryPayload,
-    };
-    await handleVidcoreProxy(reqVercelRewritten, res);
-    assert.equal(responseCode, 200);
-    assert.ok(capturedScrapeUrl.includes(encodeURIComponent("https://vidcore.io/APA91ywFtestVercelRewrite")));
+      "https://vidcore.io/APA91ywFtestVercelRewrite",
+    );
   } finally {
     global.fetch = originalFetch;
-    if (savedToken !== undefined) process.env.SCRAPE_DO_TOKEN_1 = savedToken;
-    else delete process.env.SCRAPE_DO_TOKEN_1;
   }
 });
 

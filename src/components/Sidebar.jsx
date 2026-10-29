@@ -4,7 +4,7 @@ import { isElectron } from "../utils/storage";
 import { useSeasonalEvent } from "../components/seasonalEvents.jsx";
 import { t } from "../utils/i18n";
 import {
-  StreambertLogo,
+  HwtoLogo,
   HomeIcon,
   SearchIcon,
   HistoryIcon,
@@ -111,7 +111,7 @@ export default function Sidebar({
         title="hwto-kurd"
         style={{ position: "relative" }}
       >
-        <StreambertLogo />
+        <HwtoLogo />
         {seasonalEvent && seasonalEvent.render()}
       </div>
 

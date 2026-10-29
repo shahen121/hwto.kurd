@@ -250,9 +250,9 @@ export default function HwtoSportPage({ onBack }) {
   // Sync language changes from app
   useEffect(() => {
     const handleLang = () => setCurrentLang(getCurrentLanguage());
-    window.addEventListener("streambert:tmdb-lang-changed", handleLang);
+    window.addEventListener("hwto:tmdb-lang-changed", handleLang);
     return () =>
-      window.removeEventListener("streambert:tmdb-lang-changed", handleLang);
+      window.removeEventListener("hwto:tmdb-lang-changed", handleLang);
   }, []);
 
   // Fetch leagues list on mount

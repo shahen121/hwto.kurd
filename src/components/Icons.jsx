@@ -1,4 +1,4 @@
-export const StreambertLogo = ({ style }) => (
+export const HwtoLogo = ({ style }) => (
   <img
     src="./logo.svg"
     alt="hwto-kurd"

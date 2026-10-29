@@ -3,7 +3,7 @@
 // Response: { found, results: [{ interval: { startTime, endTime }, skipType: "op"|"ed"|... }] }
 
 const ANISKIP_API = "https://api.aniskip.com/v2";
-const CACHE_KEY = "streambert_aniskipCache";
+const CACHE_KEY = "hwto_aniskipCache";
 const CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 function getCache() {

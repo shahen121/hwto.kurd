@@ -24,7 +24,7 @@ const TRUSTED_UPDATE_SOURCES = [
     origin: "https://github.com",
     // Must match the full repo path so an attacker can't use
     // a different repo on github.com to serve a malicious binary.
-    pathPrefix: "/truelockmc/streambert/releases/download/",
+    pathPrefix: "/shahen121/hwto.kurd/releases/download/",
     redirectHosts: [
       "github.com",
       "objects.githubusercontent.com",
@@ -345,7 +345,7 @@ function register(getMainWindow, { writeSecretMigration }) {
               : format === "dmg"
                 ? ".dmg"
                 : ".AppImage";
-      const destPath = path.join(os.tmpdir(), `streambert-update${ext}`);
+      const destPath = path.join(os.tmpdir(), `hwto-kurd-update${ext}`);
 
       await new Promise((resolve, reject) => {
         if (signal.aborted) return reject(new Error("Cancelled"));
@@ -372,7 +372,7 @@ function register(getMainWindow, { writeSecretMigration }) {
             reqUrl,
             {
               headers: {
-                "User-Agent": "Streambert-AutoUpdater",
+                "User-Agent": "hwto-kurd-AutoUpdater",
                 Accept: "application/octet-stream",
               },
             },
@@ -453,7 +453,7 @@ function register(getMainWindow, { writeSecretMigration }) {
         fs.chmodSync(destPath, 0o755);
         const currentAppImage = process.env.APPIMAGE;
         if (currentAppImage) {
-          const scriptPath = path.join(os.tmpdir(), "streambert-update.sh");
+          const scriptPath = path.join(os.tmpdir(), "hwto-kurd-update.sh");
           const pid = process.pid;
           const target = currentAppImage;
           const scriptContent =
@@ -593,7 +593,7 @@ function register(getMainWindow, { writeSecretMigration }) {
     https
       .get(
         url,
-        { headers: { "User-Agent": "Streambert-ReleaseNotes" } },
+        { headers: { "User-Agent": "hwto-kurd-ReleaseNotes" } },
         (res) => {
           if (
             res.statusCode >= 300 &&

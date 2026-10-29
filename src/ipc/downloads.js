@@ -242,7 +242,7 @@ function register(getMainWindow) {
           return { ok: false, error: "Invalid or unknown downloader token" };
         }
         const id = crypto.randomUUID();
-        const logPath = path.join(os.tmpdir(), `streambert_dl_${id}.log`);
+        const logPath = path.join(os.tmpdir(), `hwto_kurd_dl_${id}.log`);
 
         const entry = {
           id,
@@ -274,7 +274,7 @@ function register(getMainWindow) {
         try {
           fs.writeFileSync(
             logPath,
-            `Streambert Download Log\nName: ${name}\nURL: ${m3u8Url}\nStarted: ${new Date().toISOString()}\n${"─".repeat(60)}\n`,
+            `hwto-kurd Download Log\nName: ${name}\nURL: ${m3u8Url}\nStarted: ${new Date().toISOString()}\n${"─".repeat(60)}\n`,
             "utf8",
           );
         } catch {}

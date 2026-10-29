@@ -1,11 +1,42 @@
 // localStorage-based persistence (works in both Vite dev and prod)
 
-const PREFIX = "streambert_";
+const PREFIX = "hwto_";
+// Keys written by older Streambert-branded builds. They are migrated once on
+// startup and kept as a read fallback so existing users never lose their data.
+const LEGACY_PREFIX = "streambert_";
+const LEGACY_LANGUAGE_KEY = "streambert_hwto_app_language";
+const LANGUAGE_KEY = "hwto_app_language";
+
+function migrateLegacyKeys() {
+  try {
+    if (
+      localStorage.getItem(LANGUAGE_KEY) === null &&
+      localStorage.getItem(LEGACY_LANGUAGE_KEY) !== null
+    ) {
+      localStorage.setItem(
+        LANGUAGE_KEY,
+        localStorage.getItem(LEGACY_LANGUAGE_KEY),
+      );
+    }
+
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith(LEGACY_PREFIX)) continue;
+      const nextKey = PREFIX + key.slice(LEGACY_PREFIX.length);
+      if (localStorage.getItem(nextKey) === null) {
+        localStorage.setItem(nextKey, localStorage.getItem(key));
+      }
+    }
+  } catch {}
+}
+
+if (typeof localStorage !== "undefined") migrateLegacyKeys();
 
 export const storage = {
   get(key) {
     try {
-      const raw = localStorage.getItem(PREFIX + key);
+      const raw =
+        localStorage.getItem(PREFIX + key) ??
+        localStorage.getItem(LEGACY_PREFIX + key);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -19,13 +50,16 @@ export const storage = {
   remove(key) {
     try {
       localStorage.removeItem(PREFIX + key);
+      localStorage.removeItem(LEGACY_PREFIX + key);
     } catch {}
   },
-  // Remove all streambert_ keys (used by reset)
+  // Remove all app keys (both current and legacy namespaces) on reset.
   clearAll() {
     try {
       Object.keys(localStorage)
-        .filter((k) => k.startsWith(PREFIX))
+        .filter(
+          (k) => k.startsWith(PREFIX) || k.startsWith(LEGACY_PREFIX),
+        )
         .forEach((k) => localStorage.removeItem(k));
     } catch {}
   },
@@ -192,11 +226,19 @@ export async function clearAppCaches() {
       await window.electron.clearAnimeCache?.();
     } catch {}
   }
-  localStorage.removeItem("streambert_animeApiCache");
-  localStorage.removeItem("streambert_anilistCache");
-  localStorage.removeItem("streambert_episodeGroupCache");
-  localStorage.removeItem("streambert_aniskipCache");
   for (const key of Object.keys(localStorage)) {
-    if (key.startsWith("dlDur_")) localStorage.removeItem(key);
+    if (
+      key.startsWith("hwto_animeApiCache") ||
+      key.startsWith("hwto_anilistCache") ||
+      key.startsWith("hwto_episodeGroupCache") ||
+      key.startsWith("hwto_aniskipCache") ||
+      key.startsWith("streambert_animeApiCache") ||
+      key.startsWith("streambert_anilistCache") ||
+      key.startsWith("streambert_episodeGroupCache") ||
+      key.startsWith("streambert_aniskipCache") ||
+      key.startsWith("dlDur_")
+    ) {
+      localStorage.removeItem(key);
+    }
   }
 }

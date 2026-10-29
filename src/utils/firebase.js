@@ -76,7 +76,9 @@ function formatUser(u) {
 
 export function getCachedAuthUser() {
   try {
-    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    const raw =
+      localStorage.getItem(AUTH_SESSION_KEY) ??
+      localStorage.getItem("streambert_auth_user");
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;

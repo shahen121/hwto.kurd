@@ -7,7 +7,7 @@ export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English", dir: "ltr", flag: "🇬🇧" },
 ];
 
-const STORAGE_LANG_KEY = "hwto_app_language";
+const STORAGE_LANG_KEY = "app_language";
 
 export function getInitialLanguage() {
   const saved = storage.get(STORAGE_LANG_KEY);
@@ -55,6 +55,8 @@ export function setLanguage(newCode) {
 
   // Clear caches so new language metadata is fetched fresh immediately
   try {
+    localStorage.removeItem("hwto_trendingCache");
+    localStorage.removeItem("hwto_homeLayout");
     localStorage.removeItem("streambert_trendingCache");
     localStorage.removeItem("streambert_homeLayout");
   } catch {}
@@ -72,7 +74,7 @@ export function setLanguage(newCode) {
   });
 
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("streambert:tmdb-lang-changed"));
+    window.dispatchEvent(new CustomEvent("hwto:tmdb-lang-changed"));
   }
 }
 

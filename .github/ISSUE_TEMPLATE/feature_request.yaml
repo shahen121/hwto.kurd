@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest an idea for Streambert which you would like to see in a future release
+description: Suggest an idea for hwto-kurd which you would like to see in a future release
 title: "[Feature]: "
 labels: ["enhancement"]
 
@@ -9,7 +9,7 @@ body:
       value: |
         **README: Before You Submit Your Issue**
         - Issues are not a place to go ask support questions or start discussions.
-        - Please use discussions instead: https://github.com/truelockmc/streambert/discussions
+        - Please use discussions instead: https://github.com/shahen121/hwto.kurd/discussions
 
   - type: checkboxes
     attributes:
@@ -59,7 +59,7 @@ body:
 
   - type: input
     attributes:
-      label: Streambert Version
+      label: hwto-kurd Version
       description: Which version are you using?
       placeholder: v2.2.1
     validations:

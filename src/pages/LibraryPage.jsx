@@ -29,9 +29,9 @@ export default function LibraryPage({
   );
   useEffect(() => {
     const handler = (e) => setSort(e.detail);
-    window.addEventListener("streambert:library-sort-changed", handler);
+    window.addEventListener("hwto:library-sort-changed", handler);
     return () =>
-      window.removeEventListener("streambert:library-sort-changed", handler);
+      window.removeEventListener("hwto:library-sort-changed", handler);
   }, []);
 
   const sortLabels = {

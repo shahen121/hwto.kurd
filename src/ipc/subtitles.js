@@ -145,7 +145,7 @@ function register({ getDownloads, saveDownloads }) {
 
           const res = await fetchWithTimeout(
             `https://api.subdl.com/api/v1/subtitles?${params}`,
-            { headers: { "User-Agent": "Streambert" } },
+            { headers: { "User-Agent": "hwto-kurd" } },
             12000,
           );
           if (!res.ok) {
@@ -296,7 +296,7 @@ function register({ getDownloads, saveDownloads }) {
         const downloadUrl = `https://dl.subdl.com${subdlPath}`;
         const res = await fetchWithTimeout(
           downloadUrl,
-          { headers: { "User-Agent": "Streambert" } },
+          { headers: { "User-Agent": "hwto-kurd" } },
           30000,
         );
         if (!res.ok)
@@ -310,7 +310,7 @@ function register({ getDownloads, saveDownloads }) {
         const safeName = path.basename(extracted.name);
         const tmpPath = path.join(
           os.tmpdir(),
-          `streambert_sub_${Date.now()}_${safeName}`,
+          `hwto_kurd_sub_${Date.now()}_${safeName}`,
         );
         fs.writeFileSync(tmpPath, extracted.data);
 
@@ -410,7 +410,7 @@ function register({ getDownloads, saveDownloads }) {
               const subdlPath = decodeURIComponent(parts.slice(2).join("_"));
               const res = await fetchWithTimeout(
                 `https://dl.subdl.com${subdlPath}`,
-                { headers: { "User-Agent": "Streambert" } },
+                { headers: { "User-Agent": "hwto-kurd" } },
                 30000,
               );
               if (!res.ok) continue;
