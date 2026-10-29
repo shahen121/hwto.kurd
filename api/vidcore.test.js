@@ -78,10 +78,64 @@ test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", asy
     assert.equal(res2.status, 200);
     assert.deepEqual(secondCallTokens, ["token_beta"]);
     assert.equal(capturedUrl.includes("customHeaders=true"), true);
-    assert.equal(capturedUrl.includes("sessionId="), true);
+    assert.equal(capturedUrl.includes("session_number="), true);
+    assert.equal(capturedUrl.includes("sessionId="), false);
     assert.equal(capturedOpts.method, "POST");
     assert.equal(capturedOpts.headers["x-csrf-token"], "test_csrf_123");
     assert.equal(capturedOpts.headers["Content-Length"], "0");
+  } finally {
+    if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
+    else delete process.env.SCRAPE_DO_TOKEN_1;
+    if (saved.t2 !== undefined) process.env.SCRAPE_DO_TOKEN_2 = saved.t2;
+    else delete process.env.SCRAPE_DO_TOKEN_2;
+    if (saved.t3 !== undefined) process.env.SCRAPE_DO_TOKEN_3 = saved.t3;
+    else delete process.env.SCRAPE_DO_TOKEN_3;
+    if (saved.t0 !== undefined) process.env.SCRAPE_DO_TOKEN = saved.t0;
+    else delete process.env.SCRAPE_DO_TOKEN;
+  }
+});
+
+test("Scrape.do retries the same token with customHeaders=false on 555 before rotating", async () => {
+  const saved = {
+    t1: process.env.SCRAPE_DO_TOKEN_1,
+    t2: process.env.SCRAPE_DO_TOKEN_2,
+    t3: process.env.SCRAPE_DO_TOKEN_3,
+    t0: process.env.SCRAPE_DO_TOKEN,
+  };
+
+  try {
+    process.env.SCRAPE_DO_TOKEN_1 = "token_alpha";
+    process.env.SCRAPE_DO_TOKEN_2 = "token_beta";
+    delete process.env.SCRAPE_DO_TOKEN_3;
+    delete process.env.SCRAPE_DO_TOKEN;
+
+    const calls = [];
+    const res = await fetchViaScrapeDoWithRotation(
+      "https://vidcore.io/APA91ywF/test",
+      async (url, opts) => {
+        const u = new URL(url);
+        calls.push({ url: String(url), opts });
+        const tok = u.searchParams.get("token");
+        const custom = u.searchParams.get("customHeaders") === "true";
+        if (tok === "token_alpha" && custom) {
+          // First attempt with customHeaders=true -> rejected with 555
+          return { status: 555, headers: { get: () => "555" } };
+        }
+        // Retry same token with customHeaders=false -> success
+        return { status: 200, text: async () => "OK_RETRY" };
+      },
+      { method: "POST" },
+    );
+
+    assert.equal(res.status, 200);
+    assert.equal(calls.length, 2, "Same token must be retried before rotating");
+    const u0 = new URL(calls[0].url);
+    const u1 = new URL(calls[1].url);
+    assert.equal(u0.searchParams.get("token"), "token_alpha");
+    assert.equal(u0.searchParams.get("customHeaders"), "true");
+    assert.equal(u1.searchParams.get("token"), "token_alpha");
+    assert.equal(u1.searchParams.get("customHeaders"), "false");
+    assert.equal(u1.searchParams.get("session_number"), u0.searchParams.get("session_number"));
   } finally {
     if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
     else delete process.env.SCRAPE_DO_TOKEN_1;

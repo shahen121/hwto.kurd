@@ -72,7 +72,7 @@
       "destination": "/api/vidcore"
     },
     {
-      "source": "/(APA91ywF.*|wyzie.*|servers.*)",
+      "source": "/(APA91.*|wyzie.*|servers.*)",
       "destination": "/api/vidcore"
     },
     {
