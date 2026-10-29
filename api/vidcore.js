@@ -569,6 +569,18 @@ function patchPlayerChunk(jsCode, pathname = "") {
 }
 
 const staticChunkCache = new Map();
+const vidcoreHtmlCache = new Map();
+const HTML_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
+const CHUNK_CACHE_CONTROL = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800";
+const HTML_CACHE_CONTROL = "public, max-age=1200, s-maxage=1200, stale-while-revalidate=86400";
+
+function fetchWithTimeoutSignal(url, options = {}, ms = 2500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+    clearTimeout(timer),
+  );
+}
 
 function getCleanUserAgent(rawUa) {
   if (!rawUa || /node|curl|python|axios|undici/i.test(rawUa)) {
@@ -629,39 +641,39 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     scrapeOptions.body = bodyBuffer;
   }
 
+  // 1. Ultra-speed optimization: Direct Fetch First with 2500ms timeout
+  const fetchOptions = {
+    method,
+    headers: forwardHeaders,
+  };
+  if (method === "POST" && bodyBuffer && bodyBuffer.length > 0) {
+    fetchOptions.body = bodyBuffer;
+  }
+
+  try {
+    const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 2500);
+    const status = directRes?.status;
+
+    // Direct fetch is good if status is 200-399 and not 555 error
+    if (directRes && status >= 200 && status < 400 && status !== 555) {
+      return directRes;
+    }
+  } catch (_err) {
+    // Direct fetch timed out or network error, fall through to Scrape.do fallback
+  }
+
+  // 2. Fallback to Scrape.do with session pinning
   if (
+    useScrapeDoFallback &&
     config.mode !== "direct" &&
-    hasScrapeTokens &&
-    (isHtmlNavigation || isDecryptionRoute)
+    (method === "GET" || method === "POST") &&
+    hasScrapeTokens
   ) {
     return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
   }
 
-  try {
-    const fetchOptions = {
-      method,
-      headers: forwardHeaders,
-    };
-    if (method === "POST" && bodyBuffer && bodyBuffer.length > 0) {
-      fetchOptions.body = bodyBuffer;
-    }
-    const directRes = await fetch(targetUrl, fetchOptions);
-    if (
-      useScrapeDoFallback &&
-      (directRes.status === 403 || directRes.status === 503 || directRes.status === 429) &&
-      config.mode !== "direct" &&
-      (method === "GET" || method === "POST") &&
-      hasScrapeTokens
-    ) {
-      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
-    }
-    return directRes;
-  } catch (err) {
-    if (useScrapeDoFallback && config.mode !== "direct" && (method === "GET" || method === "POST") && hasScrapeTokens) {
-      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
-    }
-    throw err;
-  }
+  // 3. Fallback direct fetch without timeout
+  return await fetch(targetUrl, fetchOptions);
 }
 
 function readRequestBody(req) {
@@ -762,6 +774,30 @@ async function handleVidcoreProxy(req, res) {
       targetPath = pathname.slice("/vidcore".length) || "/";
     }
 
+    const isHtmlRoute =
+      targetPath.startsWith("/movie/") ||
+      targetPath.startsWith("/tv/") ||
+      targetPath.startsWith("/embed/") ||
+      (req.headers?.accept && req.headers.accept.includes("text/html"));
+
+    // Check in-memory HTML cache for instantaneous responses (< 1ms)
+    if (isHtmlRoute && req.method === "GET") {
+      const cacheKey = targetPath + search;
+      if (vidcoreHtmlCache.has(cacheKey)) {
+        const entry = vidcoreHtmlCache.get(cacheKey);
+        if (Date.now() - entry.timestamp < HTML_CACHE_TTL) {
+          res.writeHead(200, {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": HTML_CACHE_CONTROL,
+            "Access-Control-Allow-Origin": "*",
+            "X-Vidcore-Cache": "HIT",
+            "X-AdShield": "Active",
+          });
+          return res.end(entry.html, "utf8");
+        }
+        vidcoreHtmlCache.delete(cacheKey);
+      }
+    }
 
     // In-memory Caching for Static Assets / Chunks (normalized across prefixes)
     const isChunkStaticPath =
@@ -774,7 +810,7 @@ async function handleVidcoreProxy(req, res) {
         const cached = staticChunkCache.get(cacheKey);
         res.writeHead(200, {
           "Content-Type": cached.contentType,
-          "Cache-Control": "public, max-age=31536000, immutable",
+          "Cache-Control": CHUNK_CACHE_CONTROL,
           "Access-Control-Allow-Origin": "*",
         });
         return res.end(cached.body);
@@ -796,17 +832,14 @@ async function handleVidcoreProxy(req, res) {
     const setCookie = upstreamRes.headers.get("set-cookie");
     if (setCookie) responseHeaders["Set-Cookie"] = setCookie;
 
-    const isHtmlRoute =
-      contentType.includes("text/html") ||
-      targetPath.startsWith("/movie/") ||
-      targetPath.startsWith("/tv/") ||
-      targetPath.startsWith("/embed/");
-
     if (isHtmlRoute) {
       const isFromVidlink = origin === VIDLINK_ORIGIN;
       const rawText = await upstreamRes.text();
       const cleaned = isFromVidlink ? sanitizeVidlinkHtml(rawText) : sanitizeVidcoreHtml(rawText);
-      responseHeaders["Cache-Control"] = "no-cache";
+      responseHeaders["Cache-Control"] = HTML_CACHE_CONTROL;
+      if (upstreamRes.status === 200) {
+        vidcoreHtmlCache.set(targetPath + search, { html: cleaned, timestamp: Date.now() });
+      }
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(cleaned, "utf8");
     }
@@ -818,7 +851,7 @@ async function handleVidcoreProxy(req, res) {
     if (isChunkRoute) {
       const rawJs = await upstreamRes.text();
       const patchedJs = patchPlayerChunk(rawJs, targetPath);
-      responseHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
+      responseHeaders["Cache-Control"] = CHUNK_CACHE_CONTROL;
       const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
       staticChunkCache.set(cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
       res.writeHead(upstreamRes.status, responseHeaders);
@@ -868,5 +901,8 @@ module.exports.getScrapeDoTokens = getScrapeDoTokens;
 module.exports.fetchViaScrapeDoWithRotation = fetchViaScrapeDoWithRotation;
 module.exports.patchPlayerChunk = patchPlayerChunk;
 module.exports.staticChunkCache = staticChunkCache;
+module.exports.vidcoreHtmlCache = vidcoreHtmlCache;
+module.exports.CHUNK_CACHE_CONTROL = CHUNK_CACHE_CONTROL;
+module.exports.HTML_CACHE_CONTROL = HTML_CACHE_CONTROL;
 module.exports.getSessionTokenIndex = getSessionTokenIndex;
 module.exports.UNIVERSAL_SUBTITLE_INJECTOR_JS = UNIVERSAL_SUBTITLE_INJECTOR_JS;

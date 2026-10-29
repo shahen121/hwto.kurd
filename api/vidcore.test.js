@@ -331,7 +331,7 @@ test("Static chunk cache and prefix normalization in handleVidcoreProxy", async 
     assert.equal(await res1.text(), dummyCode);
     assert.equal(
       res1.headers.get("cache-control"),
-      "public, max-age=31536000, immutable",
+      "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
     );
 
     // 2. Request through /vidcore/_next/static/... hits the same cache
@@ -340,7 +340,7 @@ test("Static chunk cache and prefix normalization in handleVidcoreProxy", async 
     assert.equal(await res2.text(), dummyCode);
     assert.equal(
       res2.headers.get("cache-control"),
-      "public, max-age=31536000, immutable",
+      "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
     );
   } finally {
     server.close();

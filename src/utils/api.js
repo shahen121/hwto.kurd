@@ -212,7 +212,7 @@ const ALL_PLAYER_SOURCES = [
   },
   {
     id: "vidlink",
-    label: "سيرفر 2: VidLink (سريع)",
+    label: "سيرفر 2: VidLink (الاحتياطي)",
     tag: "سريع",
     note: null,
     supportsProgress: true,
@@ -229,69 +229,6 @@ const ALL_PLAYER_SOURCES = [
     tvUrl: (id, season, ep) =>
       resolvePlayerBaseUrl(`/vidlink/tv/${id}/${season}/${ep}`),
   },
-  {
-    id: "vidsrc_me",
-    directKey: "vidsrc",
-    aliases: ["vidsrc_cc", "vidsrc"],
-    label: "سيرفر 3: VidSrc.me",
-    tag: "Me",
-    note: null,
-    supportsProgress: false,
-    colorParam: null,
-    langParam: null,
-    subUrlParam: null,
-    params: {},
-    movieUrl: (id) =>
-      resolvePlayerBaseUrl(
-        `/embed-proxy?url=${encodeURIComponent(`https://vidsrc.me/embed/movie?tmdb=${id}`)}`,
-      ),
-    tvUrl: (id, season, ep) =>
-      resolvePlayerBaseUrl(
-        `/embed-proxy?url=${encodeURIComponent(`https://vidsrc.me/embed/tv?tmdb=${id}&season=${season}&episode=${ep}`)}`,
-      ),
-  },
-  {
-    id: "multiembed",
-    directKey: "multiembed",
-    aliases: ["embedsu"],
-    label: "سيرفر 4: MultiEmbed",
-    tag: "Direct",
-    note: null,
-    supportsProgress: false,
-    colorParam: null,
-    langParam: null,
-    subUrlParam: null,
-    params: {},
-    movieUrl: (id) =>
-      resolvePlayerBaseUrl(
-        `/embed-proxy?url=${encodeURIComponent(`https://multiembed.mov/?video_id=${id}&tmdb=1`)}`,
-      ),
-    tvUrl: (id, season, ep) =>
-      resolvePlayerBaseUrl(
-        `/embed-proxy?url=${encodeURIComponent(`https://multiembed.mov/?video_id=${id}&tmdb=1&s=${season}&e=${ep}`)}`,
-      ),
-  },
-  {
-    id: "2embed",
-    directKey: "2embed",
-    aliases: ["autoembed"],
-    label: "سيرفر 5: 2Embed",
-    tag: "2Embed",
-    note: null,
-    supportsProgress: false,
-    colorParam: null,
-    langParam: null,
-    subUrlParam: null,
-    params: {},
-    movieUrl: (id) =>
-      resolvePlayerBaseUrl(
-        `/embed-proxy?url=${encodeURIComponent(`https://www.2embed.cc/embed/${id}`)}`,
-      ),
-    tvUrl: (id, season, ep) =>
-      resolvePlayerBaseUrl(
-        `/embed-proxy?url=${encodeURIComponent(`https://www.2embed.cc/embedtv/${id}&s=${season}&e=${ep}`)}`,
-      ),
-  },
 ];
 
 // On the web, progress can't be read from a cross-origin iframe and
@@ -302,9 +239,6 @@ export const PLAYER_SOURCES = IS_ELECTRON
       ...s,
       supportsProgress: s.supportsProgress ?? false,
     }));
-
-export const getDirectServerKey = (sourceId) =>
-  PLAYER_SOURCES.find((s) => s.id === sourceId || s.aliases?.includes(sourceId))?.directKey || null;
 
 export const sourceSupportsExternalSubs = (sourceId) =>
   !!PLAYER_SOURCES.find((s) => s.id === sourceId || s.aliases?.includes(sourceId))?.subUrlParam;

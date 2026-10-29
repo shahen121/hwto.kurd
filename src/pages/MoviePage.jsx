@@ -12,7 +12,6 @@ import {
   imgUrl,
   PLAYER_SOURCES,
   getSourceUrl,
-  getDirectServerKey,
   sourceSupportsProgress,
   sourceProgressViaFrames,
   sourceIsAsync,
@@ -47,7 +46,6 @@ import BlockedStatsModal from "../components/BlockedStatsModal";
 import { useBlockedStats } from "../utils/useBlockedStats";
 import MediaCard from "../components/MediaCard";
 import HlsPlayer from "../components/HlsPlayer";
-import DirectStreamPlayer from "../components/DirectStreamPlayer";
 import { fetchAuthorizedHlsStream } from "../utils/hlsClient";
 import {
   storage,
@@ -209,7 +207,6 @@ export default function MoviePage({
   const [collection, setCollection] = useState(null); // { name, parts }
   // Webview loading overlay
   const [webviewLoading, setWebviewLoading] = useState(false);
-  const [directMode, setDirectMode] = useState(null);
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
   // pipOpen=true: main webview shows about:blank, pop-out window has the real player
   const [pipOpen, setPipOpen] = useState(false);
@@ -540,18 +537,6 @@ export default function MoviePage({
         if (playerSource === "vidcore") {
           setFailoverSource(`movie_${item.id}`, "vidlink");
           setPlayerSource("vidlink");
-        } else if (playerSource === "vidlink") {
-          setFailoverSource(`movie_${item.id}`, "vidsrc_me");
-          setPlayerSource("vidsrc_me");
-        } else if (playerSource === "vidsrc_me" || playerSource === "vidsrc_cc") {
-          setFailoverSource(`movie_${item.id}`, "multiembed");
-          setPlayerSource("multiembed");
-        } else if (playerSource === "multiembed" || playerSource === "embedsu") {
-          setFailoverSource(`movie_${item.id}`, "2embed");
-          setPlayerSource("2embed");
-        } else if (playerSource === "autoembed") {
-          setFailoverSource(`movie_${item.id}`, "2embed");
-          setPlayerSource("2embed");
         }
 
       }
@@ -1225,33 +1210,9 @@ export default function MoviePage({
                   setResolvedPlayerUrl(null);
                 }}
               />
-            ) : getDirectServerKey(playerSource) ? (
-              <DirectStreamPlayer
-                key={`${playerSource}_${item.id}`}
-                type="movie"
-                id={item.id}
-                serverKey={getDirectServerKey(playerSource)}
-                subtitles={
-                  githubSub?.available?.length
-                    ? githubSub.available
-                    : activeSub
-                      ? [activeSub]
-                      : []
-                }
-                initialTime={storage.get("dlTime_" + progressKey) || 0}
-                onProgress={(time, dur) => {
-                  setProgress(progressKey, time, dur);
-                }}
-                onBack={() => setPlaying(false)}
-                accentColor={playerAccentColor}
-                fallbackUrl={getSourceUrl(playerSource, "movie", item.id, null, null, {}, playerAccentColor, activeSub?.lang || playerSubLang, activeSub?.url || null)}
-                onModeChange={(mode) => {
-                  setDirectMode(mode);
-                  setWebviewLoading(false);
-                }}
-              />
             ) : isElectron ? (
-              <webview                ref={webviewRef}
+              <webview
+                ref={webviewRef}
                 src={
                   pipOpen
                     ? "about:blank"
@@ -1316,7 +1277,7 @@ export default function MoviePage({
               type="movie"
               tmdbId={item.id}
               externalSubtitles={movieOverlaySubtitles}
-              playing={playing && !pipOpen && !webviewLoading && !(getDirectServerKey(playerSource) && directMode === "hls")}
+              playing={playing && !pipOpen && !webviewLoading}
               externalCurrentTime={lastKnownTimeRef.current || null}
               currentTimeRef={lastKnownTimeRef}
             />

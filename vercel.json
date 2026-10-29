@@ -37,14 +37,6 @@
   ],
   "rewrites": [
     {
-      "source": "/embed-proxy",
-      "destination": "/api/embed-proxy"
-    },
-    {
-      "source": "/api/embed-proxy",
-      "destination": "/api/embed-proxy"
-    },
-    {
       "source": "/api/subtitles",
       "destination": "/api/subtitles"
     },
@@ -57,7 +49,7 @@
       "destination": "/api/vidlink"
     },
     {
-      "source": "/((?!api/tmdb|api/football|api/subtitles|api/embed-proxy|embed-proxy|subtitles/|assets/).*)",
+      "source": "/((?!api/tmdb|api/football|api/subtitles|subtitles/|assets/).*)",
       "has": [
         {
           "type": "header",
@@ -88,7 +80,7 @@
       "destination": "/api/vidcore"
     },
     {
-      "source": "/((?!api/tmdb|api/football|api/subtitles|api/embed-proxy|embed-proxy|subtitles/|assets/).*)",
+      "source": "/((?!api/tmdb|api/football|api/subtitles|subtitles/|assets/).*)",
       "has": [
         {
           "type": "header",
