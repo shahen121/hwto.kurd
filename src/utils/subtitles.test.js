@@ -27,7 +27,7 @@ test("R2 Movie Subtitles: Resolves available languages and generates direct vtt 
   assert.equal(result.lang, "ar");
   assert.equal(
     result.url,
-    `${R2_SUBTITLES_BASE_URL}/movie/346364/ar.vtt`,
+    `/subtitles/movie/346364/ar.vtt`,
   );
   assert.ok(Array.isArray(result.available));
   assert.ok(result.available.length >= 2);
@@ -35,13 +35,13 @@ test("R2 Movie Subtitles: Resolves available languages and generates direct vtt 
   const arSub = result.available.find((s) => s.lang === "ar");
   assert.ok(arSub);
   assert.equal(arSub.label, "العربية");
-  assert.equal(arSub.url, `${R2_SUBTITLES_BASE_URL}/movie/346364/ar.vtt`);
+  assert.equal(arSub.url, `/subtitles/movie/346364/ar.vtt`);
   assert.equal(arSub.isDefault, true);
 
   const kuSub = result.available.find((s) => s.lang === "ku");
   assert.ok(kuSub);
   assert.equal(kuSub.label, "Kurdî");
-  assert.equal(kuSub.url, `${R2_SUBTITLES_BASE_URL}/movie/346364/ku.vtt`);
+  assert.equal(kuSub.url, `/subtitles/movie/346364/ku.vtt`);
   assert.equal(kuSub.isDefault, false);
 });
 
@@ -69,7 +69,7 @@ test("R2 Preferred Language Selection: Correctly honors English and any preferre
 
     assert.ok(res);
     assert.equal(res.lang, "en");
-    assert.equal(res.url, `${R2_SUBTITLES_BASE_URL}/movie/88888/en.vtt`);
+    assert.equal(res.url, `/subtitles/movie/88888/en.vtt`);
     const enTrack = res.available.find((s) => s.lang === "en");
     assert.ok(enTrack);
     assert.equal(enTrack.isDefault, true);
@@ -118,7 +118,7 @@ test("R2 Series Subtitles: Parses season and episode keys correctly (including s
     assert.equal(resS1E1.lang, "ku");
     assert.equal(
       resS1E1.url,
-      `${R2_SUBTITLES_BASE_URL}/series/99999/s1/e1_ku.vtt`,
+      `/subtitles/series/99999/s1/e1_ku.vtt`,
     );
     assert.equal(resS1E1.available.length, 2);
     assert.equal(resS1E1.available[0].label, "العربية");
@@ -135,7 +135,7 @@ test("R2 Series Subtitles: Parses season and episode keys correctly (including s
     assert.equal(resS1E2.lang, "ku");
     assert.equal(
       resS1E2.url,
-      `${R2_SUBTITLES_BASE_URL}/series/99999/s1/e2_ku.vtt`,
+      `/subtitles/series/99999/s1/e2_ku.vtt`,
     );
     assert.equal(resS1E2.available.length, 1);
 
@@ -146,11 +146,12 @@ test("R2 Series Subtitles: Parses season and episode keys correctly (including s
       episode: 1,
       preferredLang: "ar",
     });
+
     assert.ok(resS3E1);
     assert.equal(resS3E1.lang, "ar");
     assert.equal(
       resS3E1.url,
-      `${R2_SUBTITLES_BASE_URL}/series/99999/s3/e1_ar.vtt`,
+      `/subtitles/series/99999/s3/e1_ar.vtt`,
     );
   } finally {
     globalThis.fetch = originalFetch;

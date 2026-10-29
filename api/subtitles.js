@@ -89,7 +89,7 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
     return origin + "/subtitles/" + clean;
   }
 
-  // Intercept HTMLTrackElement.prototype.src to always force Same-Origin URLs
+  // Intercept HTMLTrackElement.prototype.src to always force Same-Origin or Blob URLs
   try {
     if (typeof HTMLTrackElement !== "undefined" && HTMLTrackElement.prototype) {
       var trackSrcDesc = Object.getOwnPropertyDescriptor(HTMLTrackElement.prototype, "src");
@@ -99,7 +99,11 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
           enumerable: trackSrcDesc.enumerable,
           get: function() { return trackSrcDesc.get.call(this); },
           set: function(val) {
-            var normalized = toSameOriginSubUrl(String(val || ""));
+            var raw = String(val || "");
+            if (raw.indexOf("blob:") === 0) {
+              return trackSrcDesc.set.call(this, raw);
+            }
+            var normalized = toSameOriginSubUrl(raw);
             return trackSrcDesc.set.call(this, normalized);
           }
         });
@@ -156,7 +160,7 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
         var t = v.textTracks[i];
         var isTarget = t.language === targetLang || (targetLang === "ku" && (t.language === "ckb" || (t.label && (t.label.indexOf("کوردی") !== -1 || t.label.indexOf("Kurdî") !== -1))));
         var isOtherHwto = !isTarget && t.label && t.label.indexOf("hwto-kurd") !== -1;
-        if (isTarget) {
+        if (isTarget || (t.default && v.textTracks.length === 1)) {
           t.mode = "showing";
         } else if (isOtherHwto) {
           t.mode = "hidden";
@@ -169,18 +173,25 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
     var existing = v.querySelectorAll('track[srclang="' + item.lang + '"]');
     if (existing.length > 0) return;
 
+    var initialUrl = toSameOriginSubUrl(item.url);
+    if (!initialUrl) return;
+
+    var blobPlaceholder = "";
+    if (typeof URL !== "undefined" && typeof URL.createObjectURL === "function" && typeof Blob === "function") {
+      try {
+        blobPlaceholder = URL.createObjectURL(new Blob(["WEBVTT\\n\\n"], { type: "text/vtt;charset=utf-8" }));
+      } catch (_e) {}
+    }
+
     var tr = document.createElement("track");
     tr.kind = "subtitles";
     tr.label = item.label;
     tr.srclang = item.lang;
     if (item.def) tr.default = true;
-
-    var initialUrl = toSameOriginSubUrl(item.url);
-    tr.src = initialUrl;
+    tr.src = blobPlaceholder || initialUrl;
     v.appendChild(tr);
 
-    // Ultra-safe Blob URL layer: fetch VTT and convert to Blob URL
-    // Blob URLs (blob:https://...) are strictly same-origin and bypass all CORS/domain restrictions
+    // Fetch local VTT from same-origin bridge and create local Blob URL
     if (typeof fetch === "function" && typeof URL !== "undefined" && typeof URL.createObjectURL === "function" && typeof Blob === "function") {
       fetch(initialUrl)
         .then(function(res) {
@@ -192,7 +203,11 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
           try {
             var blob = new Blob([vttText], { type: "text/vtt;charset=utf-8" });
             var blobUrl = URL.createObjectURL(blob);
-            tr.src = blobUrl;
+            var trs = v.querySelectorAll('track[srclang="' + item.lang + '"]');
+            if (trs.length > 0) {
+              trs[0].src = blobUrl;
+            }
+            activatePreferredTrack(v);
           } catch (_e) {}
         })
         .catch(function() {});
@@ -239,6 +254,13 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
           var curT = v.currentTime || 0;
           var dur = v.duration || 0;
           var isP = Boolean(v.paused);
+          window.parent.postMessage({
+            type: "HWTO_VIDEO_TIME",
+            currentTime: curT,
+            time: curT,
+            duration: dur,
+            paused: isP,
+          }, "*");
           window.parent.postMessage({
             type: "TIME_UPDATE",
             currentTime: curT,

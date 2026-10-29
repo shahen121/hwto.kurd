@@ -127,7 +127,7 @@ test("Vidcore & Vidlink proxy + Cloudflare Worker integration", async () => {
     assert.equal(t3.includes('id="hwto-sub-fix"'), true);
 
     // 4. Chunk 281 is kept clean and valid without internal syntax errors
-    const chunkMatch = t3.match(/\/_next\/static\/chunks\/281-[a-zA-Z0-9]+\.js/);
+    const chunkMatch = t3.match(/\/(?:vidcore\/)?_next\/static\/chunks\/281-[a-zA-Z0-9]+\.js/);
     assert.ok(chunkMatch, "Should find chunk 281 in Vidcore HTML");
     const r4 = await fetch(`${base}${chunkMatch[0]}`);
     assert.equal(r4.status, 200);
@@ -157,7 +157,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   assert.equal(cleanedHtml.includes('href="https://mc.yandex.ru/watch/98154677"'), false);
   assert.equal(/<link[^>]*rel=["']?preload["']?[^>]*href=["']\s*["']/i.test(cleanedHtml), false);
   assert.equal(
-    cleanedHtml.includes('href="/_next/static/chunks/webpack.js?v=2"'),
+    cleanedHtml.includes('href="/vidlink/_next/static/chunks/webpack.js"'),
     true,
   );
 
@@ -219,7 +219,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   xhr1.open("GET", mpdUrl, true);
   assert.equal(
     xhrOpened[0].url,
-    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(mpdUrl)}`,
+    `https://hwto.proteome626.workers.dev/stream-proxy/ref/${encodeURIComponent(mpdUrl)}?ref=vidlink`,
   );
   // dash.js relies on xhr.responseURL being the original MPD URL to resolve relative segment templates
   assert.equal(xhr1.responseURL, mpdUrl);
@@ -231,7 +231,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   xhr2.open("GET", segUrl, true);
   assert.equal(
     xhrOpened[1].url,
-    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(segUrl)}`,
+    `https://hwto.proteome626.workers.dev/stream-proxy/ref/${encodeURIComponent(segUrl)}?ref=vidlink`,
   );
 
   // Test C: Subsequent DASH .m4s segment if resolved as root-relative /sacdn/dash/... via fetch
@@ -241,7 +241,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   const fetchRes = await sandbox.window.fetch(relSegPath);
   assert.equal(
     fetchedUrls[0],
-    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(expectedResolvedSeg)}`,
+    `https://hwto.proteome626.workers.dev/stream-proxy/ref/${encodeURIComponent(expectedResolvedSeg)}?ref=vidlink`,
   );
   assert.equal(fetchRes.url, expectedResolvedSeg);
 
@@ -250,7 +250,7 @@ test("Vidlink Client-side Interceptor rewrites fetch, XHR (.mpd, .m4s, .m3u8, .t
   await sandbox.window.fetch(hlsUrl);
   assert.equal(
     fetchedUrls[1],
-    `https://hwto.proteome626.workers.dev/?ref=vidlink&url=${encodeURIComponent(hlsUrl)}`,
+    `https://hwto.proteome626.workers.dev/stream-proxy/ref/${encodeURIComponent(hlsUrl)}?ref=vidlink`,
   );
 });
 
@@ -331,7 +331,7 @@ test("Static chunk cache and prefix normalization in handleVidcoreProxy", async 
     assert.equal(await res1.text(), dummyCode);
     assert.equal(
       res1.headers.get("cache-control"),
-      "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+      "public, max-age=31536000, immutable",
     );
 
     // 2. Request through /vidcore/_next/static/... hits the same cache
@@ -340,7 +340,7 @@ test("Static chunk cache and prefix normalization in handleVidcoreProxy", async 
     assert.equal(await res2.text(), dummyCode);
     assert.equal(
       res2.headers.get("cache-control"),
-      "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+      "public, max-age=31536000, immutable",
     );
   } finally {
     server.close();
@@ -411,46 +411,45 @@ test("AD_SHIELD_JS fake proxies spoof origin, protocol, port, hostname, and wind
   assert.equal(openedWin.closed, true);
 });
 
-test("patchPlayerChunk intercepts error handler to suppress 555 error", () => {
-  const mockChunkCode = `
-    cR[[109,123,106,77,106,127,106,123].map(function(e){return String.fromCharCode(30^e)}).join("")]=Z;
-  `;
-  const patched = patchPlayerChunk(mockChunkCode, "/_next/static/chunks/player-test.js");
-  assert.ok(patched.includes("if(v===555)"));
-
-  let interceptedStatus = null;
-  let postedMessages = [];
-  const sandbox = {
-    cR: {},
-    Z: (val) => {
-      interceptedStatus = val;
-    },
-    window: {
-      parent: {
-        postMessage: (msg) => postedMessages.push(msg),
-      },
-    },
-    console: { warn: () => {} },
+test("AD_SHIELD_JS intercepts APA91 requests and routes them to /vidcore/APA91...", async () => {
+  const fetchedUrls = [];
+  const xhrOpened = [];
+  function MockXHR() {}
+  MockXHR.prototype.open = function (method, url) {
+    xhrOpened.push({ method, url });
   };
+  const sandbox = {
+    window: null,
+    document: { querySelectorAll: () => [], addEventListener: () => {} },
+    XMLHttpRequest: MockXHR,
+    URL,
+    encodeURIComponent,
+    fetch: async (input) => {
+      fetchedUrls.push(String(input));
+      return { status: 200, url: String(input) };
+    },
+  };
+  sandbox.window = sandbox;
+  sandbox.window.parent = { postMessage: () => {} };
+  sandbox.window.location = { origin: "https://hwto-kurd.vercel.app" };
+  vm.runInNewContext(AD_SHIELD_JS, sandbox);
 
-  vm.runInNewContext(patched, sandbox);
+  // 1. Relative /APA91 via XHR
+  const xhr = new sandbox.XMLHttpRequest();
+  xhr.open("POST", "/APA91ywFtest123");
+  assert.equal(xhrOpened[0].url, "https://hwto-kurd.vercel.app/vidcore/APA91ywFtest123");
 
-  // Invoke the patched setState function with 555:
-  sandbox.cR.setState(555);
-  // Must NOT forward 555 to original Z and must NOT post 555 message
-  assert.equal(interceptedStatus, null, "555 must be suppressed");
-  assert.equal(postedMessages.length, 0, "555 must not postMessage");
+  // 2. Full vidcore.io /APA91 via fetch
+  await sandbox.window.fetch("https://vidcore.io/APA91ywFfull");
+  assert.equal(fetchedUrls[0], "https://hwto-kurd.vercel.app/vidcore/APA91ywFfull");
 
-  // Invoke with normal error status like 404:
-  sandbox.cR.setState(404);
-  assert.equal(interceptedStatus, 404);
-  assert.equal(postedMessages.length, 1);
-  assert.equal(postedMessages[0].event, "status");
-  assert.equal(postedMessages[0].data, 404);
+  // 3. Already prefixed /vidcore/APA91
+  await sandbox.window.fetch("/vidcore/APA91ywFclean");
+  assert.equal(fetchedUrls[1], "https://hwto-kurd.vercel.app/vidcore/APA91ywFclean");
 });
 
-test("Cache busting (?v=2), anti-freeze, and sandbox patches in vidcore", () => {
-  // 1. Verify HTML sanitization adds ?v=2 to Next.js chunks
+test("Cache busting (?v=4) and clean untouched JS chunks in vidcore", () => {
+  // 1. Verify HTML sanitization adds /vidcore/_next/static/... and ?v=4 to Next.js chunks
   const sampleVidcoreHtml = `
     <html>
       <head>
@@ -462,36 +461,21 @@ test("Cache busting (?v=2), anti-freeze, and sandbox patches in vidcore", () => 
     </html>
   `;
   const sanitized = sanitizeVidcoreHtml(sampleVidcoreHtml);
-  assert.ok(sanitized.includes("/_next/static/chunks/281-d15eeb1ca15a1654.js?v=2"));
-  assert.ok(sanitized.includes("/_next/static/chunks/main-app-14eacbf1653a965d.js?v=2"));
-  // Ensure idempotent (no ?v=2?v=2)
+  assert.ok(sanitized.includes("/vidcore/_next/static/chunks/281-d15eeb1ca15a1654.js?v=4"));
+  assert.ok(sanitized.includes("/vidcore/_next/static/chunks/main-app-14eacbf1653a965d.js?v=4"));
+  // Ensure idempotent (no ?v=4?v=4)
   const sanitizedTwice = sanitizeVidcoreHtml(sanitized);
-  assert.ok(!sanitizedTwice.includes("?v=2?v=2"));
+  assert.ok(!sanitizedTwice.includes("?v=4?v=4"));
 
-  // 2. Verify patchPlayerChunk anti-freeze and sandbox bypass
+  // 2. Verify patchPlayerChunk returns code 100% untouched without any .replace()
   const mockCode = `
     function wrapper() {
       let t=[];for(let a=0;a<50;a++)t.push(e);let a=Date.now();return console.table(t),console.clear(),Date.now()-a<=10
-      if(!tI.current&&(tI.current=!0,window.self!==window.top)){let t=()=>{document.body.innerHTML='<h1>Please Disable Sandbox</h1>'};}
       let{en:l,from:b,ad:h,mobile:u}=e;
-      R.length>0&&(R.sort((e,t)=>e.track.label.localeCompare(t.track.label)),el(R))
     }
   `;
-  // Verify chunk 281 remains completely clean and untouched
-  const clean281 = patchPlayerChunk(mockCode, "/_next/static/chunks/281-d15eeb1ca15a1654.js");
-  assert.equal(clean281, mockCode, "Chunk 281 must remain completely untouched");
-
-  // Verify other chunks receive standard sandbox and ad bypasses
-  const patched = patchPlayerChunk(mockCode, "/_next/static/chunks/main-app.js");
-  assert.ok(patched.includes("return!0"), "Anti-freeze must return !0");
-  assert.ok(patched.includes("if(!1)"), "Sandbox check must be bypassed with if(!1)");
-  assert.ok(!patched.includes("Please Disable Sandbox"), "Please Disable Sandbox string must be stripped");
-  assert.ok(patched.includes("let h=!1,{en:l,from:b,ad:_h_ignored,"), "Ad prop must be forced to false");
-
-  // Verify valid syntax by compiling with vm.Script
-  assert.doesNotThrow(() => {
-    new vm.Script(patched);
-  }, "Patched chunk must have zero syntax errors");
+  const cleanCode = patchPlayerChunk(mockCode, "/_next/static/chunks/main-app.js");
+  assert.equal(cleanCode, mockCode, "Chunks must remain completely untouched 100%");
 });
 
 test("AD_SHIELD_JS blocks clarity.ms, stubs clarity.q, and mutes transient SourceBuffer errors", () => {

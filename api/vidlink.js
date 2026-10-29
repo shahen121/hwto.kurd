@@ -16,7 +16,7 @@ const VIDLINK_ORIGIN = process.env.VIDLINK_ORIGIN || "https://vidlink.pro";
 const vidlinkStaticCache = new Map();
 const vidlinkHtmlCache = new Map();
 const HTML_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
-const CHUNK_CACHE_CONTROL = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800";
+const CHUNK_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const HTML_CACHE_CONTROL = "public, max-age=1200, s-maxage=1200, stale-while-revalidate=86400";
 
 function getCleanUserAgent(rawUa) {
@@ -316,9 +316,8 @@ async function handleVidlinkProxy(req, res) {
 
           if (contentType.includes("javascript")) {
             const rawJs = await staticRes.text();
-            const patchedJs = patchPlayerChunk(rawJs, targetPath);
             vidlinkStaticCache.set(cacheKey, {
-              body: patchedJs,
+              body: rawJs,
               contentType,
             });
             res.writeHead(200, {
@@ -326,7 +325,7 @@ async function handleVidlinkProxy(req, res) {
               "Cache-Control": CHUNK_CACHE_CONTROL,
               "Access-Control-Allow-Origin": "*",
             });
-            return res.end(patchedJs, "utf8");
+            return res.end(rawJs, "utf8");
           }
 
           const arrayBuffer = await staticRes.arrayBuffer();
@@ -341,9 +340,15 @@ async function handleVidlinkProxy(req, res) {
             "Access-Control-Allow-Origin": "*",
           });
           return res.end(buffer);
+        } else if (staticRes && staticRes.status === 404) {
+          res.writeHead(404, {
+            "Content-Type": "text/plain",
+            "Access-Control-Allow-Origin": "*",
+          });
+          return res.end("Not Found");
         }
       } catch (_err) {
-        // Fall through to full upstream fetch if direct static fetch failed
+        // Direct static fetch error
       }
     }
 
@@ -384,10 +389,9 @@ async function handleVidlinkProxy(req, res) {
       responseHeaders["Cache-Control"] = CHUNK_CACHE_CONTROL;
       if (contentType.includes("javascript")) {
         const rawJs = await upstreamRes.text();
-        const patchedJs = patchPlayerChunk(rawJs, targetPath);
-        vidlinkStaticCache.set(targetPath, { body: patchedJs, contentType });
+        vidlinkStaticCache.set(targetPath, { body: rawJs, contentType });
         res.writeHead(upstreamRes.status, responseHeaders);
-        return res.end(patchedJs, "utf8");
+        return res.end(rawJs, "utf8");
       }
       const arrayBuffer = await upstreamRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);

@@ -168,7 +168,7 @@ export async function resolveGithubSubtitle({
           const cleanCode = raw.split(".")[0].trim().toLowerCase();
           const normLang = cleanCode === "ckb" ? "ku" : cleanCode;
           const meta = getSubtitleMeta(normLang);
-          const directUrl = `${baseUrl}/movie/${tmdbId}/${normLang}.vtt`;
+          const directUrl = `/subtitles/movie/${tmdbId}/${normLang}.vtt`;
 
           if (!available.some((a) => a.lang === meta.lang)) {
             available.push({
@@ -225,7 +225,7 @@ export async function resolveGithubSubtitle({
             const cleanCode = raw.split(".")[0].trim().toLowerCase();
             const normLang = cleanCode === "ckb" ? "ku" : cleanCode;
             const meta = getSubtitleMeta(normLang);
-            const directUrl = `${baseUrl}/series/${tmdbId}/s${numSeason}/e${numEpisode}_${normLang}.vtt`;
+            const directUrl = `/subtitles/series/${tmdbId}/s${numSeason}/e${numEpisode}_${normLang}.vtt`;
 
             if (!available.some((a) => a.lang === meta.lang)) {
               available.push({

@@ -45,6 +45,10 @@
       "destination": "/api/subtitles?file=$1"
     },
     {
+      "source": "/vidlink/:path*",
+      "destination": "/api/vidlink"
+    },
+    {
       "source": "/vidlink/(.*)",
       "destination": "/api/vidlink"
     },
@@ -60,11 +64,19 @@
       "destination": "/api/vidlink"
     },
     {
+      "source": "/vidcore/:path*",
+      "destination": "/api/vidcore"
+    },
+    {
+      "source": "/APA91:path*",
+      "destination": "/api/vidcore"
+    },
+    {
       "source": "/(vidcore|movie|tv|embed|_next|stream-proxy)/(.*)",
       "destination": "/api/vidcore"
     },
     {
-      "source": "/(APA91ywF.*|wyzie.*|servers.*)",
+      "source": "/(APA91.*|wyzie.*|servers.*)",
       "destination": "/api/vidcore"
     },
     {

@@ -83,7 +83,7 @@ function isProxyRoute(pathname, req) {
     pathname.startsWith("/embed/") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/stream-proxy/") ||
-    pathname.startsWith("/APA91ywF") ||
+    pathname.startsWith("/APA91") ||
     pathname.startsWith("/wyzie") ||
     pathname.startsWith("/servers") ||
     pathname.startsWith("/api/b/") ||

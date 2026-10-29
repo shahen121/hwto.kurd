@@ -35,7 +35,7 @@ test("Vidlink Static Chunks: Fast direct fetch with in-memory Map cache and immu
     assert.equal(await res.text(), dummyBody);
     assert.equal(
       res.headers.get("cache-control"),
-      "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+      "public, max-age=31536000, immutable",
     );
   } finally {
     server.close();
