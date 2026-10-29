@@ -261,10 +261,22 @@ const AD_SHIELD_JS = `(function() {
   function resolveVidlinkStreamUrl(inputUrl) {
     if (!inputUrl || typeof inputUrl !== "string") return null;
     var rawUrl = inputUrl.trim();
-    if (!rawUrl || /^(blob:|data:|javascript:|about:)/i.test(rawUrl)) return null;
+    if (!rawUrl || /^(blob:|data:|javascript:|about:|ws:|wss:)/i.test(rawUrl)) return null;
     if (rawUrl.indexOf(CF_WORKER + "/?") === 0 || rawUrl.indexOf(CF_WORKER + "?") === 0 || rawUrl.indexOf("/stream-proxy/") !== -1) return null;
 
     var locOrigin = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "";
+
+    // 1. VidLink absolute URLs to same-origin proxy (for API, settings, RSC flight data)
+    if (rawUrl.indexOf("https://vidlink.pro/") === 0 || rawUrl.indexOf("http://vidlink.pro/") === 0) {
+      var relVidlink = rawUrl.replace(/^https?:\/\/vidlink\.pro/i, "");
+      if (!STREAM_EXT_RE.test(relVidlink) && !STREAM_HOST_RE.test(relVidlink)) {
+        return {
+          originalUrl: rawUrl,
+          proxiedUrl: locOrigin ? (locOrigin + "/vidlink" + relVidlink) : ("/vidlink" + relVidlink)
+        };
+      }
+    }
+
     if (rawUrl.indexOf("/sacdn/") === 0 || rawUrl.indexOf("/dash/") === 0 || rawUrl.indexOf("/proxy/") === 0 || rawUrl.indexOf("/mp/") === 0) {
       rawUrl = (lastMpdOrigin || "https://surge.flooderrr.store") + rawUrl;
     } else if (rawUrl.indexOf(CF_WORKER + "/") === 0) {
@@ -444,10 +456,10 @@ const { UNIVERSAL_SUBTITLE_INJECTOR_JS } = require("./subtitles.js");
 function injectStrictlyIntoHead(htmlStr, injectContent) {
   if (!htmlStr || typeof htmlStr !== "string") return htmlStr;
   if (htmlStr.includes("</head>")) {
-    return htmlStr.replace("</head>", injectContent + "</head>");
+    return htmlStr.replace("</head>", () => injectContent + "</head>");
   }
   if (/<head\b[^>]*>/i.test(htmlStr)) {
-    return htmlStr.replace(/(<head\b[^>]*>)/i, "$1" + injectContent);
+    return htmlStr.replace(/(<head\b[^>]*>)/i, (m, g1) => g1 + injectContent);
   }
   return "<head>" + injectContent + "</head>" + htmlStr;
 }
@@ -458,9 +470,7 @@ function sanitizeVidlinkHtml(html) {
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*>[\s\S]*?<\/script>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*\/>/gi, "");
-  out = out.replace(/https?:\/\/[^\s"'<]*clarity\.ms[^\s"'<]*/gi, "");
   out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js");
-  out = out.replace(/https:\/\/mc\.yandex\.ru\/watch\/\d+/gi, "");
 
   out = out.replace(/\\"limitAds\\":false/g, '\\"limitAds\\":true');
   out = out.replace(/"limitAds":false/g, '"limitAds":true');
@@ -475,6 +485,7 @@ function sanitizeVidlinkHtml(html) {
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
 <script id="hwto-vidlink-interceptor" src="/gtag-shield.js"></script>
+<script id="hwto-universal-subs-src" src="/hwto-subtitles.js"></script>
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
   return injectStrictlyIntoHead(out, headInject);
@@ -494,7 +505,6 @@ function sanitizeVidcoreHtml(html) {
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*>[\s\S]*?<\/script>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*\/>/gi, "");
-  out = out.replace(/https?:\/\/[^\s"'<]*clarity\.ms[^\s"'<]*/gi, "");
 
   out = sanitizePreloadLinks(out);
   out = addChunkCacheBusting(out);
@@ -504,6 +514,7 @@ function sanitizeVidcoreHtml(html) {
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
 <script id="hwto-vidcore-interceptor" src="/gtag-shield.js"></script>
+<script id="hwto-universal-subs-src" src="/hwto-subtitles.js"></script>
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
   return injectStrictlyIntoHead(out, headInject);
@@ -744,6 +755,15 @@ async function handleVidcoreProxy(req, res) {
         "Access-Control-Allow-Origin": "*",
       });
       return res.end(AD_SHIELD_JS, "utf8");
+    }
+
+    if (pathname === "/hwto-subtitles.js") {
+      res.writeHead(200, {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Access-Control-Allow-Origin": "*",
+      });
+      return res.end(UNIVERSAL_SUBTITLE_INJECTOR_JS, "utf8");
     }
 
     if (pathname.startsWith("/stream-proxy/ref/")) {

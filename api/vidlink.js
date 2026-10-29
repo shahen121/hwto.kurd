@@ -7,6 +7,7 @@ const {
   fetchViaScrapeDoWithRotation,
   getScrapeDoSessionId,
   CF_WORKER_URL,
+  UNIVERSAL_SUBTITLE_INJECTOR_JS,
 } = require("./vidcore.js");
 
 const VIDLINK_ORIGIN = process.env.VIDLINK_ORIGIN || "https://vidlink.pro";
@@ -53,8 +54,20 @@ async function fetchVidlinkHtmlFast(targetUrl, req, bodyBuffer = null) {
     Connection: "keep-alive",
   };
 
-  if (req?.headers?.["content-type"]) {
-    headers["Content-Type"] = req.headers["content-type"];
+  // Next.js RSC, Server Action, and flight streaming headers
+  const rscHeaders = [
+    "rsc",
+    "next-router-state-tree",
+    "next-router-prefetch",
+    "next-url",
+    "next-action",
+    "content-type",
+    "x-csrf-token",
+  ];
+  for (const h of rscHeaders) {
+    if (req?.headers?.[h]) {
+      headers[h] = req.headers[h];
+    }
   }
 
   // Forward cookies or x- headers if present
@@ -85,18 +98,21 @@ async function fetchVidlinkHtmlFast(targetUrl, req, bodyBuffer = null) {
       return directRes;
     }
   } catch (_directErr) {
-    // Timeout or network error, proceed to worker
+    // Timeout or network error, proceed
   }
 
-  // 2. Try via Cloudflare Worker with 3s timeout
-  try {
-    const workerTarget = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(targetUrl)}`;
-    const workerRes = await fetchWithTimeout(workerTarget, fetchOpts, 3000);
-    if (workerRes && workerRes.status >= 200 && workerRes.status < 400) {
-      return workerRes;
+  // 2. Try via Cloudflare Worker ONLY for video media segments / streams
+  const isVideoMedia = /\.(m3u8|mpd|m4s|ts|mp4|m4a|m4v)(\?|$)/i.test(targetUrl);
+  if (isVideoMedia) {
+    try {
+      const workerTarget = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(targetUrl)}`;
+      const workerRes = await fetchWithTimeout(workerTarget, fetchOpts, 3000);
+      if (workerRes && workerRes.status >= 200 && workerRes.status < 400) {
+        return workerRes;
+      }
+    } catch (_workerErr) {
+      // Proceed to Scrape.do fallback
     }
-  } catch (_workerErr) {
-    // Proceed to Scrape.do fallback
   }
 
   // 3. Fallback to Scrape.do rotation
@@ -159,6 +175,15 @@ async function handleVidlinkProxy(req, res) {
         "Access-Control-Allow-Origin": "*",
       });
       return res.end(AD_SHIELD_JS, "utf8");
+    }
+
+    if (pathname === "/hwto-subtitles.js") {
+      res.writeHead(200, {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Access-Control-Allow-Origin": "*",
+      });
+      return res.end(UNIVERSAL_SUBTITLE_INJECTOR_JS, "utf8");
     }
 
     // Stream proxy routes redirection to Cloudflare Worker

@@ -289,6 +289,7 @@ test("UNIVERSAL_SUBTITLE_INJECTOR_JS rewrites external r2.dev URLs to same-origi
     Blob,
     fetch: async () => ({ ok: true, text: async () => "WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nHello" }),
     setTimeout: (fn) => fn(),
+    setInterval: () => {},
   };
   sandbox.window = sandbox;
   sandbox.window.location = {

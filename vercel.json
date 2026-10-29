@@ -68,7 +68,7 @@
       "destination": "/api/vidcore"
     },
     {
-      "source": "/(gtag-shield\\.js|script\\.js|fu\\.wasm|decrypter-worker\\.js|hls\\.worker\\.js)",
+      "source": "/(gtag-shield\\.js|hwto-subtitles\\.js|script\\.js|fu\\.wasm|decrypter-worker\\.js|hls\\.worker\\.js)",
       "destination": "/api/vidcore"
     },
     {

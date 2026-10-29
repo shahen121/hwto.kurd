@@ -232,8 +232,41 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
       v.addEventListener("canplay", function() { activatePreferredTrack(v); });
     }
 
+    if (!v.__hwtoTimeSyncBound) {
+      v.__hwtoTimeSyncBound = true;
+      var notifyTime = function() {
+        try {
+          var curT = v.currentTime || 0;
+          var dur = v.duration || 0;
+          var isP = Boolean(v.paused);
+          window.parent.postMessage({
+            type: "TIME_UPDATE",
+            currentTime: curT,
+            time: curT,
+            duration: dur,
+            paused: isP,
+          }, "*");
+        } catch (_e) {}
+      };
+
+      v.addEventListener("timeupdate", notifyTime);
+      v.addEventListener("play", notifyTime);
+      v.addEventListener("pause", notifyTime);
+      v.addEventListener("seeking", notifyTime);
+      v.addEventListener("seeked", notifyTime);
+
+      if (typeof setInterval === "function") {
+        setInterval(function() {
+          if (!v.paused) notifyTime();
+        }, 250);
+      }
+    }
+
     setTimeout(function() { activatePreferredTrack(v); }, 300);
     setTimeout(function() { activatePreferredTrack(v); }, 1200);
+    if (typeof setInterval === "function") {
+      setInterval(function() { activatePreferredTrack(v); }, 500);
+    }
   }
 
   function checkVideos() {
@@ -255,6 +288,9 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
     }
 
     scheduleCheck();
+    if (typeof setInterval === "function") {
+      setInterval(checkVideos, 500);
+    }
 
     if (typeof MutationObserver !== "undefined") {
       var obs = new MutationObserver(function(mutations) {

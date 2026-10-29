@@ -166,24 +166,43 @@ export default function MoviePage({
   const [subPos, setSubPos] = useState(null);
   const subRef = useRef(null);
 
-  const activeSub = useMemo(() => {
-    if (!githubSub || subDisabled) return null;
-    if (selectedSubLang) {
-      return (
-        githubSub.available?.find((s) => s.lang === selectedSubLang) ||
-        githubSub
-      );
-    }
-    return githubSub;
-  }, [githubSub, subDisabled, selectedSubLang]);
-
   const movieOverlaySubtitles = useMemo(() => {
     if (githubSub?.available && githubSub.available.length > 0) {
       return githubSub.available;
     }
-    if (activeSub) return [activeSub];
+    if (item?.id) {
+      return [
+        {
+          lang: "ku",
+          label: "Kurdî",
+          flag: "☀️",
+          url: `/subtitles/movie/${item.id}/ku.vtt`,
+          isDefault: playerSubLang !== "ar",
+        },
+        {
+          lang: "ar",
+          label: "العربية",
+          flag: "🇸🇦",
+          url: `/subtitles/movie/${item.id}/ar.vtt`,
+          isDefault: playerSubLang === "ar",
+        },
+      ];
+    }
     return EMPTY_SUBS;
-  }, [githubSub, activeSub]);
+  }, [githubSub, item?.id, playerSubLang]);
+
+  const activeSub = useMemo(() => {
+    if (subDisabled) return null;
+    if (selectedSubLang) {
+      return (
+        movieOverlaySubtitles.find((s) => s.lang === selectedSubLang) ||
+        movieOverlaySubtitles[0] ||
+        null
+      );
+    }
+    const def = movieOverlaySubtitles.find((s) => s.isDefault);
+    return def || movieOverlaySubtitles[0] || null;
+  }, [movieOverlaySubtitles, subDisabled, selectedSubLang]);
 
   useEffect(() => {
     setSubDisabled(false);
@@ -1298,7 +1317,7 @@ export default function MoviePage({
                 {PLAYER_SOURCES.find((s) => s.id === playerSource)?.label ??
                   t("source")}
               </button>
-              {githubSub && (
+              {movieOverlaySubtitles.length > 0 && (
                 <button
                   ref={subRef}
                   className="player-overlay-btn"
@@ -1322,7 +1341,7 @@ export default function MoviePage({
                   CC ·{" "}
                   {subDisabled
                     ? t("turnOffSub")
-                    : (activeSub?.lang || githubSub.lang).toUpperCase()}
+                    : (activeSub?.lang || "ku").toUpperCase()}
                 </button>
               )}
               {/* Sub/Dub toggle, only for async (AllManga) sources */}
@@ -1444,7 +1463,7 @@ export default function MoviePage({
                 ))}
               </div>
             )}
-            {showSubMenu && subPos && githubSub && (
+            {showSubMenu && subPos && movieOverlaySubtitles.length > 0 && (
               <div
                 className="source-dropdown source-dropdown--fixed sub-dropdown"
                 style={{ top: subPos.top, left: subPos.left }}
@@ -1462,7 +1481,7 @@ export default function MoviePage({
                 >
                   {t("subtitles")}
                 </div>
-                {githubSub.available?.map((s) => {
+                {movieOverlaySubtitles.map((s) => {
                   const isActive = !subDisabled && activeSub?.lang === s.lang;
                   return (
                     <button

@@ -556,5 +556,54 @@ test("AD_SHIELD_JS blocks clarity.ms, stubs clarity.q, and mutes transient Sourc
   assert.ok(!cleanVidlink.includes("clarity.ms"), "Vidlink HTML must strip clarity.ms");
 });
 
+test("Strict Zero-SyntaxError verification on AD_SHIELD_JS, UNIVERSAL_SUBTITLE_INJECTOR_JS, and Next.js RSC sanitized HTML", () => {
+  const { UNIVERSAL_SUBTITLE_INJECTOR_JS } = require("./subtitles.js");
+
+  // 1. Both injected scripts must be completely valid JS without syntax errors
+  assert.doesNotThrow(() => {
+    new Function(AD_SHIELD_JS);
+  }, "AD_SHIELD_JS must compile without any syntax error");
+
+  assert.doesNotThrow(() => {
+    new Function(UNIVERSAL_SUBTITLE_INJECTOR_JS);
+  }, "UNIVERSAL_SUBTITLE_INJECTOR_JS must compile without any syntax error");
+
+  // 2. Next.js streaming RSC payload with embedded clarity script references and JSON strings
+  const mockRscHtml = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Player</title>
+      </head>
+      <body>
+        <script>self.__next_f=self.__next_f||[];self.__next_f.push([0])</script>
+        <script>self.__next_f.push([1,"1:HL[\\\"/_next/static/css/app.css\\\",\\\"style\\\"]\\n"])</script>
+        <script>self.__next_f.push([1,"14:[\\\"$\\\",\\\"script\\\",null,{\\\"src\\\":\\\"https://www.clarity.ms/tag/p5j6v64p52\\\",\\\"strategy\\\":\\\"afterInteractive\\\"}]\\n"])</script>
+        <script>self.__next_f.push([1,"15:[\\\"$\\\",\\\"div\\\",null,{\\\"children\\\":\\\"Safe content with; semicolon and quotes\\\"}]\\n"])</script>
+        <script src="https://www.clarity.ms/tag/p5j6v64p52"></script>
+      </body>
+    </html>
+  `;
+
+  for (const sanitizer of [sanitizeVidlinkHtml, sanitizeVidcoreHtml]) {
+    const sanitized = sanitizer(mockRscHtml);
+
+    // Extract all <script> contents (ignoring external src) and compile each with vm.Script
+    const scriptRegex = /<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+    let scriptCount = 0;
+    while ((match = scriptRegex.exec(sanitized)) !== null) {
+      const code = match[1].trim();
+      if (!code) continue;
+      scriptCount++;
+      assert.doesNotThrow(() => {
+        new vm.Script(code);
+      }, `Script block #${scriptCount} must compile with zero syntax errors`);
+    }
+    assert.ok(scriptCount >= 3, "Must have verified all Next.js RSC and injected script blocks");
+  }
+});
+
+
 
 
