@@ -279,7 +279,6 @@ export const getSourceUrl = (
       ? window.location.origin
       : "http://localhost:3000";
 
-  const R2_BASE = "https://pub-d1bbd0e1dd5d4e81b55c524af70a17e0.r2.dev";
   const normLang = subtitleLang === "ar" ? "ar" : "ku";
 
   if (src.langParam) {
@@ -289,15 +288,28 @@ export const getSourceUrl = (
     );
   }
 
-  // Ensure subtitle URL is an absolute URL for external players
+  // Same-Origin Subtitle Bridge: Always pass ${origin}/subtitles/...
+  // Guarantees 100% match of domain, protocol, and port with the player iframe
+  const localKu =
+    type === "movie"
+      ? `${origin}/subtitles/movie/${id}/ku.vtt`
+      : `${origin}/subtitles/series/${id}/s${season || 1}/e${ep || 1}_ku.vtt`;
+  const localAr =
+    type === "movie"
+      ? `${origin}/subtitles/movie/${id}/ar.vtt`
+      : `${origin}/subtitles/series/${id}/s${season || 1}/e${ep || 1}_ar.vtt`;
+
   let effectiveSubUrl = subtitleUrl;
   if (!effectiveSubUrl) {
-    effectiveSubUrl =
-      type === "movie"
-        ? `${R2_BASE}/movie/${id}/${normLang}.vtt`
-        : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_${normLang}.vtt`;
+    effectiveSubUrl = normLang === "ar" ? localAr : localKu;
   } else if (!effectiveSubUrl.startsWith("http")) {
     effectiveSubUrl = `${origin}${effectiveSubUrl.startsWith("/") ? "" : "/"}${effectiveSubUrl}`;
+  } else if (effectiveSubUrl.includes("r2.dev")) {
+    // Convert any external R2 URL to same-origin /subtitles/*
+    try {
+      const u = new URL(effectiveSubUrl);
+      effectiveSubUrl = `${origin}/subtitles${u.pathname.replace(/^\/subtitles/, "")}`;
+    } catch (_e) {}
   }
 
   if (effectiveSubUrl && src.subUrlParam) {
@@ -311,20 +323,10 @@ export const getSourceUrl = (
     url.searchParams.set("sub_label", subLabel);
   }
 
-  // Provide separate ku and ar subtitle URLs ONLY for internal proxied players (Vidcore)
-  // External players (VidSrc, MultiEmbed, 2Embed) reject long subtitle params or trigger debugger traps
+  // Provide separate ku and ar subtitle URLs for Vidcore using same-origin
   if (src.id === "vidcore") {
-    const r2Ku =
-      type === "movie"
-        ? `${R2_BASE}/movie/${id}/ku.vtt`
-        : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_ku.vtt`;
-    const r2Ar =
-      type === "movie"
-        ? `${R2_BASE}/movie/${id}/ar.vtt`
-        : `${R2_BASE}/series/${id}/s${season || 1}/e${ep || 1}_ar.vtt`;
-
-    url.searchParams.set("sub_url_ku", r2Ku);
-    url.searchParams.set("sub_url_ar", r2Ar);
+    url.searchParams.set("sub_url_ku", localKu);
+    url.searchParams.set("sub_url_ar", localAr);
   }
 
 

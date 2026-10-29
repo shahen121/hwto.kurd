@@ -494,4 +494,67 @@ test("Cache busting (?v=2), anti-freeze, and sandbox patches in vidcore", () => 
   }, "Patched chunk must have zero syntax errors");
 });
 
+test("AD_SHIELD_JS blocks clarity.ms, stubs clarity.q, and mutes transient SourceBuffer errors", () => {
+  const capturedErrors = [];
+  const sandbox = {
+    window: null,
+    document: {},
+    console: {
+      error: (...args) => capturedErrors.push(args.join(" ")),
+    },
+    URL,
+    encodeURIComponent,
+    Object,
+    Array,
+    String,
+    Date,
+  };
+  sandbox.window = sandbox;
+  sandbox.window.location = {
+    origin: "https://hwto-kurd.vercel.app",
+    hostname: "hwto-kurd.vercel.app",
+    protocol: "https:",
+    port: "",
+    pathname: "/vidcore/movie/550",
+  };
+
+  vm.runInNewContext(AD_SHIELD_JS, sandbox);
+
+  // 1. Check window.clarity stub and .q array
+  assert.equal(typeof sandbox.window.clarity, "function");
+  assert.ok(Array.isArray(sandbox.window.clarity.q), "clarity.q must be an array");
+  assert.doesNotThrow(() => {
+    sandbox.window.clarity("set", "test");
+    sandbox.window.clarity.q.push("item");
+    sandbox.window.clarity.q.unshift("item0");
+  }, "clarity.q.unshift must not throw");
+
+  // 2. Check console.error muting
+  sandbox.console.error("Uncaught Error: SourceBufferSink failed to append");
+  sandbox.console.error("This SourceBuffer has been removed from the parent media source.");
+  sandbox.console.error("Script error at www.clarity.ms/tag/abc");
+  assert.equal(capturedErrors.length, 0, "Transient SourceBuffer & clarity errors must be muted");
+
+  // Normal errors must NOT be muted
+  sandbox.console.error("Real critical application error");
+  assert.equal(capturedErrors.length, 1);
+  assert.ok(capturedErrors[0].includes("Real critical application error"));
+
+  // 3. HTML sanitization strips clarity.ms tags
+  const htmlWithClarity = `
+    <html>
+      <head>
+        <script src="https://www.clarity.ms/tag/12345"></script>
+        <script>window.clarity("start");</script>
+      </head>
+      <body></body>
+    </html>
+  `;
+  const cleanVidcore = sanitizeVidcoreHtml(htmlWithClarity);
+  assert.ok(!cleanVidcore.includes("clarity.ms"), "Vidcore HTML must strip clarity.ms");
+  const cleanVidlink = sanitizeVidlinkHtml(htmlWithClarity);
+  assert.ok(!cleanVidlink.includes("clarity.ms"), "Vidlink HTML must strip clarity.ms");
+});
+
+
 

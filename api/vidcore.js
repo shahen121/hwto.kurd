@@ -205,6 +205,29 @@ const AD_SHIELD_JS = `(function() {
     Object.defineProperty(window, "a3f1feb4-0b2d-4f69-a999-7116272dab1d", { value: false, writable: false, configurable: false });
   } catch (e) {}
 
+  // Mute transient SourceBuffer and clarity errors to keep console pristine
+  try {
+    if (typeof console !== "undefined" && typeof console.error === "function") {
+      var __origConsoleError = console.error;
+      console.error = function() {
+        var str = "";
+        try {
+          for (var i = 0; i < arguments.length; i++) {
+            str += " " + String(arguments[i] || "");
+          }
+        } catch (_e) {}
+        if (
+          str.indexOf("SourceBufferSink") !== -1 ||
+          str.indexOf("This SourceBuffer has been removed from the parent media source") !== -1 ||
+          str.indexOf("clarity.ms") !== -1
+        ) {
+          return;
+        }
+        return __origConsoleError.apply(console, arguments);
+      };
+    }
+  } catch (_e) {}
+
   var fakeWin = {
     closed: false,
     focus: function() {},
@@ -221,12 +244,14 @@ const AD_SHIELD_JS = `(function() {
 
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function() { window.dataLayer.push(arguments); };
-  window.clarity = window.clarity || function() {};
+  var __clarityStub = function() {};
+  __clarityStub.q = [];
+  window.clarity = __clarityStub;
   window.ym = window.ym || function() {};
 
   function isBlockedUrl(url) {
     if (!url || typeof url !== "string") return false;
-    return /googletagmanager|google-analytics|cloudflareinsights|doubleclick|popads|propeller|adnetwork|yandex/i.test(url);
+    return /googletagmanager|google-analytics|cloudflareinsights|doubleclick|popads|propeller|adnetwork|yandex|clarity\.ms/i.test(url);
   }
 
   var SAFE_ASSET_RE = /(cdn\\.(jsdelivr\\.net|jwplayer\\.com)|wsrv\\.nl|image\\.tmdb\\.org|fonts\\.(googleapis|gstatic)\\.com|raw\\.githubusercontent\\.com)/i;
@@ -431,6 +456,9 @@ function sanitizeVidlinkHtml(html) {
   let out = html;
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi, "");
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
+  out = out.replace(/<script\b[^>]*clarity\.ms[^>]*>[\s\S]*?<\/script>/gi, "");
+  out = out.replace(/<script\b[^>]*clarity\.ms[^>]*\/>/gi, "");
+  out = out.replace(/https?:\/\/[^\s"'<]*clarity\.ms[^\s"'<]*/gi, "");
   out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js");
   out = out.replace(/https:\/\/mc\.yandex\.ru\/watch\/\d+/gi, "");
 
@@ -464,6 +492,9 @@ function sanitizeVidcoreHtml(html) {
   out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js");
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi, "");
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
+  out = out.replace(/<script\b[^>]*clarity\.ms[^>]*>[\s\S]*?<\/script>/gi, "");
+  out = out.replace(/<script\b[^>]*clarity\.ms[^>]*\/>/gi, "");
+  out = out.replace(/https?:\/\/[^\s"'<]*clarity\.ms[^\s"'<]*/gi, "");
 
   out = sanitizePreloadLinks(out);
   out = addChunkCacheBusting(out);
@@ -764,6 +795,12 @@ async function handleVidcoreProxy(req, res) {
     if (pathname.startsWith("/vidlink/") || (incomingRef.includes("/vidlink/") && !pathname.startsWith("/vidcore/"))) {
       const handleVidlinkProxy = require("./vidlink.js").handleVidlinkProxy;
       return handleVidlinkProxy(req, res);
+    }
+
+    // Direct Subtitles Bridge Handler
+    if (pathname.startsWith("/subtitles/") || pathname === "/api/subtitles") {
+      const subtitlesHandler = require("./subtitles.js");
+      return subtitlesHandler(req, res);
     }
 
     let origin = VIDCORE_ORIGIN;

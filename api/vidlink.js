@@ -210,6 +210,11 @@ async function handleVidlinkProxy(req, res) {
       return res.end();
     }
 
+    if (pathname.startsWith("/subtitles/") || pathname === "/api/subtitles") {
+      const subtitlesHandler = require("./subtitles.js");
+      return subtitlesHandler(req, res);
+    }
+
     // Normalize path by stripping /vidlink prefix if present
     let targetPath = pathname;
     if (pathname.startsWith("/vidlink/")) {

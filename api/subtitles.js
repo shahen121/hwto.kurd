@@ -2,6 +2,8 @@ const fs = require("fs");
 const path = require("path");
 
 const DEFAULT_R2_BASE = "https://pub-d1bbd0e1dd5d4e81b55c524af70a17e0.r2.dev";
+const subtitleContentCache = new Map();
+const SUBTITLE_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
 
 const SUB_META = {
   ku: { lang: "ku", label: "Kurdî", flag: "☀️" },
@@ -28,6 +30,11 @@ function getSubtitlesDirectory() {
 function sanitizeSubtitleRelPath(rawFile) {
   if (!rawFile || typeof rawFile !== "string") return "";
   let clean = rawFile.replace(/\\/g, "/").trim();
+  if (/^https?:\/\//i.test(clean)) {
+    try {
+      clean = new URL(clean).pathname;
+    } catch (_e) {}
+  }
   clean = clean.replace(/^(\.\.[\/\\])+/, "");
   clean = clean.replace(/^\/?subtitles\/?/i, "");
   clean = clean.replace(/^\/+/, "");
@@ -37,10 +44,68 @@ function sanitizeSubtitleRelPath(rawFile) {
 /**
  * Universal Subtitle Injector JS:
  * Injected into proxy players (<head>) for VidCore & VidLink.
+ * Guarantees Same-Origin + Blob URLs for <track src="..."> to eliminate "Domains, protocols and ports must match".
  */
 const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
   if (window.__universalSubtitlesInjected) return;
   window.__universalSubtitlesInjected = true;
+
+  var origin = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "";
+
+  function toSameOriginSubUrl(url) {
+    if (!url || typeof url !== "string") return "";
+    var clean = url.trim();
+    if (!clean) return "";
+
+    // Convert external R2 or other domain subtitle URLs to local /subtitles/... bridge
+    if (clean.indexOf("r2.dev") !== -1 || clean.indexOf("pub-") !== -1) {
+      try {
+        var u = new URL(clean, origin || "http://localhost");
+        var p = u.pathname;
+        if (p.indexOf("/subtitles/") !== 0) p = "/subtitles" + (p.indexOf("/") === 0 ? "" : "/") + p;
+        return origin + p;
+      } catch (_e) {
+        var pathOnly = clean.replace(/^https?:\\/\\/[^\\/]+/i, "");
+        if (pathOnly.indexOf("/subtitles/") !== 0) pathOnly = "/subtitles" + (pathOnly.indexOf("/") === 0 ? "" : "/") + pathOnly;
+        return origin + pathOnly;
+      }
+    }
+
+    if (/^https?:\\/\\//i.test(clean)) {
+      try {
+        var parsed = new URL(clean);
+        if (origin && parsed.origin !== origin) {
+          var p2 = parsed.pathname;
+          if (p2.indexOf("/subtitles/") !== 0) p2 = "/subtitles" + (p2.indexOf("/") === 0 ? "" : "/") + p2;
+          return origin + p2;
+        }
+      } catch (_e) {}
+      return clean;
+    }
+
+    if (clean.indexOf("/") === 0) {
+      return origin + clean;
+    }
+    return origin + "/subtitles/" + clean;
+  }
+
+  // Intercept HTMLTrackElement.prototype.src to always force Same-Origin URLs
+  try {
+    if (typeof HTMLTrackElement !== "undefined" && HTMLTrackElement.prototype) {
+      var trackSrcDesc = Object.getOwnPropertyDescriptor(HTMLTrackElement.prototype, "src");
+      if (trackSrcDesc && trackSrcDesc.set && trackSrcDesc.get) {
+        Object.defineProperty(HTMLTrackElement.prototype, "src", {
+          configurable: true,
+          enumerable: trackSrcDesc.enumerable,
+          get: function() { return trackSrcDesc.get.call(this); },
+          set: function(val) {
+            var normalized = toSameOriginSubUrl(String(val || ""));
+            return trackSrcDesc.set.call(this, normalized);
+          }
+        });
+      }
+    }
+  } catch (_e) {}
 
   function getQueryParam(name) {
     try {
@@ -71,25 +136,17 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
       var mSeason = pathMatch[3];
       var mEp = pathMatch[4];
       var isTv = (mType === "tv" || mType === "series");
-      var r2Base = "${DEFAULT_R2_BASE}";
       if (!kuUrl) kuUrl = isTv
-        ? r2Base + "/series/" + mId + "/s" + (mSeason || "1") + "/e" + (mEp || "1") + "_ku.vtt"
-        : r2Base + "/movie/" + mId + "/ku.vtt";
+        ? origin + "/subtitles/series/" + mId + "/s" + (mSeason || "1") + "/e" + (mEp || "1") + "_ku.vtt"
+        : origin + "/subtitles/movie/" + mId + "/ku.vtt";
       if (!arUrl) arUrl = isTv
-        ? r2Base + "/series/" + mId + "/s" + (mSeason || "1") + "/e" + (mEp || "1") + "_ar.vtt"
-        : r2Base + "/movie/" + mId + "/ar.vtt";
+        ? origin + "/subtitles/series/" + mId + "/s" + (mSeason || "1") + "/e" + (mEp || "1") + "_ar.vtt"
+        : origin + "/subtitles/movie/" + mId + "/ar.vtt";
     }
   }
 
-  var origin = window.location.origin;
-  function toAbsolute(url) {
-    if (!url) return "";
-    if (/^https?:\\/\\//i.test(url)) return url;
-    return origin + (url.indexOf("/") === 0 ? "" : "/") + url;
-  }
-
-  kuUrl = toAbsolute(kuUrl);
-  arUrl = toAbsolute(arUrl);
+  kuUrl = toSameOriginSubUrl(kuUrl);
+  arUrl = toSameOriginSubUrl(arUrl);
 
   function activatePreferredTrack(v) {
     try {
@@ -108,8 +165,49 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
     } catch (_e) {}
   }
 
+  function attachTrack(v, item) {
+    var existing = v.querySelectorAll('track[srclang="' + item.lang + '"]');
+    if (existing.length > 0) return;
+
+    var tr = document.createElement("track");
+    tr.kind = "subtitles";
+    tr.label = item.label;
+    tr.srclang = item.lang;
+    if (item.def) tr.default = true;
+
+    var initialUrl = toSameOriginSubUrl(item.url);
+    tr.src = initialUrl;
+    v.appendChild(tr);
+
+    // Ultra-safe Blob URL layer: fetch VTT and convert to Blob URL
+    // Blob URLs (blob:https://...) are strictly same-origin and bypass all CORS/domain restrictions
+    if (typeof fetch === "function" && typeof URL !== "undefined" && typeof URL.createObjectURL === "function" && typeof Blob === "function") {
+      fetch(initialUrl)
+        .then(function(res) {
+          if (!res.ok) return null;
+          return res.text();
+        })
+        .then(function(vttText) {
+          if (!vttText || vttText.indexOf("WEBVTT") === -1) return;
+          try {
+            var blob = new Blob([vttText], { type: "text/vtt;charset=utf-8" });
+            var blobUrl = URL.createObjectURL(blob);
+            tr.src = blobUrl;
+          } catch (_e) {}
+        })
+        .catch(function() {});
+    }
+  }
+
   function injectSubtitlesToVideo(v) {
     if (!v) return;
+
+    try {
+      if (!v.getAttribute("crossorigin")) {
+        v.setAttribute("crossorigin", "anonymous");
+        v.crossOrigin = "anonymous";
+      }
+    } catch (_e) {}
 
     var tracks = [];
     if (kuUrl) {
@@ -123,13 +221,7 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
     tracks.forEach(function(item) {
       var existing = v.querySelectorAll('track[srclang="' + item.lang + '"]');
       if (existing.length === 0) {
-        var tr = document.createElement("track");
-        tr.kind = "subtitles";
-        tr.label = item.label;
-        tr.srclang = item.lang;
-        tr.src = item.url;
-        if (item.def) tr.default = true;
-        v.appendChild(tr);
+        attachTrack(v, item);
         addedAny = true;
       }
     });
@@ -200,18 +292,15 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
 })();`;
 
 /**
- * Universal Subtitles API Handler: /api/subtitles
- * Query params:
- *   - type: "movie" | "tv" | "series"
- *   - id: TMDB Id
- *   - season: Season number (for tv/series)
- *   - episode: Episode number (for tv/series)
- *   - file: Path to specific subtitle file to serve directly (.vtt / .srt)
+ * Universal Subtitles API Handler: /api/subtitles & /subtitles/*
  */
 async function subtitlesHandler(req, res) {
   const host = req.headers?.host || "localhost:3000";
   const parsedUrl = new URL(req.url || "/", `http://${host}`);
-  const query = Object.fromEntries(parsedUrl.searchParams.entries());
+  const query = {
+    ...Object.fromEntries(parsedUrl.searchParams.entries()),
+    ...(req.query || {}),
+  };
 
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -237,9 +326,15 @@ async function subtitlesHandler(req, res) {
       : "");
 
   if (rawFileParam) {
-    const safeRel = sanitizeSubtitleRelPath(rawFileParam).replace(/\\/g, "/");
+    let cleanRaw = rawFileParam;
+    if (/^https?:\/\//i.test(cleanRaw)) {
+      try {
+        cleanRaw = new URL(cleanRaw).pathname;
+      } catch (_e) {}
+    }
+    const safeRel = sanitizeSubtitleRelPath(cleanRaw).replace(/\\/g, "/");
 
-    // Check local filesystem first (allows offline tests and local downloads)
+    // Check local filesystem first
     const targetFile = path.join(subDir, safeRel);
     if (fs.existsSync(targetFile) && fs.statSync(targetFile).isFile()) {
       const ext = path.extname(targetFile).toLowerCase();
@@ -250,36 +345,76 @@ async function subtitlesHandler(req, res) {
       res.writeHead(200, {
         "Content-Type": contentType,
         "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
       });
       return fs.createReadStream(targetFile).pipe(res);
     }
 
     // Upstream fallback on Cloudflare R2
     if (externalBase.startsWith("http")) {
-      let r2Path = safeRel;
+      const r2Candidates = [];
 
-      // Map legacy tv path: tv/{id}/s{s}e{e}/{lang}.vtt -> series/{id}/s{s}/e{e}_{lang}.vtt
-      const tvMatch = safeRel.match(/^tv\/(\d+)\/s(\d+)e(\d+)\/([a-zA-Z0-9_-]+)\.vtt$/i);
-      if (tvMatch) {
-        r2Path = `series/${tvMatch[1]}/s${tvMatch[2]}/e${tvMatch[3]}_${tvMatch[4]}.vtt`;
+      // 1. tv/{id}/s{s}e{e}/{lang}.vtt -> series/{id}/s{s}/e{e}_{lang}.vtt
+      const tvMatch1 = safeRel.match(/^tv\/(\d+)\/s(\d+)e(\d+)\/([a-zA-Z0-9_-]+)\.vtt$/i);
+      if (tvMatch1) {
+        r2Candidates.push(`series/${tvMatch1[1]}/s${tvMatch1[2]}/e${tvMatch1[3]}_${tvMatch1[4]}.vtt`);
       }
 
-      const remoteUrl = `${externalBase}/${r2Path}`;
-      try {
-        const upstreamRes = await fetch(remoteUrl);
-        if (upstreamRes.ok) {
-          const contentType =
-            upstreamRes.headers.get("content-type") || "text/vtt; charset=utf-8";
-          const data = await upstreamRes.arrayBuffer();
-          res.writeHead(200, {
-            "Content-Type": contentType,
-            "Access-Control-Allow-Origin": "*",
-            "Cache-Control": "public, max-age=86400",
-          });
-          return res.end(Buffer.from(data));
+      // 2. tv/{id}/{s}/{e}/{lang}.vtt -> series/{id}/s{s}/e{e}_{lang}.vtt
+      const tvMatch2 = safeRel.match(/^tv\/(\d+)\/(\d+)\/(\d+)\/([a-zA-Z0-9_-]+)\.vtt$/i);
+      if (tvMatch2) {
+        r2Candidates.push(`series/${tvMatch2[1]}/s${tvMatch2[2]}/e${tvMatch2[3]}_${tvMatch2[4]}.vtt`);
+      }
+
+      // 3. tv/{id}/s{s}/e{e}/{lang}.vtt or tv/{id}/s{s}/e{e}_{lang}.vtt
+      const tvMatch3 = safeRel.match(/^tv\/(\d+)\/s(\d+)\/e(\d+)[/_]([a-zA-Z0-9_-]+)\.vtt$/i);
+      if (tvMatch3) {
+        r2Candidates.push(`series/${tvMatch3[1]}/s${tvMatch3[2]}/e${tvMatch3[3]}_${tvMatch3[4]}.vtt`);
+      }
+
+      // 4. series/{id}/{s}/{e}_{lang}.vtt -> series/{id}/s{s}/e{e}_{lang}.vtt
+      const seriesMatch1 = safeRel.match(/^series\/(\d+)\/(\d+)\/(\d+)_([a-zA-Z0-9_-]+)\.vtt$/i);
+      if (seriesMatch1) {
+        r2Candidates.push(`series/${seriesMatch1[1]}/s${seriesMatch1[2]}/e${seriesMatch1[3]}_${seriesMatch1[4]}.vtt`);
+      }
+
+      // Direct safeRel
+      r2Candidates.push(safeRel);
+
+      // Check in-memory subtitle cache
+      for (const cand of r2Candidates) {
+        if (subtitleContentCache.has(cand)) {
+          const entry = subtitleContentCache.get(cand);
+          if (Date.now() - entry.timestamp < SUBTITLE_CACHE_TTL) {
+            res.writeHead(200, {
+              "Content-Type": "text/vtt; charset=utf-8",
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+            });
+            return res.end(entry.data);
+          }
         }
-      } catch (_e) {}
+      }
+
+      for (const cand of r2Candidates) {
+        const remoteUrl = `${externalBase}/${cand}`;
+        try {
+          const upstreamRes = await fetch(remoteUrl);
+          if (upstreamRes.ok) {
+            const contentType =
+              upstreamRes.headers.get("content-type") || "text/vtt; charset=utf-8";
+            const data = await upstreamRes.arrayBuffer();
+            const buf = Buffer.from(data);
+            subtitleContentCache.set(cand, { data: buf, timestamp: Date.now() });
+            res.writeHead(200, {
+              "Content-Type": contentType,
+              "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+            });
+            return res.end(buf);
+          }
+        } catch (_e) {}
+      }
     }
 
     // Never return 404 for subtitle files - return a valid empty WebVTT with 200 OK
@@ -319,7 +454,7 @@ async function subtitlesHandler(req, res) {
             if (!available.some((a) => a.lang === meta.lang)) {
               available.push({
                 ...meta,
-                url: `${externalBase}/movie/${id}/${norm}.vtt`,
+                url: `/subtitles/movie/${id}/${norm}.vtt`,
               });
             }
           }
@@ -341,7 +476,7 @@ async function subtitlesHandler(req, res) {
             if (!available.some((a) => a.lang === meta.lang)) {
               available.push({
                 ...meta,
-                url: `${externalBase}/series/${id}/s${numSeason}/e${numEpisode}_${norm}.vtt`,
+                url: `/subtitles/series/${id}/s${numSeason}/e${numEpisode}_${norm}.vtt`,
               });
             }
           }
@@ -350,7 +485,7 @@ async function subtitlesHandler(req, res) {
     }
   } catch (_e) {}
 
-  // If no subtitles were registered upstream, provide default fallback paths
+  // If no subtitles were registered upstream, provide default fallback same-origin paths
   if (available.length === 0) {
     if (type === "tv") {
       const itemPath = `tv/${id}/s${season || 1}e${episode || 1}`;
@@ -366,21 +501,21 @@ async function subtitlesHandler(req, res) {
       const itemPath = `series/${id}/s${numSeason}/e${numEpisode}`;
       available.push({
         ...SUB_META.ku,
-        url: `${externalBase}/${itemPath}_ku.vtt`,
+        url: `/subtitles/${itemPath}_ku.vtt`,
       });
       available.push({
         ...SUB_META.ar,
-        url: `${externalBase}/${itemPath}_ar.vtt`,
+        url: `/subtitles/${itemPath}_ar.vtt`,
       });
     } else {
       const itemPath = `movie/${id}`;
       available.push({
         ...SUB_META.ku,
-        url: `${externalBase}/${itemPath}/ku.vtt`,
+        url: `/subtitles/${itemPath}/ku.vtt`,
       });
       available.push({
         ...SUB_META.ar,
-        url: `${externalBase}/${itemPath}/ar.vtt`,
+        url: `/subtitles/${itemPath}/ar.vtt`,
       });
     }
   }
@@ -408,3 +543,4 @@ module.exports.UNIVERSAL_SUBTITLE_INJECTOR_JS = UNIVERSAL_SUBTITLE_INJECTOR_JS;
 module.exports.sanitizeSubtitleRelPath = sanitizeSubtitleRelPath;
 module.exports.SUB_META = SUB_META;
 module.exports.DEFAULT_R2_BASE = DEFAULT_R2_BASE;
+module.exports.subtitleContentCache = subtitleContentCache;

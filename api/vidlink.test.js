@@ -192,17 +192,23 @@ test("getSourceUrl correctly generates clean URLs for active servers (VidCore & 
   assert.equal(PLAYER_SOURCES[0].id, "vidcore");
   assert.equal(PLAYER_SOURCES[1].id, "vidlink");
 
-  // Server 1: Vidcore (supports internal proxy subtitle tracks)
+  // Server 1: Vidcore (supports internal proxy subtitle tracks with same-origin)
   const s1 = getSourceUrl("vidcore", "movie", 550, null, null, {}, "e50914", "ku");
   assert.ok(s1.includes("/vidcore/movie/550"));
   assert.ok(s1.includes("sub_url_ku="));
   assert.ok(s1.includes("sub_url_ar="));
+  const decS1 = decodeURIComponent(s1);
+  assert.ok(decS1.includes("/subtitles/movie/550/ku.vtt"), "Must use same-origin /subtitles path");
+  assert.ok(!decS1.includes("r2.dev"), "Must NOT pass cross-origin r2.dev directly");
 
-  // Server 2: Vidlink (supports documented sub_file)
+  // Server 2: Vidlink (supports documented sub_file with same-origin)
   const s2 = getSourceUrl("vidlink", "movie", 550, null, null, {}, "e50914", "ku");
   assert.ok(s2.includes("/vidlink/movie/550"));
   assert.ok(s2.includes("sub_file="));
   assert.ok(s2.includes("sub_label="));
+  const decS2 = decodeURIComponent(s2);
+  assert.ok(decS2.includes("/subtitles/movie/550/ku.vtt"), "Must use same-origin /subtitles path");
+  assert.ok(!decS2.includes("r2.dev"), "Must NOT pass cross-origin r2.dev directly");
 
   // TV URLs
   const s1Tv = getSourceUrl("vidcore", "tv", 220542, 1, 1, {}, "e50914", "ku");
@@ -243,3 +249,70 @@ test("Subtitle 404 Prevention: missing TV subtitles return 200 OK with valid emp
     server.close();
   }
 });
+
+test("UNIVERSAL_SUBTITLE_INJECTOR_JS rewrites external r2.dev URLs to same-origin and sets video crossorigin", () => {
+  const appendedTracks = [];
+  const fakeVideo = {
+    attributes: {},
+    crossOrigin: null,
+    getAttribute(name) { return this.attributes[name] || null; },
+    setAttribute(name, val) { this.attributes[name] = val; },
+    querySelectorAll() { return []; },
+    appendChild(el) { appendedTracks.push(el); },
+    addEventListener() {},
+  };
+
+  const fakeDoc = {
+    readyState: "complete",
+    querySelectorAll(selector) {
+      if (selector === "video") return [fakeVideo];
+      return [];
+    },
+    createElement(tag) {
+      return {
+        tagName: tag,
+        kind: "",
+        label: "",
+        srclang: "",
+        src: "",
+      };
+    },
+    addEventListener() {},
+  };
+
+  const sandbox = {
+    window: null,
+    document: fakeDoc,
+    URL,
+    URLSearchParams,
+    HTMLTrackElement: { prototype: { src: "" } },
+    Blob,
+    fetch: async () => ({ ok: true, text: async () => "WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nHello" }),
+    setTimeout: (fn) => fn(),
+  };
+  sandbox.window = sandbox;
+  sandbox.window.location = {
+    origin: "https://hwto-kurd.vercel.app",
+    href: "https://hwto-kurd.vercel.app/vidcore/movie/550?sub_url=https%3A%2F%2Fpub-d1bbd0e1dd5d4e81b55c524af70a17e0.r2.dev%2Fmovie%2F550%2Fku.vtt",
+    search: "?sub_url=https%3A%2F%2Fpub-d1bbd0e1dd5d4e81b55c524af70a17e0.r2.dev%2Fmovie%2F550%2Fku.vtt",
+    pathname: "/vidcore/movie/550",
+  };
+
+  const vm = require("node:vm");
+  vm.runInNewContext(UNIVERSAL_SUBTITLE_INJECTOR_JS, sandbox);
+
+  // 1. Video element must have crossorigin="anonymous" set
+  assert.equal(fakeVideo.crossOrigin, "anonymous");
+  assert.equal(fakeVideo.getAttribute("crossorigin"), "anonymous");
+
+  // 2. Attached tracks must have been converted to same-origin /subtitles/... (not external r2.dev)
+  assert.ok(appendedTracks.length > 0, "Tracks must be injected");
+  for (const tr of appendedTracks) {
+    assert.ok(
+      tr.src.startsWith("https://hwto-kurd.vercel.app/subtitles/") || tr.src.startsWith("blob:"),
+      `Track src ${tr.src} must be same-origin or blob URL`,
+    );
+    assert.ok(!tr.src.includes("pub-d1bbd0e1dd5d4e81b55c524af70a17e0.r2.dev"));
+  }
+});
+
