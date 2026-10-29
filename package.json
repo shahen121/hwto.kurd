@@ -27,12 +27,10 @@
     "dist:mac": "cross-env ELECTRON_DIST=1 vite build && electron-builder --mac --universal --publish never"
   },
   "dependencies": {
-    "approve": "^0.0.12",
     "firebase": "^13.0.0",
     "hls.js": "^1.7.3",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "scripts": "^0.1.0"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
