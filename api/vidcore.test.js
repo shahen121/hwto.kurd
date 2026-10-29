@@ -79,12 +79,70 @@ test("Scrape.do multi-token Round-Robin rotation & fallback on 401/403/429", asy
     assert.equal(res2.status, 200);
     assert.deepEqual(secondCallTokens, ["token_beta"]);
     assert.equal(capturedUrl.includes("customHeaders=true"), true);
-    assert.equal(capturedUrl.includes("sessionId="), true);
+    assert.equal(capturedUrl.includes("session_number="), true);
+    assert.equal(capturedUrl.includes("sessionId="), false);
     assert.equal(capturedOpts.method, "POST");
     assert.equal(capturedOpts.headers["x-csrf-token"], "test_csrf_123");
     // Content-Length is intentionally stripped so the fetch implementation can
     // compute the correct value for the WHATWG-compliant body.
     assert.equal(capturedOpts.headers["Content-Length"], undefined);
+  } finally {
+    if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
+    else delete process.env.SCRAPE_DO_TOKEN_1;
+    if (saved.t2 !== undefined) process.env.SCRAPE_DO_TOKEN_2 = saved.t2;
+    else delete process.env.SCRAPE_DO_TOKEN_2;
+    if (saved.t3 !== undefined) process.env.SCRAPE_DO_TOKEN_3 = saved.t3;
+    else delete process.env.SCRAPE_DO_TOKEN_3;
+    if (saved.t0 !== undefined) process.env.SCRAPE_DO_TOKEN = saved.t0;
+    else delete process.env.SCRAPE_DO_TOKEN;
+  }
+});
+
+test("Scrape.do retries the same token with customHeaders=false on 555 before rotating", async () => {
+  const saved = {
+    t1: process.env.SCRAPE_DO_TOKEN_1,
+    t2: process.env.SCRAPE_DO_TOKEN_2,
+    t3: process.env.SCRAPE_DO_TOKEN_3,
+    t0: process.env.SCRAPE_DO_TOKEN,
+  };
+
+  try {
+    process.env.SCRAPE_DO_TOKEN_1 = "token_alpha";
+    process.env.SCRAPE_DO_TOKEN_2 = "token_beta";
+    delete process.env.SCRAPE_DO_TOKEN_3;
+    delete process.env.SCRAPE_DO_TOKEN;
+
+    const calls = [];
+    const res = await fetchViaScrapeDoWithRotation(
+      "https://vidcore.io/APA91ywF/test",
+      async (url, opts) => {
+        const u = new URL(url);
+        calls.push({ url: String(url), opts });
+        const tok = u.searchParams.get("token");
+        const custom = u.searchParams.get("customHeaders") === "true";
+        const n = calls.filter((c) => new URL(c.url).searchParams.get("token") === tok).length;
+        if (n === 1) {
+          // First attempt -> rejected with 555
+          return { status: 555, headers: { get: () => "555" } };
+        }
+        // Retry same token with customHeaders=false -> success
+        return { status: 200, text: async () => "OK_RETRY" };
+      },
+      { method: "POST" },
+    );
+
+    assert.equal(res.status, 200);
+    const byToken = new Map();
+    for (const c of calls) {
+      const tok = new URL(c.url).searchParams.get("token");
+      if (!byToken.has(tok)) byToken.set(tok, []);
+      byToken.get(tok).push(c);
+    }
+    for (const [tok, tokenCalls] of byToken) {
+      assert.equal(tokenCalls.length, 2, `Token ${tok} must be retried before rotating`);
+      assert.equal(tokenCalls[0].url.includes("customHeaders=true"), true);
+      assert.equal(tokenCalls[1].url.includes("customHeaders=false"), true);
+    }
   } finally {
     if (saved.t1 !== undefined) process.env.SCRAPE_DO_TOKEN_1 = saved.t1;
     else delete process.env.SCRAPE_DO_TOKEN_1;
@@ -694,10 +752,10 @@ test("VidCore session_number pinning across HTML and APA91 POST + .m3u8 steelpea
     "HTML request and subsequent APA91 POST must share the identical session_number",
   );
 
-  // 2. buildScrapeDoUrl includes both sessionId and session_number
+  // 2. buildScrapeDoUrl uses only the Scrape.do sticky-session param (`session_number`)
   const scrapeUrl = buildScrapeDoUrl("https://vidcore.io/movie/1283515", "test_tok", true, htmlSessId);
   const parsed = new URL(scrapeUrl);
-  assert.equal(parsed.searchParams.get("sessionId"), htmlSessId);
+  assert.equal(parsed.searchParams.get("sessionId"), null);
   assert.equal(parsed.searchParams.get("session_number"), htmlSessId);
 
   // 3. AD_SHIELD_JS routing for .m3u8, steelpeak, vd, and hls domains
@@ -760,21 +818,24 @@ test("WHATWG URL standard compliance and raw binary body forwarding for POST /AP
   const { handleVidcoreProxy } = require("./vidcore.js");
 
   const originalFetch = global.fetch;
-  const workerCalls = [];
+  const scrapeCalls = [];
   let capturedOpts = null;
 
   global.fetch = async (url, opts) => {
     const value = String(url);
-    if (!value.startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`)) {
+    if (!value.startsWith("https://api.scrape.do/")) {
       throw new Error(`Unexpected upstream fetch: ${value}`);
     }
-    workerCalls.push(value);
+    scrapeCalls.push({ url: value, opts });
     capturedOpts = opts;
     return new Response(JSON.stringify({ key: "decrypted_stream_token_123" }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   };
+
+  const savedScrapeToken = process.env.SCRAPE_DO_TOKEN_1;
+  process.env.SCRAPE_DO_TOKEN_1 = "test_token_scrape_do";
 
   try {
     const rawBinaryPayload = Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe, 0xaa, 0x55]);
@@ -791,22 +852,19 @@ test("WHATWG URL standard compliance and raw binary body forwarding for POST /AP
       },
     };
 
-    const runProxy = async (req, expectedTarget) => {
+    const runProxy = async (req, expectedScrapeTarget) => {
       responseCode = null;
       responseBody = null;
-      const before = workerCalls.length;
+      const before = scrapeCalls.length;
       await handleVidcoreProxy(req, res);
 
       assert.equal(responseCode, 200);
-      assert.equal(workerCalls.length, before + 1, "Worker-first path must be used");
-      assert.ok(
-        workerCalls[before].startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`),
-      );
-      assert.ok(
-        workerCalls[before].includes(encodeURIComponent(expectedTarget)),
-        "Encoded upstream target must be forwarded to the worker",
-      );
+      assert.equal(scrapeCalls.length, before + 1, "Scrape.do-first path must be used for decryption");
+      const call = scrapeCalls[before];
+      assert.ok(call.url.startsWith("https://api.scrape.do/"), "Decryption must go through Scrape.do");
+      assert.ok(call.url.includes(encodeURIComponent(expectedScrapeTarget)));
       assert.ok(responseBody.toString().includes("decrypted_stream_token_123"));
+      return call;
     };
 
     const req = {
@@ -822,18 +880,19 @@ test("WHATWG URL standard compliance and raw binary body forwarding for POST /AP
       rawBody: rawBinaryPayload,
     };
 
-    await runProxy(req, "https://vidcore.io/APA91ywFtestBinaryKey");
+    const scrapeCall = await runProxy(req, "https://vidcore.io/APA91ywFtestBinaryKey");
 
     // Verify options and binary body
-    assert.equal(capturedOpts.method, "POST");
-    assert.equal(capturedOpts.headers["Origin"], "https://vidcore.io");
-    assert.equal(capturedOpts.headers["Referer"], "https://vidcore.io/");
-    assert.equal(capturedOpts.headers["Content-Type"], "application/octet-stream");
-    assert.equal(capturedOpts.headers["Content-Length"], undefined);
-    assert.deepEqual(capturedOpts.body, rawBinaryPayload);
+    assert.equal(scrapeCall.opts.method, "POST");
+    assert.equal(scrapeCall.opts.headers["Origin"], "https://vidcore.io");
+    assert.equal(scrapeCall.opts.headers["Referer"], "https://vidcore.io/");
+    assert.equal(scrapeCall.opts.headers["Content-Type"], "application/octet-stream");
+    assert.equal(scrapeCall.opts.headers["Content-Length"], undefined);
+    assert.deepEqual(scrapeCall.opts.body, rawBinaryPayload);
 
     // Verify internal x-hwto header was stripped before sending upstream
-    assert.equal(capturedOpts.headers["x-hwto-media-id"], undefined);
+    assert.equal(scrapeCall.opts.headers["x-hwto-media-id"], undefined);
+    assert.equal(scrapeCall.opts.headers["media_id"], undefined);
 
     // Also verify when URL is direct /APA91ywFtestDirect without /vidcore prefix
     await runProxy(
@@ -867,6 +926,8 @@ test("WHATWG URL standard compliance and raw binary body forwarding for POST /AP
     );
   } finally {
     global.fetch = originalFetch;
+    if (savedScrapeToken !== undefined) process.env.SCRAPE_DO_TOKEN_1 = savedScrapeToken;
+    else delete process.env.SCRAPE_DO_TOKEN_1;
   }
 });
 
