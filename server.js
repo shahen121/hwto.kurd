@@ -84,6 +84,7 @@ function isProxyRoute(pathname, req) {
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/stream-proxy/") ||
     pathname.startsWith("/APA91") ||
+    pathname.includes("APA91") ||
     pathname.startsWith("/wyzie") ||
     pathname.startsWith("/servers") ||
     pathname.startsWith("/api/b/") ||
@@ -167,7 +168,7 @@ async function app(req, res) {
   // 6. Explicit /api/vidcore or any VidCore / Stream Proxy route
   if (pathname === "/api/vidcore" || isProxyRoute(pathname, req)) {
     const ref = String(req.headers["referer"] || "");
-    if (ref.includes("/vidlink/") && !pathname.startsWith("/vidcore/")) {
+    if (ref.includes("/vidlink/") && !pathname.startsWith("/vidcore/") && !pathname.includes("APA91")) {
       return handleVidlinkProxy(req, res);
     }
     return handleVidcoreProxy(req, res);

@@ -656,6 +656,104 @@ test("AD_SHIELD_JS dynamically spoofs domain for VidLink (vidlink.pro) vs VidCor
   assert.equal(s2.src, "https://hwto-kurd.vercel.app/vidcore/_next/static/chunks/main-456.js?v=4");
 });
 
+test("VidCore session_number pinning across HTML and APA91 POST + .m3u8 steelpeak stream routing", async () => {
+  const {
+    getScrapeDoSessionId,
+    buildScrapeDoUrl,
+    CF_WORKER_URL,
+  } = require("./vidcore.js");
+
+  // 1. Session ID pinning between HTML page navigation and subsequent APA91 POST
+  const htmlReq = {
+    url: "/vidcore/movie/1283515",
+    headers: {
+      "x-forwarded-for": "198.51.100.55, 10.0.0.1",
+    },
+    socket: { remoteAddress: "198.51.100.55" },
+  };
+  const htmlSessId = getScrapeDoSessionId(htmlReq, "/movie/1283515");
+
+  const apaPostReq = {
+    url: "/vidcore/APA91ywF/verify",
+    method: "POST",
+    headers: {
+      "x-forwarded-for": "198.51.100.55, 10.0.0.1",
+      referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
+      "content-type": "application/octet-stream",
+    },
+    socket: { remoteAddress: "198.51.100.55" },
+  };
+  const apaSessId = getScrapeDoSessionId(apaPostReq, "/APA91ywF/verify");
+
+  assert.equal(
+    apaSessId,
+    htmlSessId,
+    "HTML request and subsequent APA91 POST must share the identical session_number",
+  );
+
+  // 2. buildScrapeDoUrl includes both sessionId and session_number
+  const scrapeUrl = buildScrapeDoUrl("https://vidcore.io/movie/1283515", "test_tok", true, htmlSessId);
+  const parsed = new URL(scrapeUrl);
+  assert.equal(parsed.searchParams.get("sessionId"), htmlSessId);
+  assert.equal(parsed.searchParams.get("session_number"), htmlSessId);
+
+  // 3. AD_SHIELD_JS routing for .m3u8, steelpeak, vd, and hls domains
+  let capturedFetchUrl = "";
+  const mockFetch = async (url) => {
+    capturedFetchUrl = typeof url === "string" ? url : url.url;
+    return { ok: true, status: 200, text: async () => "#EXTM3U" };
+  };
+
+  const sandbox = {
+    window: null,
+    document: {},
+    fetch: mockFetch,
+    console: {
+      error: () => {},
+      warn: () => {},
+    },
+    URL,
+    encodeURIComponent,
+    Object,
+    Array,
+    String,
+    Date,
+  };
+  sandbox.window = sandbox;
+  sandbox.window.location = {
+    origin: "https://hwto-kurd.vercel.app",
+    hostname: "hwto-kurd.vercel.app",
+    href: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
+    pathname: "/vidcore/movie/1283515",
+  };
+
+  vm.runInNewContext(AD_SHIELD_JS, sandbox);
+
+  // Fetch to steelpeak .m3u8 stream
+  await sandbox.window.fetch("https://steelpeak.store/hls/master.m3u8");
+  assert.ok(
+    capturedFetchUrl.startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`),
+    "steelpeak stream must be routed through Cloudflare Worker stream-proxy",
+  );
+  assert.ok(capturedFetchUrl.includes(encodeURIComponent("https://steelpeak.store/hls/master.m3u8")));
+
+  // Fetch to vd streaming domain
+  await sandbox.window.fetch("https://vd12.com/live/playlist.m3u8");
+  assert.ok(
+    capturedFetchUrl.startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`),
+    "vd domain must be routed through Cloudflare Worker stream-proxy",
+  );
+
+  // Protocol-relative //steelpeak...
+  await sandbox.window.fetch("//steelpeak.store/live/chunk.m3u8");
+  assert.ok(
+    capturedFetchUrl.startsWith(`${CF_WORKER_URL}/stream-proxy/ref/`),
+    "protocol-relative stream must be routed through Cloudflare Worker stream-proxy",
+  );
+  assert.ok(capturedFetchUrl.includes(encodeURIComponent("https://steelpeak.store/live/chunk.m3u8")));
+});
+
+
 
 
 

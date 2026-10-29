@@ -58,29 +58,52 @@ function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionId =
   if (useCustomHeaders) api.searchParams.set("customHeaders", "true");
   if (sessionId) {
     const cleanSessionId = String(sessionId).trim().slice(0, 10);
-    if (cleanSessionId) api.searchParams.set("sessionId", cleanSessionId);
+    if (cleanSessionId) {
+      api.searchParams.set("sessionId", cleanSessionId);
+      api.searchParams.set("session_number", cleanSessionId);
+    }
   }
   return api.toString();
 }
 
-function getScrapeDoSessionId(req) {
+function getScrapeDoSessionId(req, targetPathAndQuery = "") {
   if (!req) return "884422";
-  if (req.query && req.query.sessionId) {
-    const s = String(req.query.sessionId).trim().slice(0, 10);
+  if (req.query && (req.query.sessionId || req.query.session_number || req.query.sid)) {
+    const s = String(req.query.sessionId || req.query.session_number || req.query.sid).trim().slice(0, 10);
     if (s) return s;
   }
+
+  // 1. Extract media ID (tmdbId) from target path, request URL, or Referer
+  let mediaId = "";
+  const pathMatch = String(targetPathAndQuery || (req.url || "")).match(/\/(movie|tv)\/(\d+)/i);
+  if (pathMatch) {
+    mediaId = pathMatch[2];
+  } else {
+    const ref = String((req.headers && req.headers["referer"]) || "");
+    const refMatch = ref.match(/\/(movie|tv)\/(\d+)/i);
+    if (refMatch) {
+      mediaId = refMatch[2];
+    }
+  }
+
+  // 2. Extract Client IP
   const rawHeader =
     (req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) ||
     "";
   const clientIp = rawHeader
     ? rawHeader.split(",")[0].trim()
     : (req.socket && req.socket.remoteAddress) || "";
-  if (!clientIp || clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "localhost") {
+
+  if (!clientIp && !mediaId) {
     return "884422";
   }
-  const raw = String(clientIp);
+
+  // 3. Deterministic session number pinned across HTML page and APA91 decryption POST
+  const seed = `${clientIp || "client"}_${mediaId || "vidcore"}`;
   let hash = 0;
-  for (let i = 0; i < raw.length; i++) hash = (hash * 31 + raw.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
   return String((hash % 900000) + 100000);
 }
 
@@ -235,12 +258,36 @@ const AD_SHIELD_JS = `(function() {
         } catch (_e) {}
         if (
           str.indexOf("SourceBufferSink") !== -1 ||
+          str.indexOf("[SourceBufferSink]") !== -1 ||
+          str.indexOf("SourceBuffer") !== -1 ||
           str.indexOf("This SourceBuffer has been removed from the parent media source") !== -1 ||
           str.indexOf("clarity.ms") !== -1
         ) {
           return;
         }
         return __origConsoleError.apply(console, arguments);
+      };
+    }
+  } catch (_e) {}
+
+  try {
+    if (typeof console !== "undefined" && typeof console.warn === "function") {
+      var __origConsoleWarn = console.warn;
+      console.warn = function() {
+        var str = "";
+        try {
+          for (var i = 0; i < arguments.length; i++) {
+            str += " " + String(arguments[i] || "");
+          }
+        } catch (_e) {}
+        if (
+          str.indexOf("SourceBufferSink") !== -1 ||
+          str.indexOf("[SourceBufferSink]") !== -1 ||
+          str.indexOf("SourceBuffer") !== -1
+        ) {
+          return;
+        }
+        return __origConsoleWarn.apply(console, arguments);
       };
     }
   } catch (_e) {}
@@ -273,7 +320,7 @@ const AD_SHIELD_JS = `(function() {
 
   var SAFE_ASSET_RE = /(cdn\\.(jsdelivr\\.net|jwplayer\\.com)|wsrv\\.nl|image\\.tmdb\\.org|fonts\\.(googleapis|gstatic)\\.com|raw\\.githubusercontent\\.com)/i;
   var STREAM_EXT_RE = /\\.(m3u8|mpd|m4s|ts|mp4|m4a|m4v|aac|key)(\\?|$|#)/i;
-  var STREAM_HOST_RE = /(flooderrr\\.store|hakunaymatata\\.com|sacdn|\\/sacdn\\/|\\/dash\\/|\\/proxy\\/|\\/mp\\/|orbitcache|premilkyway|sunnybreeze|frostywinds|cloudnestra|shadowlands|trueparadise|goldenkite|wisecanvas|streamhi|streamcdn|vidsrc|vidstream|topcdn|vidplay|megafiles|megacloud)/i;
+  var STREAM_HOST_RE = /(steelpeak|vd\\b|\\.vd\\b|vd-|\\/vd\\/|hls|flooderrr\\.store|hakunaymatata\\.com|sacdn|\\/sacdn\\/|\\/dash\\/|\\/proxy\\/|\\/mp\\/|orbitcache|premilkyway|sunnybreeze|frostywinds|cloudnestra|shadowlands|trueparadise|goldenkite|wisecanvas|streamhi|streamcdn|vidsrc|vidstream|topcdn|vidplay|megafiles|megacloud)/i;
 
   function resolveVidlinkStreamUrl(inputUrl) {
     if (!inputUrl || typeof inputUrl !== "string") return null;
@@ -416,7 +463,13 @@ const AD_SHIELD_JS = `(function() {
         return null;
       }
     } else if (!/^https?:\\/\\//i.test(rawUrl)) {
-      if (/\\.(m4s|mpd)(\\?|$)/i.test(rawUrl) && lastMpdBaseDir) {
+      if (rawUrl.indexOf("//") === 0) {
+        rawUrl = "https:" + rawUrl;
+      } else if (rawUrl.indexOf(".m3u8") !== -1 || STREAM_HOST_RE.test(rawUrl)) {
+        if (lastMpdBaseDir) rawUrl = lastMpdBaseDir + rawUrl.replace(/^\\.?\\//, "");
+        else if (lastMpdOrigin) rawUrl = lastMpdOrigin + (rawUrl.indexOf("/") === 0 ? rawUrl : ("/" + rawUrl));
+        else rawUrl = "https://vidcore.io" + (rawUrl.indexOf("/") === 0 ? rawUrl : ("/" + rawUrl));
+      } else if (/\\.(m4s|mpd)(\\?|$)/i.test(rawUrl) && lastMpdBaseDir) {
         rawUrl = lastMpdBaseDir + rawUrl.replace(/^\\.?\\//, "");
       } else {
         return null;
@@ -425,7 +478,7 @@ const AD_SHIELD_JS = `(function() {
 
     if (!/^https?:\\/\\//i.test(rawUrl)) return null;
     if (SAFE_ASSET_RE.test(rawUrl) || isBlockedUrl(rawUrl)) return null;
-    var isStream = STREAM_EXT_RE.test(rawUrl) || STREAM_HOST_RE.test(rawUrl);
+    var isStream = rawUrl.indexOf(".m3u8") !== -1 || STREAM_EXT_RE.test(rawUrl) || STREAM_HOST_RE.test(rawUrl);
     if (!isStream) return null;
 
     try {
@@ -743,9 +796,13 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     forwardHeaders["Origin"] = VIDCORE_ORIGIN;
     if (req.headers && req.headers["content-type"]) {
       forwardHeaders["Content-Type"] = req.headers["content-type"];
+    } else {
+      forwardHeaders["Content-Type"] = "application/octet-stream";
     }
     if (bodyBuffer && bodyBuffer.length > 0) {
       forwardHeaders["Content-Length"] = String(bodyBuffer.length);
+    } else {
+      forwardHeaders["Content-Length"] = "0";
     }
   }
 
@@ -755,9 +812,10 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
 
   const isDecryptionRoute =
     targetPathAndQuery.startsWith("/APA91") ||
-    targetPathAndQuery.startsWith("/servers");
+    targetPathAndQuery.startsWith("/servers") ||
+    targetPathAndQuery.includes("APA91");
 
-  const sessionId = getScrapeDoSessionId(req);
+  const sessionId = getScrapeDoSessionId(req, targetPathAndQuery);
   const hasScrapeTokens = getScrapeDoTokens().length > 0;
   const scrapeOptions = {
     method,
@@ -768,7 +826,18 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     scrapeOptions.body = bodyBuffer;
   }
 
-  // 1. Ultra-speed optimization: Direct Fetch First with 2500ms timeout
+  // 1. VidCore HTML navigation and APA91 decryption POST MUST go through Scrape.do directly!
+  // This guarantees VidCore sees the exact same residential proxy IP and session_number,
+  // preventing 555/403 blocks and infinite loading spinners.
+  if (
+    (isHtmlNavigation || isDecryptionRoute || method === "POST") &&
+    hasScrapeTokens &&
+    config.mode !== "direct"
+  ) {
+    return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
+  }
+
+  // 2. Direct Fetch with 2500ms timeout for static assets and other routes
   const fetchOptions = {
     method,
     headers: forwardHeaders,
@@ -789,17 +858,16 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     // Direct fetch timed out or network error, fall through to Scrape.do fallback
   }
 
-  // 2. Fallback to Scrape.do with session pinning
+  // 3. Fallback to Scrape.do with session pinning
   if (
     useScrapeDoFallback &&
     config.mode !== "direct" &&
-    (method === "GET" || method === "POST") &&
     hasScrapeTokens
   ) {
     return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
   }
 
-  // 3. Fallback direct fetch without timeout
+  // 4. Fallback direct fetch without timeout
   return await fetch(targetUrl, fetchOptions);
 }
 
@@ -1047,4 +1115,5 @@ module.exports.vidcoreHtmlCache = vidcoreHtmlCache;
 module.exports.CHUNK_CACHE_CONTROL = CHUNK_CACHE_CONTROL;
 module.exports.HTML_CACHE_CONTROL = HTML_CACHE_CONTROL;
 module.exports.getSessionTokenIndex = getSessionTokenIndex;
+module.exports.buildScrapeDoUrl = buildScrapeDoUrl;
 module.exports.UNIVERSAL_SUBTITLE_INJECTOR_JS = UNIVERSAL_SUBTITLE_INJECTOR_JS;
