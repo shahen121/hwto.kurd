@@ -114,87 +114,73 @@ function getScrapeDoSessionId(req, targetPathAndQuery = "") {
   return String((hash % 900000) + 100000);
 }
 
-async function fetchFromUpstream(
-  origin,
-  targetPathAndQuery,
-  req,
-  bodyBuffer,
-  useScrapeDoFallback = true
-) {
-  const targetUrl = origin + targetPathAndQuery;
-  const method = req.method || "GET";
-  
-  // إذا كان طلب فك تشفير APA91 أو POST، وجهه حصراً وسريعاً عبر Scrape.do لضمان عدم حصول 502
-  const isDecryptionRoute = targetPathAndQuery.startsWith("/APA91") || targetPathAndQuery.includes("APA91");
-  const sessionId = getScrapeDoSessionId(req, targetPathAndQuery);
-  const hasScrapeTokens = getScrapeDoTokens().length > 0;
+async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, options = {}) {
+  const tokens = getScrapeDoTokens();
+  if (tokens.length === 0) throw new Error("No Scrape.do tokens configured");
 
-  const forwardHeaders = {
-    "User-Agent": getCleanUserAgent(req.headers["user-agent"]),
-    Accept: req.headers["accept"] || "*/*",
-    "Accept-Language": req.headers["accept-language"] || "en-US,en;q=0.9,ar;q=0.8",
-    Referer: `${origin}/`,
-    Origin: origin,
-  };
-
-  if (method === "POST" || isDecryptionRoute) {
-    forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
-    forwardHeaders["Origin"] = VIDCORE_ORIGIN;
-    if (req.headers["content-type"] || req.headers["Content-Type"]) {
-      forwardHeaders["Content-Type"] = req.headers["content-type"] || req.headers["Content-Type"];
-    } else {
-      forwardHeaders["Content-Type"] = "application/octet-stream";
-    }
+  const sessionId = options.sessionId;
+  let startIdx;
+  if (options.tokenIndex !== undefined) {
+    startIdx = options.tokenIndex % tokens.length;
+  } else if (sessionId) {
+    startIdx = getSessionTokenIndex(sessionId, tokens.length);
+  } else {
+    startIdx = _tokenRoundRobinIndex;
+    _tokenRoundRobinIndex = (_tokenRoundRobinIndex + 1) % tokens.length;
   }
 
-  delete forwardHeaders["content-length"];
-  delete forwardHeaders["Content-Length"];
-  delete forwardHeaders["connection"];
-  delete forwardHeaders["Connection"];
+  const effectiveSessionId = sessionId || "884422";
+  const method = options.method || "GET";
+  const headers = { ...(options.headers || {}) };
 
-  // إجبار توجيه مسارات APA91 والـ POST عبر Scrape.do مباشرة
-  if ((isDecryptionRoute || method === "POST") && hasScrapeTokens && config.mode !== "direct") {
+  delete headers["Content-Length"];
+  delete headers["content-length"];
+  delete headers["Connection"];
+  delete headers["connection"];
+  delete headers["Host"];
+  delete headers["host"];
+
+  const fetchOpts = { method, headers };
+  if (method === "POST" && options.body && options.body.length > 0) {
+    fetchOpts.body = options.body;
+  }
+
+  let lastRes = null;
+  let lastErr = null;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[(startIdx + i) % tokens.length];
+    const scrapeUrl = buildScrapeDoUrl(targetUrl, token, true, effectiveSessionId);
     try {
-      const scrapeRes = await fetchViaScrapeDoWithRotation(targetUrl, fetch, {
-        method,
-        headers: forwardHeaders,
-        sessionId,
-        body: method === "POST" ? bodyBuffer : undefined,
-      });
-      if (scrapeRes && scrapeRes.status < 500) {
-        return scrapeRes;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const res = await fetchImpl(scrapeUrl, { ...fetchOpts, signal: controller.signal }).finally(() =>
+        clearTimeout(timer)
+      );
+
+      const initialStatus =
+        res.headers && typeof res.headers.get === "function"
+          ? res.headers.get("scrape.do-initial-status-code")
+          : null;
+      if (
+        (res.status === 401 || res.status === 403 || res.status === 429) &&
+        initialStatus !== "404" &&
+        initialStatus !== "200"
+      ) {
+        lastRes = res;
+        advanceSessionToken(sessionId, tokens.length);
+        continue;
       }
-    } catch (_err) {}
-  }
-
-  // باقي الطلبات (الملفات الثابتة وغيرها) تذهب بالطريقة العادية...
-  const fetchOptions = {
-    method,
-    headers: forwardHeaders,
-  };
-  if (method === "POST" && bodyBuffer && bodyBuffer.length > 0) {
-    fetchOptions.body = bodyBuffer;
-  }
-
-  try {
-    const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 6000);
-    if (directRes && directRes.status >= 200 && directRes.status < 400 && directRes.status !== 555) {
-      return directRes;
+      if (res.status < 500) return res;
+      lastRes = res;
+      advanceSessionToken(sessionId, tokens.length);
+    } catch (err) {
+      lastErr = err;
+      advanceSessionToken(sessionId, tokens.length);
     }
-  } catch (_err) {}
-
-  if (useScrapeDoFallback && config.mode !== "direct" && hasScrapeTokens) {
-    try {
-      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, {
-        method,
-        headers: forwardHeaders,
-        sessionId,
-        body: method === "POST" ? bodyBuffer : undefined,
-      });
-    } catch (_err) {}
   }
-
-  return await fetch(targetUrl, fetchOptions);
+  if (lastRes) return lastRes;
+  throw lastErr || new Error("All Scrape.do tokens failed");
 }
 
 const AD_SHIELD_JS = `(function() {
@@ -987,6 +973,11 @@ async function fetchFromUpstream(
 ) {
   const targetUrl = origin + targetPathAndQuery;
   const method = req.method || "GET";
+  
+  const isDecryptionRoute = targetPathAndQuery.startsWith("/APA91") || targetPathAndQuery.includes("APA91");
+  const sessionId = getScrapeDoSessionId(req, targetPathAndQuery);
+  const hasScrapeTokens = getScrapeDoTokens().length > 0;
+
   const forwardHeaders = {
     "User-Agent": getCleanUserAgent(req.headers["user-agent"]),
     Accept: req.headers["accept"] || "*/*",
@@ -994,6 +985,7 @@ async function fetchFromUpstream(
     Referer: `${origin}/`,
     Origin: origin,
   };
+
   const optionalHeaders = [
     "x-csrf-token",
     "content-type",
@@ -1006,32 +998,11 @@ async function fetchFromUpstream(
     if (req.headers[h]) forwardHeaders[h] = req.headers[h];
   }
 
-  for (const [k, v] of Object.entries(req.headers || {})) {
-    const lower = k.toLowerCase();
-    if (
-      (lower.startsWith("x-") || lower === "cookie") &&
-      !forwardHeaders[lower] &&
-      !lower.startsWith("x-forwarded") &&
-      !lower.startsWith("x-vercel") &&
-      !lower.startsWith("x-hwto") &&
-      !lower.startsWith("x-matched") &&
-      !lower.startsWith("x-invoke")
-    ) {
-      forwardHeaders[k] = v;
-    }
-  }
-
-  if (
-    method === "POST" ||
-    targetPathAndQuery.startsWith("/APA91") ||
-    targetPathAndQuery.includes("APA91")
-  ) {
+  if (method === "POST" || isDecryptionRoute) {
     forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
     forwardHeaders["Origin"] = VIDCORE_ORIGIN;
-    delete forwardHeaders["content-type"];
-    if (req.headers && (req.headers["content-type"] || req.headers["Content-Type"])) {
-      forwardHeaders["Content-Type"] =
-        req.headers["content-type"] || req.headers["Content-Type"];
+    if (req.headers["content-type"] || req.headers["Content-Type"]) {
+      forwardHeaders["Content-Type"] = req.headers["content-type"] || req.headers["Content-Type"];
     } else {
       forwardHeaders["Content-Type"] = "application/octet-stream";
     }
@@ -1050,7 +1021,22 @@ async function fetchFromUpstream(
     fetchOptions.body = bodyBuffer;
   }
 
-  // 1. Direct fetch first with 6s timeout for maximum speed and avoiding 300s timeout
+  // 1. FOR APA91 DECRYPTION & POST REQUESTS: ALWAYS USE SCRAPE.DO FIRST TO PREVENT 502
+  if ((isDecryptionRoute || method === "POST") && hasScrapeTokens && config.mode !== "direct") {
+    try {
+      const scrapeRes = await fetchViaScrapeDoWithRotation(targetUrl, fetch, {
+        method,
+        headers: forwardHeaders,
+        sessionId,
+        body: method === "POST" ? bodyBuffer : undefined,
+      });
+      if (scrapeRes && scrapeRes.status < 500) {
+        return scrapeRes;
+      }
+    } catch (_err) {}
+  }
+
+  // 2. Direct fetch for static assets and other standard GET routes
   try {
     const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 6000);
     const status = directRes?.status;
@@ -1059,9 +1045,7 @@ async function fetchFromUpstream(
     }
   } catch (_err) {}
 
-  // 2. Fallback to Scrape.do with strict timeout if direct fetch fails or blocked
-  const sessionId = getScrapeDoSessionId(req, targetPathAndQuery);
-  const hasScrapeTokens = getScrapeDoTokens().length > 0;
+  // 3. Fallback to Scrape.do for anything else if direct fetch failed
   if (useScrapeDoFallback && config.mode !== "direct" && hasScrapeTokens) {
     try {
       const scrapeRes = await fetchViaScrapeDoWithRotation(targetUrl, fetch, {
