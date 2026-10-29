@@ -46,11 +46,11 @@
     },
     {
       "source": "/vidlink/:path*",
-      "destination": "/api/vidlink"
+      "destination": "/api/vidlink?__orig_path=/vidlink/:path*"
     },
     {
       "source": "/vidlink/(.*)",
-      "destination": "/api/vidlink"
+      "destination": "/api/vidlink?__orig_path=/vidlink/$1"
     },
     {
       "source": "/((?!api/tmdb|api/football|api/subtitles|subtitles/|assets/).*)",
@@ -61,43 +61,43 @@
           "value": ".*vidlink.*"
         }
       ],
-      "destination": "/api/vidlink"
+      "destination": "/api/vidlink?__orig_path=/$1"
     },
     {
       "source": "/vidcore/:path*",
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/vidcore/:path*"
     },
     {
       "source": "/vidcore/(.*)",
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/vidcore/$1"
     },
     {
       "source": "/APA91(.*)",
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/APA91$1"
     },
     {
       "source": "/servers(.*)",
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/servers$1"
     },
     {
       "source": "/wyzie(.*)",
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/wyzie$1"
     },
     {
       "source": "/(movie|tv|embed|_next|stream-proxy)/(.*)",
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/$1/$2"
     },
     {
       "source": "/(gtag-shield.*|hwto-subtitles\\.js|script\\.js|fu\\.wasm|decrypter-worker\\.js|hls\\.worker\\.js)",
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/$1"
     },
     {
       "source": "/api/b/(.*)",
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/api/b/$1"
     },
     {
       "source": "/api/skip-events",
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/api/skip-events"
     },
     {
       "source": "/((?!api/tmdb|api/football|api/subtitles|subtitles/|assets/).*)",
@@ -108,7 +108,7 @@
           "value": ".*vidcore.*"
         }
       ],
-      "destination": "/api/vidcore"
+      "destination": "/api/vidcore?__orig_path=/$1"
     },
     {
       "source": "/((?!api/).*)",
