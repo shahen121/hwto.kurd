@@ -384,7 +384,6 @@ const AD_SHIELD_JS = `(function() {
             msg.indexOf("Hydration failed") !== -1
           ) {
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-            if (e.stopPropagation) e.stopPropagation();
             if (e.preventDefault) e.preventDefault();
             return true;
           }
@@ -988,6 +987,27 @@ function getCleanUserAgent(rawUa) {
   return rawUa;
 }
 
+<<<<<<< HEAD
+=======
+async function fetchViaCfWorker(targetUrl, method, headers, bodyBuffer, ms = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(targetUrl, {
+      method,
+      headers,
+      body: method === "POST" && bodyBuffer && bodyBuffer.length > 0 ? bodyBuffer : undefined,
+      signal: controller.signal,
+    });
+    return res || null;
+  } catch (_err) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+>>>>>>> c3811687363cdd3017081df9a089967b13cdbce5
 async function fetchFromUpstream(
   origin,
   targetPathAndQuery,
@@ -1036,6 +1056,7 @@ async function fetchFromUpstream(
   delete forwardHeaders["connection"];
   delete forwardHeaders["Connection"];
 
+<<<<<<< HEAD
   const fetchOptions = {
     method,
     headers: forwardHeaders,
@@ -1052,6 +1073,27 @@ async function fetchFromUpstream(
   if (isDecryptionOrPost && hasScrapeTokens && config.mode !== "direct") {
     const scrapeTargetPath = stripMediaIdParam(targetPathAndQuery);
     const scrapeUrl = origin + scrapeTargetPath;
+=======
+  // 0. FOR APA91 DECRYPTION & POST REQUESTS: TRY THE CLOUDFLARE WORKER FIRST TO AVOID 555
+  if ((isDecryptionRoute || method === "POST") && config.mode !== "scrapedo") {
+    try {
+      const workerTargetUrl = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(targetUrl)}`;
+      const workerRes = await fetchViaCfWorker(
+        workerTargetUrl,
+        method,
+        forwardHeaders,
+        method === "POST" ? bodyBuffer : undefined,
+        8000
+      );
+      if (workerRes && workerRes.status < 500) {
+        return workerRes;
+      }
+    } catch (_e) {}
+  }
+
+  // 1. FOR APA91 DECRYPTION & POST REQUESTS: USE SCRAPE.DO
+  if ((isDecryptionRoute || method === "POST") && hasScrapeTokens && config.mode !== "direct") {
+>>>>>>> c3811687363cdd3017081df9a089967b13cdbce5
     try {
       const scrapeRes = await fetchViaScrapeDoWithRotation(scrapeUrl, fetch, {
         method,
@@ -1067,14 +1109,14 @@ async function fetchFromUpstream(
 
   // 2. Direct fetch for static assets and other standard GET routes
   try {
-    const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 6000);
+    const directRes = await fetchWithTimeoutSignal(targetUrl, { method, headers: forwardHeaders }, 6000);
     const status = directRes?.status;
     if (directRes && status >= 200 && status < 400 && status !== 555) {
       return directRes;
     }
   } catch (_err) {}
 
-  // 3. Fallback to Scrape.do for anything else if direct fetch failed
+  // 3. Fallback to Scrape.do for anything else
   if (useScrapeDoFallback && config.mode !== "direct" && hasScrapeTokens) {
     const scrapeRes = await fetchViaScrapeDoWithRotation(origin + stripMediaIdParam(targetPathAndQuery), fetch, {
       method,
@@ -1087,7 +1129,11 @@ async function fetchFromUpstream(
     }
   }
 
-  return await fetch(targetUrl, fetchOptions);
+  return await fetch(targetUrl, {
+    method,
+    headers: forwardHeaders,
+    body: method === "POST" ? bodyBuffer : undefined,
+  });
 }
 
 // Remove the `media_id` tracking param before the target reaches vidcore.io.
