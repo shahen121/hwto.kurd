@@ -231,6 +231,7 @@ const ALL_PLAYER_SOURCES = [
   },
   {
     id: "vidsrc_me",
+    directKey: "vidsrc",
     aliases: ["vidsrc_cc", "vidsrc"],
     label: "سيرفر 3: VidSrc.me",
     tag: "Me",
@@ -251,6 +252,7 @@ const ALL_PLAYER_SOURCES = [
   },
   {
     id: "multiembed",
+    directKey: "multiembed",
     aliases: ["embedsu"],
     label: "سيرفر 4: MultiEmbed",
     tag: "Direct",
@@ -271,6 +273,7 @@ const ALL_PLAYER_SOURCES = [
   },
   {
     id: "2embed",
+    directKey: "2embed",
     aliases: ["autoembed"],
     label: "سيرفر 5: 2Embed",
     tag: "2Embed",
@@ -299,6 +302,9 @@ export const PLAYER_SOURCES = IS_ELECTRON
       ...s,
       supportsProgress: s.supportsProgress ?? false,
     }));
+
+export const getDirectServerKey = (sourceId) =>
+  PLAYER_SOURCES.find((s) => s.id === sourceId || s.aliases?.includes(sourceId))?.directKey || null;
 
 export const sourceSupportsExternalSubs = (sourceId) =>
   !!PLAYER_SOURCES.find((s) => s.id === sourceId || s.aliases?.includes(sourceId))?.subUrlParam;

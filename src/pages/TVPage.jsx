@@ -17,6 +17,7 @@ import {
   imgUrl,
   PLAYER_SOURCES,
   getSourceUrl,
+  getDirectServerKey,
   sourceSupportsProgress,
   sourceProgressViaFrames,
   sourceIsAsync,
@@ -51,6 +52,7 @@ import SoraniOverview from "../components/SoraniOverview";
 import TrailerModal from "../components/TrailerModal";
 import BlockedStatsModal from "../components/BlockedStatsModal";
 import HlsPlayer from "../components/HlsPlayer";
+import DirectStreamPlayer from "../components/DirectStreamPlayer";
 import { fetchAuthorizedHlsStream } from "../utils/hlsClient";
 import { useBlockedStats } from "../utils/useBlockedStats";
 import {
@@ -524,6 +526,7 @@ export default function TVPage({
   const [episodeGroupMap, setEpisodeGroupMap] = useState(null); // Map built from TMDB episode group
   // Webview loading overlay
   const [webviewLoading, setWebviewLoading] = useState(false);
+  const [directMode, setDirectMode] = useState(null);
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
   const [pipOpen, setPipOpen] = useState(false);
   const pipUrlRef = useRef(null);
@@ -2321,9 +2324,40 @@ export default function TVPage({
                       setResolvedPlayerUrl(null);
                     }}
                   />
+                ) : getDirectServerKey(playerSource) ? (
+                  <DirectStreamPlayer
+                    key={`${playerSource}_${item.id}_${playerEp.season}_${playerEp.episode}`}
+                    type="tv"
+                    id={item.id}
+                    season={playerEp.season}
+                    episode={playerEp.episode}
+                    serverKey={getDirectServerKey(playerSource)}
+                    subtitles={
+                      githubSub?.available?.length
+                        ? githubSub.available
+                        : activeSub
+                          ? [activeSub]
+                          : []
+                    }
+                    initialTime={
+                      storage.get(
+                        `dlTime_tv_${item.id}_s${playerEp.season}e${playerEp.episode}`,
+                      ) || 0
+                    }
+                    onProgress={(time, dur) => {
+                      const pk = `tv_${item.id}_s${playerEp.season}e${playerEp.episode}`;
+                      setProgress(pk, time, dur);
+                    }}
+                    onBack={() => setPlaying(false)}
+                    accentColor={playerAccentColor}
+                    fallbackUrl={getSourceUrl(playerSource, "tv", item.id, playerEp.season, playerEp.episode, {}, playerAccentColor, activeSub?.lang || playerSubLang, activeSub?.url || null)}
+                    onModeChange={(mode) => {
+                      setDirectMode(mode);
+                      setWebviewLoading(false);
+                    }}
+                  />
                 ) : isElectron ? (
-                  <webview
-                    ref={webviewRef}
+                  <webview                    ref={webviewRef}
                     src={
                       pipOpen
                         ? "about:blank"
@@ -2398,7 +2432,7 @@ export default function TVPage({
                   season={playerEp?.season}
                   episode={playerEp?.episode}
                   externalSubtitles={tvOverlaySubtitles}
-                  playing={playing && !pipOpen && !webviewLoading}
+                  playing={playing && !pipOpen && !webviewLoading && !(getDirectServerKey(playerSource) && directMode === "hls")}
                   externalCurrentTime={lastKnownTimeRef.current || null}
                   currentTimeRef={lastKnownTimeRef}
                 />
