@@ -114,74 +114,87 @@ function getScrapeDoSessionId(req, targetPathAndQuery = "") {
   return String((hash % 900000) + 100000);
 }
 
-async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, options = {}) {
-  const tokens = getScrapeDoTokens();
-  if (tokens.length === 0) throw new Error("No Scrape.do tokens configured");
+async function fetchFromUpstream(
+  origin,
+  targetPathAndQuery,
+  req,
+  bodyBuffer,
+  useScrapeDoFallback = true
+) {
+  const targetUrl = origin + targetPathAndQuery;
+  const method = req.method || "GET";
+  
+  // إذا كان طلب فك تشفير APA91 أو POST، وجهه حصراً وسريعاً عبر Scrape.do لضمان عدم حصول 502
+  const isDecryptionRoute = targetPathAndQuery.startsWith("/APA91") || targetPathAndQuery.includes("APA91");
+  const sessionId = getScrapeDoSessionId(req, targetPathAndQuery);
+  const hasScrapeTokens = getScrapeDoTokens().length > 0;
 
-  const sessionId = options.sessionId;
-  let startIdx;
-  if (options.tokenIndex !== undefined) {
-    startIdx = options.tokenIndex % tokens.length;
-  } else if (sessionId) {
-    startIdx = getSessionTokenIndex(sessionId, tokens.length);
-  } else {
-    startIdx = _tokenRoundRobinIndex;
-    _tokenRoundRobinIndex = (_tokenRoundRobinIndex + 1) % tokens.length;
-  }
+  const forwardHeaders = {
+    "User-Agent": getCleanUserAgent(req.headers["user-agent"]),
+    Accept: req.headers["accept"] || "*/*",
+    "Accept-Language": req.headers["accept-language"] || "en-US,en;q=0.9,ar;q=0.8",
+    Referer: `${origin}/`,
+    Origin: origin,
+  };
 
-  const effectiveSessionId = sessionId || "884422";
-  const method = options.method || "GET";
-  const headers = { ...(options.headers || {}) };
-
-  delete headers["Content-Length"];
-  delete headers["content-length"];
-  delete headers["Connection"];
-  delete headers["connection"];
-  delete headers["Host"];
-  delete headers["host"];
-
-  const fetchOpts = { method, headers };
-  if (method === "POST" && options.body && options.body.length > 0) {
-    fetchOpts.body = options.body;
-  }
-
-  let lastRes = null;
-  let lastErr = null;
-
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[(startIdx + i) % tokens.length];
-    const scrapeUrl = buildScrapeDoUrl(targetUrl, token, true, effectiveSessionId);
-    try {
-      // Strict 6 seconds timeout per token to prevent Vercel 300s timeout errors
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6000);
-      const res = await fetchImpl(scrapeUrl, { ...fetchOpts, signal: controller.signal }).finally(() =>
-        clearTimeout(timer)
-      );
-
-      const initialStatus =
-        res.headers && typeof res.headers.get === "function"
-          ? res.headers.get("scrape.do-initial-status-code")
-          : null;
-      if (
-        (res.status === 401 || res.status === 403 || res.status === 429) &&
-        initialStatus !== "404" &&
-        initialStatus !== "200"
-      ) {
-        lastRes = res;
-        advanceSessionToken(sessionId, tokens.length);
-        continue;
-      }
-      if (res.status < 500) return res;
-      lastRes = res;
-      advanceSessionToken(sessionId, tokens.length);
-    } catch (err) {
-      lastErr = err;
-      advanceSessionToken(sessionId, tokens.length);
+  if (method === "POST" || isDecryptionRoute) {
+    forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
+    forwardHeaders["Origin"] = VIDCORE_ORIGIN;
+    if (req.headers["content-type"] || req.headers["Content-Type"]) {
+      forwardHeaders["Content-Type"] = req.headers["content-type"] || req.headers["Content-Type"];
+    } else {
+      forwardHeaders["Content-Type"] = "application/octet-stream";
     }
   }
-  if (lastRes) return lastRes;
-  throw lastErr || new Error("All Scrape.do tokens failed");
+
+  delete forwardHeaders["content-length"];
+  delete forwardHeaders["Content-Length"];
+  delete forwardHeaders["connection"];
+  delete forwardHeaders["Connection"];
+
+  // إجبار توجيه مسارات APA91 والـ POST عبر Scrape.do مباشرة
+  if ((isDecryptionRoute || method === "POST") && hasScrapeTokens && config.mode !== "direct") {
+    try {
+      const scrapeRes = await fetchViaScrapeDoWithRotation(targetUrl, fetch, {
+        method,
+        headers: forwardHeaders,
+        sessionId,
+        body: method === "POST" ? bodyBuffer : undefined,
+      });
+      if (scrapeRes && scrapeRes.status < 500) {
+        return scrapeRes;
+      }
+    } catch (_err) {}
+  }
+
+  // باقي الطلبات (الملفات الثابتة وغيرها) تذهب بالطريقة العادية...
+  const fetchOptions = {
+    method,
+    headers: forwardHeaders,
+  };
+  if (method === "POST" && bodyBuffer && bodyBuffer.length > 0) {
+    fetchOptions.body = bodyBuffer;
+  }
+
+  try {
+    const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 6000);
+    if (directRes && directRes.status >= 200 && directRes.status < 400 && directRes.status !== 555) {
+      return directRes;
+    }
+  } catch (_err) {}
+
+  if (useScrapeDoFallback && config.mode !== "direct" && hasScrapeTokens) {
+    try {
+      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, {
+        method,
+        headers: forwardHeaders,
+        sessionId,
+        body: method === "POST" ? bodyBuffer : undefined,
+      });
+    } catch (_err) {}
+  }
+
+  return await fetch(targetUrl, fetchOptions);
 }
 
 const AD_SHIELD_JS = `(function() {
