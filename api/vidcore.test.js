@@ -588,6 +588,75 @@ test("Strict Zero-SyntaxError verification on AD_SHIELD_JS, UNIVERSAL_SUBTITLE_I
   }
 });
 
+test("AD_SHIELD_JS dynamically spoofs domain for VidLink (vidlink.pro) vs VidCore (vidcore.io) and intercepts script src", () => {
+  // Test VidLink context
+  const fakeScriptInstances = [];
+  function MockScript() {
+    this._src = "";
+    fakeScriptInstances.push(this);
+  }
+  Object.defineProperty(MockScript.prototype, "src", {
+    get() { return this._src; },
+    set(v) { this._src = v; },
+    configurable: true,
+  });
+
+  const vidlinkSandbox = {
+    window: null,
+    document: {},
+    HTMLScriptElement: MockScript,
+    URL,
+    encodeURIComponent,
+  };
+  vidlinkSandbox.window = vidlinkSandbox;
+  vidlinkSandbox.window.location = {
+    origin: "https://hwto-kurd.vercel.app",
+    hostname: "hwto-kurd.vercel.app",
+    href: "https://hwto-kurd.vercel.app/vidlink/movie/550",
+    pathname: "/vidlink/movie/550",
+  };
+
+  vm.runInNewContext(AD_SHIELD_JS, vidlinkSandbox);
+
+  // In VidLink context, fake location/origin must be vidlink.pro (NOT vidcore.io)
+  assert.equal(vidlinkSandbox.__fakeLoc.hostname, "vidlink.pro");
+  assert.equal(vidlinkSandbox.__fakeLoc.origin, "https://vidlink.pro");
+  assert.equal(vidlinkSandbox.__fakeDoc.domain, "vidlink.pro");
+
+  // Script src setter should route /_next/ to /vidlink/_next/
+  const s1 = new MockScript();
+  s1.src = "/_next/static/chunks/app-123.js";
+  assert.equal(s1.src, "https://hwto-kurd.vercel.app/vidlink/_next/static/chunks/app-123.js");
+
+  // Test VidCore context
+  const vidcoreSandbox = {
+    window: null,
+    document: {},
+    HTMLScriptElement: MockScript,
+    URL,
+    encodeURIComponent,
+  };
+  vidcoreSandbox.window = vidcoreSandbox;
+  vidcoreSandbox.window.location = {
+    origin: "https://hwto-kurd.vercel.app",
+    hostname: "hwto-kurd.vercel.app",
+    href: "https://hwto-kurd.vercel.app/vidcore/movie/550",
+    pathname: "/vidcore/movie/550",
+  };
+
+  vm.runInNewContext(AD_SHIELD_JS, vidcoreSandbox);
+
+  // In VidCore context, fake location/origin must be vidcore.io
+  assert.equal(vidcoreSandbox.__fakeLoc.hostname, "vidcore.io");
+  assert.equal(vidcoreSandbox.__fakeLoc.origin, "https://vidcore.io");
+
+  // Script src setter should route /_next/static/ to /vidcore/_next/static/ with ?v=4
+  const s2 = new MockScript();
+  s2.src = "/_next/static/chunks/main-456.js";
+  assert.equal(s2.src, "https://hwto-kurd.vercel.app/vidcore/_next/static/chunks/main-456.js?v=4");
+});
+
+
 
 
 

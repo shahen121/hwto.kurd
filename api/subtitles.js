@@ -152,6 +152,38 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
   kuUrl = toSameOriginSubUrl(kuUrl);
   arUrl = toSameOriginSubUrl(arUrl);
 
+  var blobMap = {};
+
+  function fetchSubtitleBlob(rawUrl, onBlobReady) {
+    var url = toSameOriginSubUrl(rawUrl);
+    if (!url) return;
+    if (blobMap[url]) {
+      if (onBlobReady) onBlobReady(blobMap[url]);
+      return;
+    }
+    if (typeof fetch === "function" && typeof URL !== "undefined" && typeof URL.createObjectURL === "function" && typeof Blob === "function") {
+      fetch(url)
+        .then(function(res) {
+          if (!res.ok) return null;
+          return res.text();
+        })
+        .then(function(vttText) {
+          if (!vttText || vttText.indexOf("WEBVTT") === -1) return;
+          try {
+            var blob = new Blob([vttText], { type: "text/vtt;charset=utf-8" });
+            var blobUrl = URL.createObjectURL(blob);
+            blobMap[url] = blobUrl;
+            if (onBlobReady) onBlobReady(blobUrl);
+          } catch (_e) {}
+        })
+        .catch(function() {});
+    }
+  }
+
+  // Pre-fetch both language tracks immediately so Blob URLs are ready when video mounts
+  if (kuUrl) fetchSubtitleBlob(kuUrl, function() { checkVideos(); });
+  if (arUrl) fetchSubtitleBlob(arUrl, function() { checkVideos(); });
+
   function activatePreferredTrack(v) {
     try {
       if (!v || !v.textTracks || v.textTracks.length === 0) return;
@@ -170,47 +202,35 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
   }
 
   function attachTrack(v, item) {
-    var existing = v.querySelectorAll('track[srclang="' + item.lang + '"]');
-    if (existing.length > 0) return;
-
     var initialUrl = toSameOriginSubUrl(item.url);
     if (!initialUrl) return;
 
-    var blobPlaceholder = "";
-    if (typeof URL !== "undefined" && typeof URL.createObjectURL === "function" && typeof Blob === "function") {
-      try {
-        blobPlaceholder = URL.createObjectURL(new Blob(["WEBVTT\\n\\n"], { type: "text/vtt;charset=utf-8" }));
-      } catch (_e) {}
-    }
+    var doAttach = function(blobOrSameOriginUrl) {
+      if (!blobOrSameOriginUrl) return;
+      var existing = v.querySelectorAll('track[srclang="' + item.lang + '"]');
+      if (existing.length > 0) {
+        if (existing[0].src === blobOrSameOriginUrl) return;
+        for (var i = 0; i < existing.length; i++) {
+          try { v.removeChild(existing[i]); } catch (_e) {}
+        }
+      }
+      var tr = document.createElement("track");
+      tr.kind = "subtitles";
+      tr.label = item.label;
+      tr.srclang = item.lang;
+      if (item.def) tr.default = true;
+      tr.src = blobOrSameOriginUrl;
+      v.appendChild(tr);
+      activatePreferredTrack(v);
+    };
 
-    var tr = document.createElement("track");
-    tr.kind = "subtitles";
-    tr.label = item.label;
-    tr.srclang = item.lang;
-    if (item.def) tr.default = true;
-    tr.src = blobPlaceholder || initialUrl;
-    v.appendChild(tr);
-
-    // Fetch local VTT from same-origin bridge and create local Blob URL
-    if (typeof fetch === "function" && typeof URL !== "undefined" && typeof URL.createObjectURL === "function" && typeof Blob === "function") {
-      fetch(initialUrl)
-        .then(function(res) {
-          if (!res.ok) return null;
-          return res.text();
-        })
-        .then(function(vttText) {
-          if (!vttText || vttText.indexOf("WEBVTT") === -1) return;
-          try {
-            var blob = new Blob([vttText], { type: "text/vtt;charset=utf-8" });
-            var blobUrl = URL.createObjectURL(blob);
-            var trs = v.querySelectorAll('track[srclang="' + item.lang + '"]');
-            if (trs.length > 0) {
-              trs[0].src = blobUrl;
-            }
-            activatePreferredTrack(v);
-          } catch (_e) {}
-        })
-        .catch(function() {});
+    if (blobMap[initialUrl]) {
+      doAttach(blobMap[initialUrl]);
+    } else {
+      doAttach(initialUrl);
+      fetchSubtitleBlob(initialUrl, function(blobUrl) {
+        doAttach(blobUrl);
+      });
     }
   }
 

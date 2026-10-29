@@ -160,14 +160,29 @@ const AD_SHIELD_JS = `(function() {
   var lastMpdBaseDir = "";
   var lastMpdQuery = "";
 
+  var isVidlink = false;
+  var isVidcore = false;
+  try {
+    var locHref = String((window.location && window.location.href) || "");
+    if (locHref.indexOf("/vidlink/") !== -1 || (window.location && window.location.hostname && window.location.hostname.indexOf("vidlink") !== -1)) {
+      isVidlink = true;
+    }
+    if (locHref.indexOf("/vidcore/") !== -1 || (window.location && window.location.hostname && window.location.hostname.indexOf("vidcore") !== -1)) {
+      isVidcore = true;
+    }
+  } catch (_e) {}
+  var spoofDomain = isVidlink ? "vidlink.pro" : "vidcore.io";
+  var spoofOrigin = "https://" + spoofDomain;
+  var locOrigin = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "";
+
   try {
     var __fakeLoc = new Proxy(window.location, {
       get: function(target, prop) {
-        if (prop === "hostname" || prop === "host") return "vidcore.io";
-        if (prop === "origin") return "https://vidcore.io";
+        if (prop === "hostname" || prop === "host") return spoofDomain;
+        if (prop === "origin") return spoofOrigin;
         if (prop === "protocol") return "https:";
         if (prop === "port") return "";
-        if (prop === "href") return "https://vidcore.io" + (window.location.pathname || "/") + (window.location.search || "");
+        if (prop === "href") return spoofOrigin + (window.location.pathname || "/") + (window.location.search || "");
         var val = target[prop];
         return typeof val === "function" ? val.bind(target) : val;
       }
@@ -175,9 +190,9 @@ const AD_SHIELD_JS = `(function() {
 
     var __fakeDoc = new Proxy(document, {
       get: function(target, prop) {
-        if (prop === "domain") return "vidcore.io";
-        if (prop === "URL") return "https://vidcore.io" + (window.location.pathname || "/") + (window.location.search || "");
-        if (prop === "referrer") return "https://vidcore.io/";
+        if (prop === "domain") return spoofDomain;
+        if (prop === "URL") return spoofOrigin + (window.location.pathname || "/") + (window.location.search || "");
+        if (prop === "referrer") return spoofOrigin + "/";
         if (prop === "location") return __fakeLoc;
         var val = target[prop];
         return typeof val === "function" ? val.bind(target) : val;
@@ -188,7 +203,7 @@ const AD_SHIELD_JS = `(function() {
       get: function(target, prop) {
         if (prop === "location") return __fakeLoc;
         if (prop === "document") return __fakeDoc;
-        if (prop === "origin") return "https://vidcore.io";
+        if (prop === "origin") return spoofOrigin;
         if (prop === "self" || prop === "window" || prop === "top" || prop === "parent" || prop === "globalThis") {
           return __fakeWin;
         }
@@ -201,8 +216,10 @@ const AD_SHIELD_JS = `(function() {
     window.__fakeDoc = __fakeDoc;
     window.__fakeLoc = __fakeLoc;
 
-    Object.defineProperty(window, "adce5c77-2808-4d01-877e-41167529529d", { value: false, writable: false, configurable: false });
-    Object.defineProperty(window, "a3f1feb4-0b2d-4f69-a999-7116272dab1d", { value: false, writable: false, configurable: false });
+    if (!isVidlink) {
+      Object.defineProperty(window, "adce5c77-2808-4d01-877e-41167529529d", { value: false, writable: false, configurable: false });
+      Object.defineProperty(window, "a3f1feb4-0b2d-4f69-a999-7116272dab1d", { value: false, writable: false, configurable: false });
+    }
   } catch (e) {}
 
   // Mute transient SourceBuffer and clarity errors to keep console pristine
@@ -305,13 +322,28 @@ const AD_SHIELD_JS = `(function() {
       }
     } catch (_e) {}
 
-    // 1. VidLink absolute URLs to same-origin proxy (for API, settings, RSC flight data)
-    if (rawUrl.indexOf("https://vidlink.pro/") === 0 || rawUrl.indexOf("http://vidlink.pro/") === 0) {
-      var relVidlink = rawUrl.indexOf("https://vidlink.pro") === 0 ? rawUrl.slice(19) : rawUrl.slice(18);
+    // 1. VidLink absolute / protocol-relative URLs (for API, settings, RSC flight data)
+    if (rawUrl.indexOf("vidlink.pro/api/") !== -1) {
+      var apiPart = rawUrl.slice(rawUrl.indexOf("vidlink.pro/api/") + "vidlink.pro".length);
+      return {
+        originalUrl: rawUrl,
+        proxiedUrl: locOrigin ? (locOrigin + "/vidlink" + apiPart) : ("/vidlink" + apiPart)
+      };
+    }
+    if (rawUrl.indexOf("vidlink.pro/_next/") !== -1) {
+      var nextPart = rawUrl.slice(rawUrl.indexOf("vidlink.pro/_next/") + "vidlink.pro".length);
+      return {
+        originalUrl: rawUrl,
+        proxiedUrl: locOrigin ? (locOrigin + "/vidlink" + nextPart) : ("/vidlink" + nextPart)
+      };
+    }
+    if (rawUrl.indexOf("https://vidlink.pro/") === 0 || rawUrl.indexOf("http://vidlink.pro/") === 0 || rawUrl.indexOf("//vidlink.pro/") === 0) {
+      var relVidlink = rawUrl.replace(/^(?:https?:)?\/\/vidlink\.pro/i, "");
       if (STREAM_EXT_RE.test(relVidlink) || STREAM_HOST_RE.test(relVidlink)) {
+        var fullStream = rawUrl.indexOf("//") === 0 ? ("https:" + rawUrl) : rawUrl;
         return {
           originalUrl: rawUrl,
-          proxiedUrl: CF_WORKER + "/stream-proxy/ref/" + encodeURIComponent(rawUrl) + "?ref=vidlink"
+          proxiedUrl: CF_WORKER + "/stream-proxy/ref/" + encodeURIComponent(fullStream) + "?ref=vidlink"
         };
       }
       return {
@@ -322,22 +354,24 @@ const AD_SHIELD_JS = `(function() {
 
     // 2. Intercept relative /_next/ or /api/ requests in VidLink context
     if (isVidlink) {
-      if (rawUrl.indexOf("/_next/") === 0) {
+      if (rawUrl.indexOf("/_next/") === 0 || rawUrl.indexOf("_next/") === 0) {
+        var cleanNext = rawUrl.indexOf("/_next/") === 0 ? rawUrl : ("/" + rawUrl);
         return {
           originalUrl: rawUrl,
-          proxiedUrl: locOrigin ? (locOrigin + "/vidlink" + rawUrl) : ("/vidlink" + rawUrl)
+          proxiedUrl: locOrigin ? (locOrigin + "/vidlink" + cleanNext) : ("/vidlink" + cleanNext)
         };
       }
       if (
-        rawUrl.indexOf("/api/") === 0 &&
+        (rawUrl.indexOf("/api/") === 0 || rawUrl.indexOf("api/") === 0) &&
         rawUrl.indexOf("/api/subtitles") !== 0 &&
         rawUrl.indexOf("/api/tmdb") !== 0 &&
         rawUrl.indexOf("/api/football") !== 0 &&
         rawUrl.indexOf("/api/hls") !== 0
       ) {
+        var cleanApi = rawUrl.indexOf("/api/") === 0 ? rawUrl : ("/" + rawUrl);
         return {
           originalUrl: rawUrl,
-          proxiedUrl: locOrigin ? (locOrigin + "/vidlink" + rawUrl) : ("/vidlink" + rawUrl)
+          proxiedUrl: locOrigin ? (locOrigin + "/vidlink" + cleanApi) : ("/vidlink" + cleanApi)
         };
       }
       if (locOrigin && rawUrl.indexOf(locOrigin + "/_next/") === 0) {
@@ -476,6 +510,43 @@ const AD_SHIELD_JS = `(function() {
     }
   } catch (_e) {}
 
+  try {
+    if (typeof HTMLScriptElement !== "undefined" && HTMLScriptElement.prototype) {
+      var scriptSrcDesc = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, "src");
+      if (scriptSrcDesc && scriptSrcDesc.set && scriptSrcDesc.get) {
+        Object.defineProperty(HTMLScriptElement.prototype, "src", {
+          configurable: true,
+          enumerable: scriptSrcDesc.enumerable,
+          get: function() { return scriptSrcDesc.get.call(this); },
+          set: function(val) {
+            var raw = String(val || "");
+            if (isVidlink) {
+              if (raw.indexOf("/_next/") === 0 || raw.indexOf("_next/") === 0) {
+                var cleanRel = raw.slice(raw.indexOf("_next/") + 6);
+                var newSrc = locOrigin ? (locOrigin + "/vidlink/_next/" + cleanRel) : ("/vidlink/_next/" + cleanRel);
+                return scriptSrcDesc.set.call(this, newSrc);
+              }
+              if (raw.indexOf("vidlink.pro/_next/") !== -1) {
+                var rel = raw.slice(raw.indexOf("vidlink.pro/_next/") + "vidlink.pro".length);
+                var newSrc2 = locOrigin ? (locOrigin + "/vidlink" + rel) : ("/vidlink" + rel);
+                return scriptSrcDesc.set.call(this, newSrc2);
+              }
+            } else if (isVidcore) {
+              if (raw.indexOf("/_next/static/") === 0 || raw.indexOf("_next/static/") === 0) {
+                var cleanRel2 = raw.slice(raw.indexOf("_next/static/") + 13);
+                var qIdx = cleanRel2.indexOf("?");
+                var baseClean = qIdx !== -1 ? cleanRel2.slice(0, qIdx) : cleanRel2;
+                var newSrc3 = (locOrigin ? (locOrigin + "/vidcore/_next/static/") : ("/vidcore/_next/static/")) + baseClean + "?v=4";
+                return scriptSrcDesc.set.call(this, newSrc3);
+              }
+            }
+            return scriptSrcDesc.set.call(this, val);
+          }
+        });
+      }
+    }
+  } catch (_e) {}
+
   function cleanInvalidPreloads() {
     try {
       var safeDataUri = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
@@ -531,6 +602,9 @@ function rewriteVidcoreStaticLinks(html) {
 function rewriteVidlinkPaths(html) {
   if (!html || typeof html !== "string") return html;
   let out = html;
+  out = out.replace(/https?:\/\/vidlink\.pro\/_next\//g, '/vidlink/_next/');
+  out = out.replace(/https?:\/\/vidlink\.pro\/api\/(?!subtitles|tmdb|football|hls)/g, '/vidlink/api/');
+
   out = out.replace(/(href|src)=["'](?:\/vidlink)?\/_next\/([^"']+)["']/g, '$1="/vidlink/_next/$2"');
   out = out.replace(/(["'\\])\/_next\//g, '$1/vidlink/_next/');
   out = out.replace(/\/vidlink\/vidlink\//g, '/vidlink/');
@@ -669,6 +743,9 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     forwardHeaders["Origin"] = VIDCORE_ORIGIN;
     if (req.headers && req.headers["content-type"]) {
       forwardHeaders["Content-Type"] = req.headers["content-type"];
+    }
+    if (bodyBuffer && bodyBuffer.length > 0) {
+      forwardHeaders["Content-Length"] = String(bodyBuffer.length);
     }
   }
 

@@ -841,6 +841,40 @@ export default function MoviePage({
     };
   }, [playing, progressKey, watchedThreshold, playerSource, progressViaFrames]);
 
+  // Auto-sync iframe player time updates (HWTO_VIDEO_TIME / TIME_UPDATE)
+  useEffect(() => {
+    if (!playing) return;
+    const handlePlayerMessage = (e) => {
+      const d = e.data;
+      if (!d) return;
+      let ct = null;
+      let dur = null;
+      if (typeof d.currentTime === "number") ct = d.currentTime;
+      else if (typeof d.time === "number") ct = d.time;
+      if (typeof d.duration === "number") dur = d.duration;
+
+      if (ct != null && !isNaN(ct) && ct >= 0) {
+        lastKnownTimeRef.current = ct;
+        if (dur && dur > 0) {
+          const p = Math.floor((ct / dur) * 100);
+          saveProgressRef.current(
+            progressKey,
+            Math.min(p, 100),
+            Math.floor(ct),
+            Math.floor(dur),
+          );
+          storage.set("dlTime_" + progressKey, Math.floor(ct));
+          const remaining = dur - ct;
+          if (remaining <= watchedThreshold) {
+            onMarkWatchedRef.current?.(item.id);
+          }
+        }
+      }
+    };
+    window.addEventListener("message", handlePlayerMessage);
+    return () => window.removeEventListener("message", handlePlayerMessage);
+  }, [playing, progressKey, watchedThreshold, item.id]);
+
   const handlePlay = useCallback(() => {
     setM3u8Url(null);
     setInterceptedSubs([]);

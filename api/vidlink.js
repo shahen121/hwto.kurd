@@ -346,9 +346,19 @@ async function handleVidlinkProxy(req, res) {
             "Access-Control-Allow-Origin": "*",
           });
           return res.end("Not Found");
+        } else if (staticRes) {
+          res.writeHead(staticRes.status, {
+            "Content-Type": "text/plain",
+            "Access-Control-Allow-Origin": "*",
+          });
+          return res.end(`Upstream status ${staticRes.status}`);
         }
       } catch (_err) {
-        // Direct static fetch error
+        res.writeHead(502, {
+          "Content-Type": "text/plain",
+          "Access-Control-Allow-Origin": "*",
+        });
+        return res.end("Bad Gateway - Static chunk fetch failed");
       }
     }
 

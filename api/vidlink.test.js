@@ -317,3 +317,112 @@ test("UNIVERSAL_SUBTITLE_INJECTOR_JS rewrites external r2.dev URLs to same-origi
   }
 });
 
+test("UNIVERSAL_SUBTITLE_INJECTOR_JS creates Blob URLs and sends HWTO_VIDEO_TIME postMessage on timeupdate", async () => {
+  const appendedTracks = [];
+  const eventListeners = {};
+  const parentMessages = [];
+
+  const fakeVideo = {
+    attributes: {},
+    crossOrigin: null,
+    currentTime: 42.5,
+    duration: 120.0,
+    paused: false,
+    textTracks: [
+      {
+        language: "ku",
+        label: "Kurdî (hwto-kurd)",
+        mode: "hidden",
+      },
+    ],
+    getAttribute(name) { return this.attributes[name] || null; },
+    setAttribute(name, val) { this.attributes[name] = val; },
+    querySelectorAll() { return appendedTracks; },
+    appendChild(el) { appendedTracks.push(el); },
+    removeChild(el) {
+      const idx = appendedTracks.indexOf(el);
+      if (idx !== -1) appendedTracks.splice(idx, 1);
+    },
+    addEventListener(evt, fn) {
+      eventListeners[evt] = eventListeners[evt] || [];
+      eventListeners[evt].push(fn);
+    },
+  };
+
+  const fakeDoc = {
+    readyState: "complete",
+    querySelectorAll(selector) {
+      if (selector === "video") return [fakeVideo];
+      return [];
+    },
+    createElement(tag) {
+      return {
+        tagName: tag,
+        kind: "",
+        label: "",
+        srclang: "",
+        src: "",
+      };
+    },
+    addEventListener() {},
+  };
+
+  const sandbox = {
+    window: null,
+    document: fakeDoc,
+    URL: {
+      createObjectURL: () => "blob:https://hwto-kurd.vercel.app/test-blob-uuid-1234",
+    },
+    URLSearchParams,
+    HTMLTrackElement: { prototype: { src: "" } },
+    Blob: class MockBlob {
+      constructor(parts, opts) {
+        this.parts = parts;
+        this.opts = opts;
+      }
+    },
+    fetch: async () => ({
+      ok: true,
+      text: async () => "WEBVTT\n\n1\n00:00:01.000 --> 00:00:04.000\nHello World",
+    }),
+    setTimeout: (fn) => fn(),
+    setInterval: () => {},
+  };
+  sandbox.window = sandbox;
+  sandbox.window.parent = {
+    postMessage: (msg, targetOrigin) => {
+      parentMessages.push({ msg, targetOrigin });
+    },
+  };
+  sandbox.window.location = {
+    origin: "https://hwto-kurd.vercel.app",
+    href: "https://hwto-kurd.vercel.app/vidlink/movie/550",
+    pathname: "/vidlink/movie/550",
+  };
+
+  const vm = require("node:vm");
+  vm.runInNewContext(UNIVERSAL_SUBTITLE_INJECTOR_JS, sandbox);
+
+  // Allow microtasks to resolve fetch promise
+  await new Promise((r) => setTimeout(r, 20));
+
+  // 1. Attached tracks must have Blob URL
+  assert.ok(appendedTracks.length > 0, "Tracks must be injected");
+  const blobTrack = appendedTracks.find((t) => t.src.startsWith("blob:"));
+  assert.ok(blobTrack, "A Blob URL track must be created and attached");
+  assert.equal(blobTrack.kind, "subtitles");
+
+  // 2. Preferred track mode must be showing
+  assert.equal(fakeVideo.textTracks[0].mode, "showing");
+
+  // 3. Trigger timeupdate event on video -> must send HWTO_VIDEO_TIME to parent
+  assert.ok(eventListeners["timeupdate"] && eventListeners["timeupdate"].length > 0);
+  eventListeners["timeupdate"][0]();
+  const timeMsg = parentMessages.find((m) => m.msg.type === "HWTO_VIDEO_TIME");
+  assert.ok(timeMsg, "Must dispatch HWTO_VIDEO_TIME message to parent");
+  assert.equal(timeMsg.msg.currentTime, 42.5);
+  assert.equal(timeMsg.msg.duration, 120.0);
+  assert.equal(timeMsg.targetOrigin, "*");
+});
+
+

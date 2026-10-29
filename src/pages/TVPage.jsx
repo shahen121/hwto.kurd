@@ -1668,6 +1668,45 @@ export default function TVPage({
     progressViaFrames,
   ]);
 
+  // Auto-sync iframe player time updates (HWTO_VIDEO_TIME / TIME_UPDATE)
+  useEffect(() => {
+    if (!playing) return;
+    const handlePlayerMessage = (e) => {
+      const d = e.data;
+      if (!d) return;
+      let ct = null;
+      let dur = null;
+      if (typeof d.currentTime === "number") ct = d.currentTime;
+      else if (typeof d.time === "number") ct = d.time;
+      if (typeof d.duration === "number") dur = d.duration;
+
+      if (ct != null && !isNaN(ct) && ct >= 0) {
+        lastKnownTimeRef.current = ct;
+        if (dur && dur > 0) {
+          const p = Math.floor((ct / dur) * 100);
+          saveProgressRef.current(
+            currentProgressKey,
+            Math.min(p, 100),
+            Math.floor(ct),
+            Math.floor(dur),
+          );
+          storage.set("dlTime_" + currentProgressKey, Math.floor(ct));
+          const remaining = dur - ct;
+          if (
+            !autoMarkedRef.current &&
+            remaining <= watchedThreshold &&
+            remaining >= 0
+          ) {
+            autoMarkedRef.current = true;
+            onMarkWatchedRef.current?.(currentProgressKey);
+          }
+        }
+      }
+    };
+    window.addEventListener("message", handlePlayerMessage);
+    return () => window.removeEventListener("message", handlePlayerMessage);
+  }, [playing, currentProgressKey, watchedThreshold]);
+
   // Skip backward/forward by N seconds via webview JS injection
   const seekBy = useCallback(async (seconds) => {
     if (!isElectron) return;
