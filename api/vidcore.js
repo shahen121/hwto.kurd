@@ -369,6 +369,7 @@ const AD_SHIELD_JS = `(function() {
             msg.indexOf("Hydration failed") !== -1
           ) {
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            if (e.stopPropagation) e.stopPropagation();
             if (e.preventDefault) e.preventDefault();
             return true;
           }
@@ -964,6 +965,25 @@ function getCleanUserAgent(rawUa) {
   return rawUa;
 }
 
+// جلب عبر Cloudflare Worker مع مهلة زمنية قصيرة (يُستخدم لتجاوز خطأ 555 من Scrape.do)
+async function fetchViaCfWorker(targetUrl, method, headers, bodyBuffer, ms = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(targetUrl, {
+      method,
+      headers,
+      body: method === "POST" && bodyBuffer && bodyBuffer.length > 0 ? bodyBuffer : undefined,
+      signal: controller.signal,
+    });
+    return res || null;
+  } catch (_err) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchFromUpstream(
   origin,
   targetPathAndQuery,
@@ -973,7 +993,7 @@ async function fetchFromUpstream(
 ) {
   const targetUrl = origin + targetPathAndQuery;
   const method = req.method || "GET";
-  
+
   const isDecryptionRoute = targetPathAndQuery.startsWith("/APA91") || targetPathAndQuery.includes("APA91");
   const sessionId = getScrapeDoSessionId(req, targetPathAndQuery);
   const hasScrapeTokens = getScrapeDoTokens().length > 0;
@@ -1019,6 +1039,24 @@ async function fetchFromUpstream(
   };
   if (method === "POST" && bodyBuffer && bodyBuffer.length > 0) {
     fetchOptions.body = bodyBuffer;
+  }
+
+  // 0. FOR APA91 DECRYPTION & POST REQUESTS: TRY THE CLOUDFLARE WORKER FIRST
+  //    (Scrape.do يعيّن خطأ 555 على مسارات الفك والتشفير، لذا نمررها عبر الـ Worker مباشرة عند الإمكان)
+  if ((isDecryptionRoute || method === "POST") && config.mode !== "scrapedo") {
+    try {
+      const workerTargetUrl = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(targetUrl)}`;
+      const workerRes = await fetchViaCfWorker(
+        workerTargetUrl,
+        method,
+        forwardHeaders,
+        method === "POST" ? bodyBuffer : undefined,
+        8000
+      );
+      if (workerRes && workerRes.status < 500) {
+        return workerRes;
+      }
+    } catch (_e) {}
   }
 
   // 1. FOR APA91 DECRYPTION & POST REQUESTS: ALWAYS USE SCRAPE.DO FIRST TO PREVENT 502
