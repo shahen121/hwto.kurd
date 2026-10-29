@@ -8,6 +8,7 @@ const {
   getScrapeDoSessionId,
   CF_WORKER_URL,
   UNIVERSAL_SUBTITLE_INJECTOR_JS,
+  SOURCE_BUFFER_MUTE_JS,
 } = require("./vidcore.js");
 
 const VIDLINK_ORIGIN = process.env.VIDLINK_ORIGIN || "https://vidlink.pro";
@@ -447,3 +448,4 @@ module.exports.vidlinkHtmlCache = vidlinkHtmlCache;
 module.exports.CHUNK_CACHE_CONTROL = CHUNK_CACHE_CONTROL;
 module.exports.HTML_CACHE_CONTROL = HTML_CACHE_CONTROL;
 module.exports.VIDLINK_ORIGIN = VIDLINK_ORIGIN;
+module.exports.SOURCE_BUFFER_MUTE_JS = SOURCE_BUFFER_MUTE_JS;

@@ -8,6 +8,7 @@ const {
   handleVidlinkProxy,
   vidlinkStaticCache,
   fetchVidlinkHtmlFast,
+  SOURCE_BUFFER_MUTE_JS,
 } = require("./vidlink.js");
 const {
   subtitlesHandler,
@@ -64,6 +65,12 @@ test("Vidlink HTML: Preconnect header, ad limits, and universal subtitle script 
     assert.ok(
       html.includes('id="hwto-universal-subs"'),
       "Must include universal subtitles script",
+    );
+
+    // 2b. SourceBuffer mute script
+    assert.ok(
+      html.includes('id="hwto-vidlink-sourcebuffer-mute"'),
+      "Must include dedicated SourceBuffer mute script",
     );
 
     // 3. Fast Vidlink header
@@ -458,6 +465,38 @@ test("UNIVERSAL_SUBTITLE_INJECTOR_JS creates Blob URLs and sends HWTO_VIDEO_TIME
   assert.equal(timeMsg.msg.currentTime, 42.5);
   assert.equal(timeMsg.msg.duration, 120.0);
   assert.equal(timeMsg.targetOrigin, "*");
+});
+
+test("Vidlink dedicated SourceBufferSink error muting script", () => {
+  const vm = require("node:vm");
+  const capturedErrors = [];
+  const capturedWarns = [];
+
+  const sandbox = {
+    console: {
+      error: (...args) => capturedErrors.push(args.join(" ")),
+      warn: (...args) => capturedWarns.push(args.join(" ")),
+    },
+  };
+
+  vm.runInNewContext(SOURCE_BUFFER_MUTE_JS, sandbox);
+
+  // 1. Mutes SourceBufferSink string error
+  sandbox.console.error("Uncaught Error: [SourceBufferSink] appendBuffer failed");
+  assert.equal(capturedErrors.length, 0);
+
+  // 2. Mutes Error object with 'This SourceBuffer has been removed'
+  sandbox.console.error(new Error("This SourceBuffer has been removed from the parent media source"));
+  assert.equal(capturedErrors.length, 0);
+
+  // 3. Mutes warnings
+  sandbox.console.warn("[SourceBufferSink] Warning on segment drop");
+  assert.equal(capturedWarns.length, 0);
+
+  // 4. Regular app error is preserved
+  sandbox.console.error("Real critical playback error");
+  assert.equal(capturedErrors.length, 1);
+  assert.ok(capturedErrors[0].includes("Real critical playback error"));
 });
 
 

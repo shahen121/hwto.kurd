@@ -827,6 +827,21 @@ test("WHATWG URL standard compliance and raw binary body forwarding for POST /AP
 
     // Verify buffered response
     assert.ok(responseBody.toString().includes("decrypted_stream_token_123"));
+
+    // Also verify when URL is direct /APA91ywFtestDirect without /vidcore prefix
+    const reqDirect = {
+      method: "POST",
+      url: "/APA91ywFtestDirect",
+      headers: {
+        host: "hwto-kurd.vercel.app",
+        referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
+        "content-type": "application/octet-stream",
+      },
+      rawBody: rawBinaryPayload,
+    };
+    await handleVidcoreProxy(reqDirect, res);
+    assert.equal(responseCode, 200);
+    assert.ok(capturedScrapeUrl.includes(encodeURIComponent("https://vidcore.io/APA91ywFtestDirect")));
   } finally {
     global.fetch = originalFetch;
     if (savedToken !== undefined) process.env.SCRAPE_DO_TOKEN_1 = savedToken;

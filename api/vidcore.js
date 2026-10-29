@@ -258,14 +258,15 @@ const AD_SHIELD_JS = `(function() {
         var str = "";
         try {
           for (var i = 0; i < arguments.length; i++) {
-            str += " " + String(arguments[i] || "");
+            var a = arguments[i];
+            str += " " + (typeof a === "object" && a !== null ? (a.message || a.stack || String(a)) : String(a || ""));
           }
         } catch (_e) {}
         if (
           str.indexOf("SourceBufferSink") !== -1 ||
           str.indexOf("[SourceBufferSink]") !== -1 ||
           str.indexOf("SourceBuffer") !== -1 ||
-          str.indexOf("This SourceBuffer has been removed from the parent media source") !== -1 ||
+          str.indexOf("This SourceBuffer has been removed") !== -1 ||
           str.indexOf("clarity.ms") !== -1
         ) {
           return;
@@ -282,13 +283,15 @@ const AD_SHIELD_JS = `(function() {
         var str = "";
         try {
           for (var i = 0; i < arguments.length; i++) {
-            str += " " + String(arguments[i] || "");
+            var a = arguments[i];
+            str += " " + (typeof a === "object" && a !== null ? (a.message || a.stack || String(a)) : String(a || ""));
           }
         } catch (_e) {}
         if (
           str.indexOf("SourceBufferSink") !== -1 ||
           str.indexOf("[SourceBufferSink]") !== -1 ||
-          str.indexOf("SourceBuffer") !== -1
+          str.indexOf("SourceBuffer") !== -1 ||
+          str.indexOf("This SourceBuffer has been removed") !== -1
         ) {
           return;
         }
@@ -680,6 +683,55 @@ function rewriteVidlinkPaths(html) {
 
 const { UNIVERSAL_SUBTITLE_INJECTOR_JS } = require("./subtitles.js");
 
+const SOURCE_BUFFER_MUTE_JS = `(function() {
+  try {
+    if (typeof console !== "undefined" && typeof console.error === "function") {
+      var _origErr = console.error;
+      console.error = function() {
+        var str = "";
+        try {
+          for (var i = 0; i < arguments.length; i++) {
+            var a = arguments[i];
+            str += " " + (typeof a === "object" && a !== null ? (a.message || a.stack || String(a)) : String(a || ""));
+          }
+        } catch (_e) {}
+        if (
+          str.indexOf("SourceBufferSink") !== -1 ||
+          str.indexOf("[SourceBufferSink]") !== -1 ||
+          str.indexOf("SourceBuffer") !== -1 ||
+          str.indexOf("This SourceBuffer has been removed") !== -1
+        ) {
+          return;
+        }
+        return _origErr.apply(console, arguments);
+      };
+    }
+  } catch (_e) {}
+  try {
+    if (typeof console !== "undefined" && typeof console.warn === "function") {
+      var _origWarn = console.warn;
+      console.warn = function() {
+        var str = "";
+        try {
+          for (var i = 0; i < arguments.length; i++) {
+            var a = arguments[i];
+            str += " " + (typeof a === "object" && a !== null ? (a.message || a.stack || String(a)) : String(a || ""));
+          }
+        } catch (_e) {}
+        if (
+          str.indexOf("SourceBufferSink") !== -1 ||
+          str.indexOf("[SourceBufferSink]") !== -1 ||
+          str.indexOf("SourceBuffer") !== -1 ||
+          str.indexOf("This SourceBuffer has been removed") !== -1
+        ) {
+          return;
+        }
+        return _origWarn.apply(console, arguments);
+      };
+    }
+  } catch (_e) {}
+})();`;
+
 function injectStrictlyIntoHead(htmlStr, injectContent) {
   if (!htmlStr || typeof htmlStr !== "string") return htmlStr;
   if (htmlStr.includes("</head>")) {
@@ -707,6 +759,7 @@ function sanitizeVidlinkHtml(html) {
   out = rewriteVidlinkPaths(out);
 
   const headInject = `
+<script id="hwto-vidlink-sourcebuffer-mute">${SOURCE_BUFFER_MUTE_JS}</script>
 <link rel="preconnect" href="https://hwto.proteome626.workers.dev" />
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
@@ -737,6 +790,7 @@ function sanitizeVidcoreHtml(html) {
   out = rewriteVidcoreStaticLinks(out);
 
   const headInject = `
+<script id="hwto-vidcore-sourcebuffer-mute">${SOURCE_BUFFER_MUTE_JS}</script>
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
@@ -1140,3 +1194,4 @@ module.exports.HTML_CACHE_CONTROL = HTML_CACHE_CONTROL;
 module.exports.getSessionTokenIndex = getSessionTokenIndex;
 module.exports.buildScrapeDoUrl = buildScrapeDoUrl;
 module.exports.UNIVERSAL_SUBTITLE_INJECTOR_JS = UNIVERSAL_SUBTITLE_INJECTOR_JS;
+module.exports.SOURCE_BUFFER_MUTE_JS = SOURCE_BUFFER_MUTE_JS;
