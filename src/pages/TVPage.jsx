@@ -473,54 +473,6 @@ export default function TVPage({
   const [subPos, setSubPos] = useState(null);
   const subRef = useRef(null);
 
-  const tvOverlaySubtitles = useMemo(() => {
-    if (githubSub?.available && githubSub.available.length > 0) {
-      return githubSub.available;
-    }
-    const s = playerEp?.season || selectedSeason || 1;
-    const e = playerEp?.episode || selectedEp?.episode_number || 1;
-    if (item?.id) {
-      return [
-        {
-          lang: "ku",
-          label: "Kurdî",
-          flag: "☀️",
-          url: `/subtitles/series/${item.id}/s${s}/e${e}_ku.vtt`,
-          isDefault: playerSubLang !== "ar",
-        },
-        {
-          lang: "ar",
-          label: "العربية",
-          flag: "🇸🇦",
-          url: `/subtitles/series/${item.id}/s${s}/e${e}_ar.vtt`,
-          isDefault: playerSubLang === "ar",
-        },
-      ];
-    }
-    return EMPTY_SUBS;
-  }, [
-    githubSub,
-    item?.id,
-    playerEp?.season,
-    playerEp?.episode,
-    selectedSeason,
-    selectedEp?.episode_number,
-    playerSubLang,
-  ]);
-
-  const activeSub = useMemo(() => {
-    if (subDisabled) return null;
-    if (selectedSubLang) {
-      return (
-        tvOverlaySubtitles.find((s) => s.lang === selectedSubLang) ||
-        tvOverlaySubtitles[0] ||
-        null
-      );
-    }
-    const def = tvOverlaySubtitles.find((s) => s.isDefault);
-    return def || tvOverlaySubtitles[0] || null;
-  }, [tvOverlaySubtitles, subDisabled, selectedSubLang]);
-
   useEffect(() => {
     setSubDisabled(false);
     setSelectedSubLang(null);
@@ -1143,6 +1095,56 @@ export default function TVPage({
     const rawEpisode = selectedEp._tmdbAbsolute ?? selectedEp.episode_number;
     return applyEpisodeMapping(item.id, rawSeason, rawEpisode, episodeGroupMap);
   }, [selectedEp, selectedSeason, item.id, episodeGroupMap]);
+
+  // Must be declared after playerEp: reading playerEp before its declaration
+  // triggers a temporal-dead-zone ReferenceError on every TV page render.
+  const tvOverlaySubtitles = useMemo(() => {
+    if (githubSub?.available && githubSub.available.length > 0) {
+      return githubSub.available;
+    }
+    const s = playerEp?.season || selectedSeason || 1;
+    const e = playerEp?.episode || selectedEp?.episode_number || 1;
+    if (item?.id) {
+      return [
+        {
+          lang: "ku",
+          label: "Kurdî",
+          flag: "☀️",
+          url: `/subtitles/series/${item.id}/s${s}/e${e}_ku.vtt`,
+          isDefault: playerSubLang !== "ar",
+        },
+        {
+          lang: "ar",
+          label: "العربية",
+          flag: "🇸🇦",
+          url: `/subtitles/series/${item.id}/s${s}/e${e}_ar.vtt`,
+          isDefault: playerSubLang === "ar",
+        },
+      ];
+    }
+    return EMPTY_SUBS;
+  }, [
+    githubSub,
+    item?.id,
+    playerEp?.season,
+    playerEp?.episode,
+    selectedSeason,
+    selectedEp?.episode_number,
+    playerSubLang,
+  ]);
+
+  const activeSub = useMemo(() => {
+    if (subDisabled) return null;
+    if (selectedSubLang) {
+      return (
+        tvOverlaySubtitles.find((s) => s.lang === selectedSubLang) ||
+        tvOverlaySubtitles[0] ||
+        null
+      );
+    }
+    const def = tvOverlaySubtitles.find((s) => s.isDefault);
+    return def || tvOverlaySubtitles[0] || null;
+  }, [tvOverlaySubtitles, subDisabled, selectedSubLang]);
 
   // Automatically check GitHub subtitles repo for the active TV episode (fetched once per ep/lang key)
   useEffect(() => {
