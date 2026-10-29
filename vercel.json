@@ -3,35 +3,17 @@
     {
       "source": "/subtitles/(.*)",
       "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "*"
-        }
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "*" }
       ]
     },
     {
       "source": "/api/subtitles",
       "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "*"
-        }
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "*" }
       ]
     }
   ],
@@ -53,23 +35,16 @@
       "destination": "/api/vidlink?__orig_path=/vidlink/$1"
     },
     {
-      "source": "/((?!api/tmdb|api/football|api/subtitles|subtitles/|assets/).*)",
-      "has": [
-        {
-          "type": "header",
-          "key": "referer",
-          "value": ".*vidlink.*"
-        }
-      ],
-      "destination": "/api/vidlink?__orig_path=/$1"
-    },
-    {
       "source": "/vidcore/:path*",
       "destination": "/api/vidcore?__orig_path=/vidcore/:path*"
     },
     {
       "source": "/vidcore/(.*)",
       "destination": "/api/vidcore?__orig_path=/vidcore/$1"
+    },
+    {
+      "source": "/APA91/:path*",
+      "destination": "/api/vidcore?__orig_path=/APA91/:path*"
     },
     {
       "source": "/APA91(.*)",
@@ -84,12 +59,16 @@
       "destination": "/api/vidcore?__orig_path=/wyzie$1"
     },
     {
-      "source": "/(movie|tv|embed|_next|stream-proxy)/(.*)",
-      "destination": "/api/vidcore?__orig_path=/$1/$2"
+      "source": "/stream-proxy/(.*)",
+      "destination": "/api/vidcore?__orig_path=/stream-proxy/$1"
     },
     {
-      "source": "/(gtag-shield.*|hwto-subtitles\\.js|script\\.js|fu\\.wasm|decrypter-worker\\.js|hls\\.worker\\.js)",
-      "destination": "/api/vidcore?__orig_path=/$1"
+      "source": "/gtag-shield.js",
+      "destination": "/api/vidcore?__orig_path=/gtag-shield.js"
+    },
+    {
+      "source": "/hwto-subtitles.js",
+      "destination": "/api/vidcore?__orig_path=/hwto-subtitles.js"
     },
     {
       "source": "/api/b/(.*)",
@@ -98,17 +77,6 @@
     {
       "source": "/api/skip-events",
       "destination": "/api/vidcore?__orig_path=/api/skip-events"
-    },
-    {
-      "source": "/((?!api/tmdb|api/football|api/subtitles|subtitles/|assets/).*)",
-      "has": [
-        {
-          "type": "header",
-          "key": "referer",
-          "value": ".*vidcore.*"
-        }
-      ],
-      "destination": "/api/vidcore?__orig_path=/$1"
     },
     {
       "source": "/((?!api/).*)",
