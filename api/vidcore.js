@@ -133,7 +133,6 @@ async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, option
   const method = options.method || "GET";
   const headers = { ...(options.headers || {}) };
 
-  // Never set Content-Length or Connection manually with undici fetch + Scrape.do
   delete headers["Content-Length"];
   delete headers["content-length"];
   delete headers["Connection"];
@@ -153,7 +152,13 @@ async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, option
     const token = tokens[(startIdx + i) % tokens.length];
     const scrapeUrl = buildScrapeDoUrl(targetUrl, token, true, effectiveSessionId);
     try {
-      const res = await fetchImpl(scrapeUrl, fetchOpts);
+      // Strict 6 seconds timeout per token to prevent Vercel 300s timeout errors
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const res = await fetchImpl(scrapeUrl, { ...fetchOpts, signal: controller.signal }).finally(() =>
+        clearTimeout(timer)
+      );
+
       const initialStatus =
         res.headers && typeof res.headers.get === "function"
           ? res.headers.get("scrape.do-initial-status-code")
@@ -422,7 +427,6 @@ const AD_SHIELD_JS = `(function() {
 
     var locOrigin = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "";
 
-    // 0. Intercept APA91 decryption calls for VidCore
     if (rawUrl.indexOf("APA91") !== -1) {
       var apaClean = rawUrl;
       if (apaClean.indexOf("http://") === 0 || apaClean.indexOf("https://") === 0) {
@@ -690,7 +694,7 @@ const AD_SHIELD_JS = `(function() {
                 var cleanRel2 = raw.slice(raw.indexOf("_next/static/") + 13);
                 var qIdx = cleanRel2.indexOf("?");
                 var baseClean = qIdx !== -1 ? cleanRel2.slice(0, qIdx) : cleanRel2;
-                var newSrc3 = (locOrigin ? (locOrigin + "/vidcore/_next/static/") : ("/vidcore/_next/static/")) + baseClean + "?v=5";
+                var newSrc3 = (locOrigin ? (locOrigin + "/vidcore/_next/static/") : ("/vidcore/_next/static/")) + baseClean + "?v=6";
                 return scriptSrcDesc.set.call(this, newSrc3);
               }
             }
@@ -748,7 +752,7 @@ function rewriteVidcoreStaticLinks(html) {
     (match, attr, relPath) => {
       const cleanPath = relPath.replace(/[?&]v=[^&"']+/g, "");
       const separator = cleanPath.includes("?") ? "&" : "?";
-      return `${attr}="/vidcore/_next/static/${cleanPath}${separator}v=5"`;
+      return `${attr}="/vidcore/_next/static/${cleanPath}${separator}v=6"`;
     }
   );
 }
@@ -946,7 +950,7 @@ const HTML_CACHE_TTL = 20 * 60 * 1000;
 const CHUNK_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const HTML_CACHE_CONTROL = "public, max-age=1200, s-maxage=1200, stale-while-revalidate=86400";
 
-function fetchWithTimeoutSignal(url, options = {}, ms = 4500) {
+function fetchWithTimeoutSignal(url, options = {}, ms = 6000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   return fetch(url, { ...options, signal: controller.signal }).finally(() =>
@@ -1020,30 +1024,10 @@ async function fetchFromUpstream(
     }
   }
 
-  // Never set Content-Length or Connection manually
   delete forwardHeaders["content-length"];
   delete forwardHeaders["Content-Length"];
   delete forwardHeaders["connection"];
   delete forwardHeaders["Connection"];
-
-  const isHtmlNavigation =
-    targetPathAndQuery.startsWith("/movie/") || targetPathAndQuery.startsWith("/tv/");
-
-  const isDecryptionRoute =
-    targetPathAndQuery.startsWith("/APA91") ||
-    targetPathAndQuery.startsWith("/servers") ||
-    targetPathAndQuery.includes("APA91");
-
-  const sessionId = getScrapeDoSessionId(req, targetPathAndQuery);
-  const hasScrapeTokens = getScrapeDoTokens().length > 0;
-  const scrapeOptions = {
-    method,
-    headers: forwardHeaders,
-    sessionId,
-  };
-  if (method === "POST" && bodyBuffer && bodyBuffer.length > 0) {
-    scrapeOptions.body = bodyBuffer;
-  }
 
   const fetchOptions = {
     method,
@@ -1053,47 +1037,32 @@ async function fetchFromUpstream(
     fetchOptions.body = bodyBuffer;
   }
 
-  // 1. For VidCore HTML navigation and APA91 decryption POST:
-  // Try Scrape.do first; if it returns >= 500 or throws, fall back to Direct Fetch immediately!
-  if (
-    (isHtmlNavigation || isDecryptionRoute || method === "POST") &&
-    hasScrapeTokens &&
-    config.mode !== "direct"
-  ) {
-    try {
-      const scrapeRes = await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
-      if (scrapeRes && scrapeRes.status < 500 && scrapeRes.status !== 555) {
-        return scrapeRes;
-      }
-    } catch (_err) {
-      // Fall through to Direct Fetch fallback
-    }
-  }
-
-  // 2. Direct Fetch attempt
+  // 1. Direct fetch first with 6s timeout for maximum speed and avoiding 300s timeout
   try {
-    const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 4500);
+    const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 6000);
     const status = directRes?.status;
     if (directRes && status >= 200 && status < 400 && status !== 555) {
       return directRes;
     }
   } catch (_err) {}
 
-  // 3. Scrape.do fallback for other routes
+  // 2. Fallback to Scrape.do with strict timeout if direct fetch fails or blocked
+  const sessionId = getScrapeDoSessionId(req, targetPathAndQuery);
+  const hasScrapeTokens = getScrapeDoTokens().length > 0;
   if (useScrapeDoFallback && config.mode !== "direct" && hasScrapeTokens) {
     try {
-      const fallbackScrapeRes = await fetchViaScrapeDoWithRotation(
-        targetUrl,
-        fetch,
-        scrapeOptions
-      );
-      if (fallbackScrapeRes && fallbackScrapeRes.status < 500) {
-        return fallbackScrapeRes;
+      const scrapeRes = await fetchViaScrapeDoWithRotation(targetUrl, fetch, {
+        method,
+        headers: forwardHeaders,
+        sessionId,
+        body: method === "POST" ? bodyBuffer : undefined,
+      });
+      if (scrapeRes && scrapeRes.status < 500) {
+        return scrapeRes;
       }
     } catch (_err) {}
   }
 
-  // 4. Final direct fetch fallback
   return await fetch(targetUrl, fetchOptions);
 }
 
@@ -1121,12 +1090,10 @@ async function handleVidcoreProxy(req, res) {
     const parsedUrl = new URL(req.url || "/", `http://${host}`);
     let pathname = parsedUrl.pathname;
 
-    // Extract original path passed by vercel.json rewrite (__orig_path)
     const origPathParam =
       parsedUrl.searchParams.get("__orig_path") ||
       (req.query && req.query.__orig_path);
 
-    // Always delete internal rewrite parameter so it is never forwarded upstream
     parsedUrl.searchParams.delete("__orig_path");
     if (req.query && req.query.__orig_path) {
       delete req.query.__orig_path;
