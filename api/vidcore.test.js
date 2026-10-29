@@ -842,11 +842,94 @@ test("WHATWG URL standard compliance and raw binary body forwarding for POST /AP
     await handleVidcoreProxy(reqDirect, res);
     assert.equal(responseCode, 200);
     assert.ok(capturedScrapeUrl.includes(encodeURIComponent("https://vidcore.io/APA91ywFtestDirect")));
+
+    // Verify Vercel rewrite with x-matched-path header on /api/vidcore
+    const reqVercelRewritten = {
+      method: "POST",
+      url: "/api/vidcore",
+      headers: {
+        host: "hwto-kurd.vercel.app",
+        "x-matched-path": "/APA91ywFtestVercelRewrite",
+        referer: "https://hwto-kurd.vercel.app/vidcore/movie/1283515",
+        "content-type": "application/octet-stream",
+      },
+      rawBody: rawBinaryPayload,
+    };
+    await handleVidcoreProxy(reqVercelRewritten, res);
+    assert.equal(responseCode, 200);
+    assert.ok(capturedScrapeUrl.includes(encodeURIComponent("https://vidcore.io/APA91ywFtestVercelRewrite")));
   } finally {
     global.fetch = originalFetch;
     if (savedToken !== undefined) process.env.SCRAPE_DO_TOKEN_1 = savedToken;
     else delete process.env.SCRAPE_DO_TOKEN_1;
   }
+});
+
+test("Cache-busting /gtag-shield.js?v=6 and unoverwritable console shield in AD_SHIELD_JS", async () => {
+  let responseCode = 0;
+  let responseHeaders = {};
+  let responseBody = "";
+
+  const req = {
+    method: "GET",
+    url: "/gtag-shield.js?v=6",
+    headers: { host: "localhost:3000" },
+  };
+
+  const res = {
+    writeHead(code, headers) {
+      responseCode = code;
+      responseHeaders = headers;
+    },
+    end(data) {
+      responseBody = data;
+    },
+  };
+
+  const { handleVidcoreProxy } = require("./vidcore.js");
+  await handleVidcoreProxy(req, res);
+
+  assert.equal(responseCode, 200);
+  assert.equal(responseHeaders["Content-Type"], "application/javascript; charset=utf-8");
+  assert.ok(responseHeaders["Cache-Control"].includes("max-age=86400"));
+  assert.ok(responseBody.includes("__shouldMuteLog"));
+
+  // Verify unoverwritable console error in AD_SHIELD_JS
+  const captured = [];
+  const sandbox = {
+    console: {
+      error: (...args) => captured.push(args.join(" ")),
+      warn: () => {},
+    },
+    window: {
+      location: { href: "https://hwto-kurd.vercel.app/vidlink/movie/550" },
+      addEventListener: () => {},
+      parent: { postMessage: () => {} },
+    },
+    document: {},
+  };
+
+  vm.runInNewContext(responseBody, sandbox);
+
+  // Mutes SourceBufferSink and React #418
+  sandbox.console.error("[SourceBufferSink] [4888] SourceBuffer append failed");
+  sandbox.console.error("Minified React error #418; visit https://react.dev/errors/418");
+  assert.equal(captured.length, 0);
+
+  // Reassigned console.error by external script still preserves filtering
+  const reassignedLogs = [];
+  sandbox.console.error = function(...args) {
+    reassignedLogs.push(args.join(" "));
+  };
+
+  sandbox.console.error("[SourceBufferSink] [8988] This SourceBuffer has been removed");
+  sandbox.console.error("Cannot read properties of undefined (reading 'unshift')");
+  assert.equal(reassignedLogs.length, 0);
+
+  // Real error is passed through
+  sandbox.console.error("Actual application error");
+  assert.equal(reassignedLogs.length, 1);
+  assert.ok(reassignedLogs[0].includes("Actual application error"));
 });
 
 

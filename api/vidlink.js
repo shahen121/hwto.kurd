@@ -156,6 +156,28 @@ async function handleVidlinkProxy(req, res) {
     const parsedUrl = new URL(req.url || "/", `http://${host}`);
     let pathname = parsedUrl.pathname;
     const search = parsedUrl.search || "";
+    if (!req.query) {
+      req.query = Object.fromEntries(parsedUrl.searchParams.entries());
+    }
+
+    if (pathname === "/api/vidlink" || pathname === "/api/vidlink/") {
+      const origPath =
+        (req.query && req.query.__orig_path) ||
+        (req.headers && (req.headers["x-matched-path"] || req.headers["x-invoke-path"]));
+      if (origPath && typeof origPath === "string" && origPath !== "/api/vidlink" && origPath !== "/api/vidlink/") {
+        try {
+          const matchedParsed = new URL(origPath, `http://${host}`);
+          pathname = matchedParsed.pathname;
+          for (const [k, v] of matchedParsed.searchParams.entries()) {
+            if (!parsedUrl.searchParams.has(k)) {
+              parsedUrl.searchParams.set(k, v);
+            }
+          }
+        } catch (_e) {
+          pathname = origPath.split("?")[0];
+        }
+      }
+    }
 
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
@@ -169,10 +191,10 @@ async function handleVidlinkProxy(req, res) {
 
     // 0. Vital Proxy Utilities
     // Gtag shield / ad protector script
-    if (pathname === "/gtag-shield.js") {
+    if (pathname === "/gtag-shield.js" || pathname.startsWith("/gtag-shield")) {
       res.writeHead(200, {
         "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
         "Access-Control-Allow-Origin": "*",
       });
       return res.end(AD_SHIELD_JS, "utf8");

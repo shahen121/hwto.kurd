@@ -68,19 +68,27 @@
       "destination": "/api/vidcore"
     },
     {
-      "source": "/APA91:path*",
+      "source": "/vidcore/(.*)",
       "destination": "/api/vidcore"
     },
     {
-      "source": "/(vidcore|movie|tv|embed|_next|stream-proxy)/(.*)",
+      "source": "/APA91(.*)",
       "destination": "/api/vidcore"
     },
     {
-      "source": "/(APA91.*|wyzie.*|servers.*)",
+      "source": "/servers(.*)",
       "destination": "/api/vidcore"
     },
     {
-      "source": "/(gtag-shield\\.js|hwto-subtitles\\.js|script\\.js|fu\\.wasm|decrypter-worker\\.js|hls\\.worker\\.js)",
+      "source": "/wyzie(.*)",
+      "destination": "/api/vidcore"
+    },
+    {
+      "source": "/(movie|tv|embed|_next|stream-proxy)/(.*)",
+      "destination": "/api/vidcore"
+    },
+    {
+      "source": "/(gtag-shield.*|hwto-subtitles\\.js|script\\.js|fu\\.wasm|decrypter-worker\\.js|hls\\.worker\\.js)",
       "destination": "/api/vidcore"
     },
     {

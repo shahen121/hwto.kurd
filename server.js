@@ -90,6 +90,7 @@ function isProxyRoute(pathname, req) {
     pathname.startsWith("/api/b/") ||
     pathname === "/api/skip-events" ||
     pathname === "/gtag-shield.js" ||
+    pathname.startsWith("/gtag-shield") ||
     pathname === "/hwto-subtitles.js" ||
     pathname === "/script.js" ||
     pathname === "/fu.wasm" ||

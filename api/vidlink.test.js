@@ -477,6 +477,9 @@ test("Vidlink dedicated SourceBufferSink error muting script", () => {
       error: (...args) => capturedErrors.push(args.join(" ")),
       warn: (...args) => capturedWarns.push(args.join(" ")),
     },
+    window: {
+      addEventListener: () => {},
+    },
   };
 
   vm.runInNewContext(SOURCE_BUFFER_MUTE_JS, sandbox);
@@ -493,10 +496,31 @@ test("Vidlink dedicated SourceBufferSink error muting script", () => {
   sandbox.console.warn("[SourceBufferSink] Warning on segment drop");
   assert.equal(capturedWarns.length, 0);
 
-  // 4. Regular app error is preserved
+  // 4. Mutes React hydration #418 and unshift tracker error
+  sandbox.console.error("Minified React error #418; visit https://react.dev/errors/418");
+  sandbox.console.error("Uncaught TypeError: Cannot read properties of undefined (reading 'unshift')");
+  assert.equal(capturedErrors.length, 0);
+
+  // 5. Regular app error is preserved
   sandbox.console.error("Real critical playback error");
   assert.equal(capturedErrors.length, 1);
   assert.ok(capturedErrors[0].includes("Real critical playback error"));
+
+  // 6. Resilient to console.error reassignment by external bundles (e.g. 7023-*.js)
+  const bundleErrors = [];
+  sandbox.console.error = function(...args) {
+    bundleErrors.push(args.join(" "));
+  };
+
+  // Reassigned console.error MUST still mute SourceBufferSink and React #418
+  sandbox.console.error("[SourceBufferSink] [3460] SourceBuffer append failed");
+  sandbox.console.error("Error: Minified React error #418");
+  assert.equal(bundleErrors.length, 0);
+
+  // But forwards legitimate errors to the bundle's handler
+  sandbox.console.error("Real critical playback error from bundle");
+  assert.equal(bundleErrors.length, 1);
+  assert.ok(bundleErrors[0].includes("Real critical playback error from bundle"));
 });
 
 

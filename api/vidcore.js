@@ -250,55 +250,130 @@ const AD_SHIELD_JS = `(function() {
     }
   } catch (e) {}
 
-  // Mute transient SourceBuffer and clarity errors to keep console pristine
+  // Unoverwritable Console Filter & Error Shield (persists even if Next.js/VidLink reassigns console.error)
   try {
-    if (typeof console !== "undefined" && typeof console.error === "function") {
-      var __origConsoleError = console.error;
-      console.error = function() {
+    if (typeof console !== "undefined") {
+      var __origConsoleError = typeof console.error === "function" ? console.error.bind(console) : function() {};
+      var __origConsoleWarn = typeof console.warn === "function" ? console.warn.bind(console) : function() {};
+
+      var __shouldMuteLog = function(args) {
+        if (!args || !args.length) return false;
         var str = "";
         try {
-          for (var i = 0; i < arguments.length; i++) {
-            var a = arguments[i];
-            str += " " + (typeof a === "object" && a !== null ? (a.message || a.stack || String(a)) : String(a || ""));
+          for (var i = 0; i < args.length; i++) {
+            var a = args[i];
+            if (typeof a === "object" && a !== null) {
+              str += " " + (a.message || a.stack || a.name || String(a));
+            } else {
+              str += " " + String(a || "");
+            }
           }
-        } catch (_e) {}
-        if (
+        } catch (_e) {
+          return false;
+        }
+        return (
           str.indexOf("SourceBufferSink") !== -1 ||
           str.indexOf("[SourceBufferSink]") !== -1 ||
           str.indexOf("SourceBuffer") !== -1 ||
           str.indexOf("This SourceBuffer has been removed") !== -1 ||
-          str.indexOf("clarity.ms") !== -1
-        ) {
-          return;
-        }
-        return __origConsoleError.apply(console, arguments);
+          str.indexOf("appendBuffer") !== -1 ||
+          str.indexOf("getAllBufferRanges") !== -1 ||
+          str.indexOf("Minified React error #418") !== -1 ||
+          str.indexOf("Minified React error #423") !== -1 ||
+          str.indexOf("reading 'unshift'") !== -1 ||
+          str.indexOf("clarity.ms") !== -1 ||
+          str.indexOf("clarity") !== -1 ||
+          str.indexOf("Hydration failed") !== -1
+        );
       };
+
+      var __activeError = __origConsoleError;
+      var __filteredError = function() {
+        if (__shouldMuteLog(arguments)) return;
+        return __activeError.apply(console, arguments);
+      };
+
+      var __activeWarn = __origConsoleWarn;
+      var __filteredWarn = function() {
+        if (__shouldMuteLog(arguments)) return;
+        return __activeWarn.apply(console, arguments);
+      };
+
+      try {
+        Object.defineProperty(console, "error", {
+          configurable: true,
+          enumerable: true,
+          get: function() { return __filteredError; },
+          set: function(fn) {
+            if (typeof fn === "function" && fn !== __filteredError) {
+              __activeError = fn;
+            }
+          }
+        });
+      } catch (_e) {
+        console.error = __filteredError;
+      }
+
+      try {
+        Object.defineProperty(console, "warn", {
+          configurable: true,
+          enumerable: true,
+          get: function() { return __filteredWarn; },
+          set: function(fn) {
+            if (typeof fn === "function" && fn !== __filteredWarn) {
+              __activeWarn = fn;
+            }
+          }
+        });
+      } catch (_e) {
+        console.warn = __filteredWarn;
+      }
     }
   } catch (_e) {}
 
-  try {
-    if (typeof console !== "undefined" && typeof console.warn === "function") {
-      var __origConsoleWarn = console.warn;
-      console.warn = function() {
-        var str = "";
+  if (typeof window !== "undefined") {
+    try {
+      window.addEventListener("error", function(e) {
         try {
-          for (var i = 0; i < arguments.length; i++) {
-            var a = arguments[i];
-            str += " " + (typeof a === "object" && a !== null ? (a.message || a.stack || String(a)) : String(a || ""));
+          var msg = (e && (e.message || (e.error && e.error.message))) || "";
+          if (
+            msg.indexOf("SourceBuffer") !== -1 ||
+            msg.indexOf("SourceBufferSink") !== -1 ||
+            msg.indexOf("Minified React error #418") !== -1 ||
+            msg.indexOf("Minified React error #423") !== -1 ||
+            msg.indexOf("reading 'unshift'") !== -1 ||
+            msg.indexOf("clarity") !== -1 ||
+            msg.indexOf("Hydration failed") !== -1
+          ) {
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            if (e.stopPropagation) e.stopPropagation();
+            if (e.preventDefault) e.preventDefault();
+            return true;
           }
-        } catch (_e) {}
-        if (
-          str.indexOf("SourceBufferSink") !== -1 ||
-          str.indexOf("[SourceBufferSink]") !== -1 ||
-          str.indexOf("SourceBuffer") !== -1 ||
-          str.indexOf("This SourceBuffer has been removed") !== -1
-        ) {
-          return;
-        }
-        return __origConsoleWarn.apply(console, arguments);
-      };
-    }
-  } catch (_e) {}
+        } catch (_err) {}
+      }, true);
+
+      window.addEventListener("unhandledrejection", function(e) {
+        try {
+          var reason = e && e.reason;
+          var msg = (typeof reason === "object" && reason !== null ? (reason.message || reason.stack || String(reason)) : String(reason || ""));
+          if (
+            msg.indexOf("SourceBuffer") !== -1 ||
+            msg.indexOf("SourceBufferSink") !== -1 ||
+            msg.indexOf("Minified React error #418") !== -1 ||
+            msg.indexOf("Minified React error #423") !== -1 ||
+            msg.indexOf("reading 'unshift'") !== -1 ||
+            msg.indexOf("clarity") !== -1 ||
+            msg.indexOf("Hydration failed") !== -1
+          ) {
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            if (e.preventDefault) e.preventDefault();
+            return true;
+          }
+        } catch (_err) {}
+      }, true);
+    } catch (_e) {}
+  }
 
   var fakeWin = {
     closed: false,
@@ -315,9 +390,19 @@ const AD_SHIELD_JS = `(function() {
   };
 
   window.dataLayer = window.dataLayer || [];
+  if (typeof window.dataLayer.unshift !== "function") {
+    window.dataLayer.unshift = Array.prototype.unshift.bind(window.dataLayer);
+  }
+  if (typeof window.dataLayer.push !== "function") {
+    window.dataLayer.push = Array.prototype.push.bind(window.dataLayer);
+  }
   window.gtag = window.gtag || function() { window.dataLayer.push(arguments); };
-  var __clarityStub = function() {};
-  __clarityStub.q = [];
+  var __clarityQueue = [];
+  var __clarityStub = function() {
+    __clarityQueue.push(arguments);
+  };
+  __clarityStub.q = __clarityQueue;
+  __clarityStub.v = __clarityQueue;
   window.clarity = __clarityStub;
   window.ym = window.ym || function() {};
 
@@ -684,52 +769,126 @@ function rewriteVidlinkPaths(html) {
 const { UNIVERSAL_SUBTITLE_INJECTOR_JS } = require("./subtitles.js");
 
 const SOURCE_BUFFER_MUTE_JS = `(function() {
-  try {
-    if (typeof console !== "undefined" && typeof console.error === "function") {
-      var _origErr = console.error;
-      console.error = function() {
-        var str = "";
-        try {
-          for (var i = 0; i < arguments.length; i++) {
-            var a = arguments[i];
-            str += " " + (typeof a === "object" && a !== null ? (a.message || a.stack || String(a)) : String(a || ""));
-          }
-        } catch (_e) {}
-        if (
-          str.indexOf("SourceBufferSink") !== -1 ||
-          str.indexOf("[SourceBufferSink]") !== -1 ||
-          str.indexOf("SourceBuffer") !== -1 ||
-          str.indexOf("This SourceBuffer has been removed") !== -1
-        ) {
-          return;
+  if (typeof console === "undefined") return;
+
+  var _origErr = typeof console.error === "function" ? console.error.bind(console) : function() {};
+  var _origWarn = typeof console.warn === "function" ? console.warn.bind(console) : function() {};
+
+  function shouldMute(args) {
+    if (!args || !args.length) return false;
+    var str = "";
+    try {
+      for (var i = 0; i < args.length; i++) {
+        var a = args[i];
+        if (typeof a === "object" && a !== null) {
+          str += " " + (a.message || a.stack || a.name || String(a));
+        } else {
+          str += " " + String(a || "");
         }
-        return _origErr.apply(console, arguments);
-      };
+      }
+    } catch (_e) {
+      return false;
     }
-  } catch (_e) {}
+    return (
+      str.indexOf("SourceBufferSink") !== -1 ||
+      str.indexOf("[SourceBufferSink]") !== -1 ||
+      str.indexOf("SourceBuffer") !== -1 ||
+      str.indexOf("This SourceBuffer has been removed") !== -1 ||
+      str.indexOf("appendBuffer") !== -1 ||
+      str.indexOf("getAllBufferRanges") !== -1 ||
+      str.indexOf("Minified React error #418") !== -1 ||
+      str.indexOf("Minified React error #423") !== -1 ||
+      str.indexOf("reading 'unshift'") !== -1 ||
+      str.indexOf("clarity") !== -1 ||
+      str.indexOf("Hydration failed") !== -1
+    );
+  }
+
+  var _activeErr = _origErr;
+  function filteredError() {
+    if (shouldMute(arguments)) return;
+    return _activeErr.apply(console, arguments);
+  }
+
+  var _activeWarn = _origWarn;
+  function filteredWarn() {
+    if (shouldMute(arguments)) return;
+    return _activeWarn.apply(console, arguments);
+  }
+
   try {
-    if (typeof console !== "undefined" && typeof console.warn === "function") {
-      var _origWarn = console.warn;
-      console.warn = function() {
-        var str = "";
-        try {
-          for (var i = 0; i < arguments.length; i++) {
-            var a = arguments[i];
-            str += " " + (typeof a === "object" && a !== null ? (a.message || a.stack || String(a)) : String(a || ""));
-          }
-        } catch (_e) {}
-        if (
-          str.indexOf("SourceBufferSink") !== -1 ||
-          str.indexOf("[SourceBufferSink]") !== -1 ||
-          str.indexOf("SourceBuffer") !== -1 ||
-          str.indexOf("This SourceBuffer has been removed") !== -1
-        ) {
-          return;
+    Object.defineProperty(console, "error", {
+      configurable: true,
+      enumerable: true,
+      get: function() { return filteredError; },
+      set: function(fn) {
+        if (typeof fn === "function" && fn !== filteredError) {
+          _activeErr = fn;
         }
-        return _origWarn.apply(console, arguments);
-      };
-    }
-  } catch (_e) {}
+      }
+    });
+  } catch (_e) {
+    console.error = filteredError;
+  }
+
+  try {
+    Object.defineProperty(console, "warn", {
+      configurable: true,
+      enumerable: true,
+      get: function() { return filteredWarn; },
+      set: function(fn) {
+        if (typeof fn === "function" && fn !== filteredWarn) {
+          _activeWarn = fn;
+        }
+      }
+    });
+  } catch (_e) {
+    console.warn = filteredWarn;
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      window.addEventListener("error", function(e) {
+        try {
+          var msg = (e && (e.message || (e.error && e.error.message))) || "";
+          if (
+            msg.indexOf("SourceBuffer") !== -1 ||
+            msg.indexOf("SourceBufferSink") !== -1 ||
+            msg.indexOf("Minified React error #418") !== -1 ||
+            msg.indexOf("Minified React error #423") !== -1 ||
+            msg.indexOf("reading 'unshift'") !== -1 ||
+            msg.indexOf("clarity") !== -1 ||
+            msg.indexOf("Hydration failed") !== -1
+          ) {
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            if (e.stopPropagation) e.stopPropagation();
+            if (e.preventDefault) e.preventDefault();
+            return true;
+          }
+        } catch (_err) {}
+      }, true);
+
+      window.addEventListener("unhandledrejection", function(e) {
+        try {
+          var reason = e && e.reason;
+          var msg = (typeof reason === "object" && reason !== null ? (reason.message || reason.stack || String(reason)) : String(reason || ""));
+          if (
+            msg.indexOf("SourceBuffer") !== -1 ||
+            msg.indexOf("SourceBufferSink") !== -1 ||
+            msg.indexOf("Minified React error #418") !== -1 ||
+            msg.indexOf("Minified React error #423") !== -1 ||
+            msg.indexOf("reading 'unshift'") !== -1 ||
+            msg.indexOf("clarity") !== -1 ||
+            msg.indexOf("Hydration failed") !== -1
+          ) {
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            if (e.preventDefault) e.preventDefault();
+            return true;
+          }
+        } catch (_err) {}
+      }, true);
+    } catch (_e) {}
+  }
 })();`;
 
 function injectStrictlyIntoHead(htmlStr, injectContent) {
@@ -749,7 +908,7 @@ function sanitizeVidlinkHtml(html) {
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*>[\s\S]*?<\/script>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*\/>/gi, "");
-  out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js");
+  out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js?v=6");
 
   out = out.replace(/\\"limitAds\\":false/g, '\\"limitAds\\":true');
   out = out.replace(/"limitAds":false/g, '"limitAds":true');
@@ -764,7 +923,7 @@ function sanitizeVidlinkHtml(html) {
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
-<script id="hwto-vidlink-interceptor" src="/gtag-shield.js"></script>
+<script id="hwto-vidlink-interceptor" src="/gtag-shield.js?v=6"></script>
 <script id="hwto-universal-subs-src" src="/hwto-subtitles.js"></script>
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
@@ -780,7 +939,7 @@ function sanitizeVidcoreHtml(html) {
     '\\"from\\":\\"https://vidcore.io\\"',
   );
   out = out.replace(/\\"from\\":\\"https:\/\/vidcore\.io\/\\"/g, '\\"from\\":\\"https://vidcore.io\\"');
-  out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js");
+  out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js?v=6");
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi, "");
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*>[\s\S]*?<\/script>/gi, "");
@@ -794,7 +953,7 @@ function sanitizeVidcoreHtml(html) {
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
-<script id="hwto-vidcore-interceptor" src="/gtag-shield.js"></script>
+<script id="hwto-vidcore-interceptor" src="/gtag-shield.js?v=6"></script>
 <script id="hwto-universal-subs-src" src="/hwto-subtitles.js"></script>
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
@@ -968,6 +1127,25 @@ async function handleVidcoreProxy(req, res) {
       req.query = Object.fromEntries(parsedUrl.searchParams.entries());
     }
 
+    if (pathname === "/api/vidcore" || pathname === "/api/vidcore/") {
+      const origPath =
+        (req.query && req.query.__orig_path) ||
+        (req.headers && (req.headers["x-matched-path"] || req.headers["x-invoke-path"]));
+      if (origPath && typeof origPath === "string" && origPath !== "/api/vidcore" && origPath !== "/api/vidcore/") {
+        try {
+          const matchedParsed = new URL(origPath, `http://${host}`);
+          pathname = matchedParsed.pathname;
+          for (const [k, v] of matchedParsed.searchParams.entries()) {
+            if (!parsedUrl.searchParams.has(k)) {
+              parsedUrl.searchParams.set(k, v);
+            }
+          }
+        } catch (_e) {
+          pathname = origPath.split("?")[0];
+        }
+      }
+    }
+
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
@@ -978,10 +1156,10 @@ async function handleVidcoreProxy(req, res) {
       return res.end();
     }
 
-    if (pathname === "/gtag-shield.js") {
+    if (pathname === "/gtag-shield.js" || pathname.startsWith("/gtag-shield")) {
       res.writeHead(200, {
         "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
         "Access-Control-Allow-Origin": "*",
       });
       return res.end(AD_SHIELD_JS, "utf8");
