@@ -319,7 +319,7 @@ async function subtitlesHandler(req, res) {
             if (!available.some((a) => a.lang === meta.lang)) {
               available.push({
                 ...meta,
-                url: `${externalBase}/movie/${id}/${norm}.vtt`,
+                url: `/subtitles/movie/${id}/${norm}.vtt`,
               });
             }
           }
@@ -341,7 +341,7 @@ async function subtitlesHandler(req, res) {
             if (!available.some((a) => a.lang === meta.lang)) {
               available.push({
                 ...meta,
-                url: `${externalBase}/series/${id}/s${numSeason}/e${numEpisode}_${norm}.vtt`,
+                url: `/subtitles/series/${id}/s${numSeason}/e${numEpisode}_${norm}.vtt`,
               });
             }
           }
@@ -366,21 +366,21 @@ async function subtitlesHandler(req, res) {
       const itemPath = `series/${id}/s${numSeason}/e${numEpisode}`;
       available.push({
         ...SUB_META.ku,
-        url: `${externalBase}/${itemPath}_ku.vtt`,
+        url: `/subtitles/${itemPath}_ku.vtt`,
       });
       available.push({
         ...SUB_META.ar,
-        url: `${externalBase}/${itemPath}_ar.vtt`,
+        url: `/subtitles/${itemPath}_ar.vtt`,
       });
     } else {
       const itemPath = `movie/${id}`;
       available.push({
         ...SUB_META.ku,
-        url: `${externalBase}/${itemPath}/ku.vtt`,
+        url: `/subtitles/${itemPath}/ku.vtt`,
       });
       available.push({
         ...SUB_META.ar,
-        url: `${externalBase}/${itemPath}/ar.vtt`,
+        url: `/subtitles/${itemPath}/ar.vtt`,
       });
     }
   }
