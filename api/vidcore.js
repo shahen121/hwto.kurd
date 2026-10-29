@@ -68,14 +68,20 @@ function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionId =
 
 function getScrapeDoSessionId(req, targetPathAndQuery = "") {
   if (!req) return "884422";
-  if (req.query && (req.query.sessionId || req.query.session_number || req.query.sid || req.query.media_id)) {
-    const s = String(req.query.sessionId || req.query.session_number || req.query.sid || req.query.media_id).trim().slice(0, 10);
+  if (
+    req.query &&
+    (req.query.sessionId || req.query.session_number || req.query.sid || req.query.media_id)
+  ) {
+    const s = String(
+      req.query.sessionId || req.query.session_number || req.query.sid || req.query.media_id
+    )
+      .trim()
+      .slice(0, 10);
     if (s) return s;
   }
 
-  // 1. Extract media ID (tmdbId) from target path, request URL, or Referer
   let mediaId = "";
-  const pathMatch = String(targetPathAndQuery || (req.url || "")).match(/\/(movie|tv)\/(\d+)/i);
+  const pathMatch = String(targetPathAndQuery || req.url || "").match(/\/(movie|tv)\/(\d+)/i);
   if (pathMatch) {
     mediaId = pathMatch[2];
   } else {
@@ -86,15 +92,12 @@ function getScrapeDoSessionId(req, targetPathAndQuery = "") {
     }
   }
 
-  // Check custom header if present
   if (!mediaId && req.headers && req.headers["x-hwto-media-id"]) {
     mediaId = String(req.headers["x-hwto-media-id"]).trim();
   }
 
-  // 2. Extract Client IP
   const rawHeader =
-    (req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) ||
-    "";
+    (req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) || "";
   const clientIp = rawHeader
     ? rawHeader.split(",")[0].trim()
     : (req.socket && req.socket.remoteAddress) || "";
@@ -103,7 +106,6 @@ function getScrapeDoSessionId(req, targetPathAndQuery = "") {
     return "884422";
   }
 
-  // 3. Deterministic session number pinned across HTML page and APA91 decryption POST
   const seed = `${clientIp || "client"}_${mediaId || "vidcore"}`;
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -131,17 +133,13 @@ async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, option
   const method = options.method || "GET";
   const headers = { ...(options.headers || {}) };
 
-  if (method === "POST" && headers["Content-Length"] === undefined) {
-    if (options.body) {
-      headers["Content-Length"] = String(
-        Buffer.isBuffer(options.body)
-          ? options.body.length
-          : Buffer.byteLength(options.body)
-      );
-    } else {
-      headers["Content-Length"] = "0";
-    }
-  }
+  // Never set Content-Length or Connection manually with undici fetch + Scrape.do
+  delete headers["Content-Length"];
+  delete headers["content-length"];
+  delete headers["Connection"];
+  delete headers["connection"];
+  delete headers["Host"];
+  delete headers["host"];
 
   const fetchOpts = { method, headers };
   if (method === "POST" && options.body && options.body.length > 0) {
@@ -171,6 +169,7 @@ async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, option
       }
       if (res.status < 500) return res;
       lastRes = res;
+      advanceSessionToken(sessionId, tokens.length);
     } catch (err) {
       lastErr = err;
       advanceSessionToken(sessionId, tokens.length);
@@ -250,7 +249,6 @@ const AD_SHIELD_JS = `(function() {
     }
   } catch (e) {}
 
-  // Unoverwritable Console Filter & Error Shield (persists even if Next.js/VidLink reassigns console.error)
   try {
     if (typeof console !== "undefined") {
       var __origConsoleError = typeof console.error === "function" ? console.error.bind(console) : function() {};
@@ -408,10 +406,10 @@ const AD_SHIELD_JS = `(function() {
 
   function isBlockedUrl(url) {
     if (!url || typeof url !== "string") return false;
-    return /googletagmanager|google-analytics|cloudflareinsights|doubleclick|popads|propeller|adnetwork|yandex|clarity\.ms/i.test(url);
+    return /googletagmanager|google-analytics|cloudflareinsights|doubleclick|popads|propeller|adnetwork|yandex|clarity\\.ms|nske6pmog4/i.test(url);
   }
 
-  var SAFE_ASSET_RE = /(cdn\\.(jsdelivr\\.net|jwplayer\\.com)|wsrv\\.nl|image\\.tmdb\\.org|fonts\\.(googleapis|gstatic)\\.com|raw\\.githubusercontent\\.com)/i;
+  var SAFE_ASSET_RE = /(cdn\\.(jsdelivr\\.net|jwplayer\\.com)|ssl\\.p\\.jwpcdn\\.com|cdnjs\\.cloudflare\\.com|wsrv\\.nl|image\\.tmdb\\.org|fonts\\.(googleapis|gstatic)\\.com|raw\\.githubusercontent\\.com)/i;
   var STREAM_EXT_RE = /\\.(m3u8|mpd|m4s|ts|mp4|m4a|m4v|aac|key)(\\?|$|#)/i;
   var STREAM_HOST_RE = /(steelpeak|vd\\b|\\.vd\\b|vd-|\\/vd\\/|hls|flooderrr\\.store|hakunaymatata\\.com|sacdn|\\/sacdn\\/|\\/dash\\/|\\/proxy\\/|\\/mp\\/|orbitcache|premilkyway|sunnybreeze|frostywinds|cloudnestra|shadowlands|trueparadise|goldenkite|wisecanvas|streamhi|streamcdn|vidsrc|vidstream|topcdn|vidplay|megafiles|megacloud)/i;
 
@@ -419,11 +417,12 @@ const AD_SHIELD_JS = `(function() {
     if (!inputUrl || typeof inputUrl !== "string") return null;
     var rawUrl = inputUrl.trim();
     if (!rawUrl || /^(blob:|data:|javascript:|about:|ws:|wss:)/i.test(rawUrl)) return null;
+    if (SAFE_ASSET_RE.test(rawUrl)) return null;
     if (rawUrl.indexOf(CF_WORKER + "/?") === 0 || rawUrl.indexOf(CF_WORKER + "?") === 0 || rawUrl.indexOf("/stream-proxy/") !== -1) return null;
 
     var locOrigin = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "";
 
-    // 0. Intercept APA91 decryption calls for VidCore (relative or full URLs pointing to vidcore.io or vercel domain)
+    // 0. Intercept APA91 decryption calls for VidCore
     if (rawUrl.indexOf("APA91") !== -1) {
       var apaClean = rawUrl;
       if (apaClean.indexOf("http://") === 0 || apaClean.indexOf("https://") === 0) {
@@ -467,7 +466,6 @@ const AD_SHIELD_JS = `(function() {
       }
     } catch (_e) {}
 
-    // 1. VidLink absolute / protocol-relative URLs (for API, settings, RSC flight data)
     if (rawUrl.indexOf("vidlink.pro/api/") !== -1) {
       var apiPart = rawUrl.slice(rawUrl.indexOf("vidlink.pro/api/") + "vidlink.pro".length);
       return {
@@ -483,7 +481,7 @@ const AD_SHIELD_JS = `(function() {
       };
     }
     if (rawUrl.indexOf("https://vidlink.pro/") === 0 || rawUrl.indexOf("http://vidlink.pro/") === 0 || rawUrl.indexOf("//vidlink.pro/") === 0) {
-      var relVidlink = rawUrl.replace(/^(?:https?:)?\/\/vidlink\.pro/i, "");
+      var relVidlink = rawUrl.replace(/^(?:https?:)?\\/\\/vidlink\\.pro/i, "");
       if (STREAM_EXT_RE.test(relVidlink) || STREAM_HOST_RE.test(relVidlink)) {
         var fullStream = rawUrl.indexOf("//") === 0 ? ("https:" + rawUrl) : rawUrl;
         return {
@@ -497,7 +495,6 @@ const AD_SHIELD_JS = `(function() {
       };
     }
 
-    // 2. Intercept relative /_next/ or /api/ requests in VidLink context
     if (isVidlink) {
       if (rawUrl.indexOf("/_next/") === 0 || rawUrl.indexOf("_next/") === 0) {
         var cleanNext = rawUrl.indexOf("/_next/") === 0 ? rawUrl : ("/" + rawUrl);
@@ -612,6 +609,9 @@ const AD_SHIELD_JS = `(function() {
         if (typeof input === "string") reqUrl = input;
         else if (typeof URL !== "undefined" && input instanceof URL) reqUrl = input.toString();
         else if (input && typeof input === "object" && typeof input.url === "string") reqUrl = input.url;
+        if (isBlockedUrl(reqUrl)) {
+          return Promise.resolve(new Response("", { status: 200 }));
+        }
         var rw = resolveVidlinkStreamUrl(reqUrl);
         if (rw) {
           var newInput = rw.proxiedUrl;
@@ -671,6 +671,9 @@ const AD_SHIELD_JS = `(function() {
           get: function() { return scriptSrcDesc.get.call(this); },
           set: function(val) {
             var raw = String(val || "");
+            if (isBlockedUrl(raw)) {
+              return scriptSrcDesc.set.call(this, "data:application/javascript,//");
+            }
             if (isVidlink) {
               if (raw.indexOf("/_next/") === 0 || raw.indexOf("_next/") === 0) {
                 var cleanRel = raw.slice(raw.indexOf("_next/") + 6);
@@ -687,7 +690,7 @@ const AD_SHIELD_JS = `(function() {
                 var cleanRel2 = raw.slice(raw.indexOf("_next/static/") + 13);
                 var qIdx = cleanRel2.indexOf("?");
                 var baseClean = qIdx !== -1 ? cleanRel2.slice(0, qIdx) : cleanRel2;
-                var newSrc3 = (locOrigin ? (locOrigin + "/vidcore/_next/static/") : ("/vidcore/_next/static/")) + baseClean + "?v=4";
+                var newSrc3 = (locOrigin ? (locOrigin + "/vidcore/_next/static/") : ("/vidcore/_next/static/")) + baseClean + "?v=5";
                 return scriptSrcDesc.set.call(this, newSrc3);
               }
             }
@@ -745,7 +748,7 @@ function rewriteVidcoreStaticLinks(html) {
     (match, attr, relPath) => {
       const cleanPath = relPath.replace(/[?&]v=[^&"']+/g, "");
       const separator = cleanPath.includes("?") ? "&" : "?";
-      return `${attr}="/vidcore/_next/static/${cleanPath}${separator}v=4"`;
+      return `${attr}="/vidcore/_next/static/${cleanPath}${separator}v=5"`;
     }
   );
 }
@@ -753,16 +756,25 @@ function rewriteVidcoreStaticLinks(html) {
 function rewriteVidlinkPaths(html) {
   if (!html || typeof html !== "string") return html;
   let out = html;
-  out = out.replace(/https?:\/\/vidlink\.pro\/_next\//g, '/vidlink/_next/');
-  out = out.replace(/https?:\/\/vidlink\.pro\/api\/(?!subtitles|tmdb|football|hls)/g, '/vidlink/api/');
+  out = out.replace(/https?:\/\/vidlink\.pro\/_next\//g, "/vidlink/_next/");
+  out = out.replace(
+    /https?:\/\/vidlink\.pro\/api\/(?!subtitles|tmdb|football|hls)/g,
+    "/vidlink/api/"
+  );
 
-  out = out.replace(/(href|src)=["'](?:\/vidlink)?\/_next\/([^"']+)["']/g, '$1="/vidlink/_next/$2"');
-  out = out.replace(/(["'\\])\/_next\//g, '$1/vidlink/_next/');
-  out = out.replace(/\/vidlink\/vidlink\//g, '/vidlink/');
+  out = out.replace(
+    /(href|src)=["'](?:\/vidlink)?\/_next\/([^"']+)["']/g,
+    '$1="/vidlink/_next/$2"'
+  );
+  out = out.replace(/(["'\\])\/_next\//g, "$1/vidlink/_next/");
+  out = out.replace(/\/vidlink\/vidlink\//g, "/vidlink/");
 
-  out = out.replace(/(href|src)=["'](?:\/vidlink)?\/api\/(?!subtitles|tmdb|football|hls)([^"']+)["']/g, '$1="/vidlink/api/$2"');
-  out = out.replace(/(["'\\])\/api\/(?!subtitles|tmdb|football|hls)/g, '$1/vidlink/api/');
-  out = out.replace(/\/vidlink\/vidlink\//g, '/vidlink/');
+  out = out.replace(
+    /(href|src)=["'](?:\/vidlink)?\/api\/(?!subtitles|tmdb|football|hls)([^"']+)["']/g,
+    '$1="/vidlink/api/$2"'
+  );
+  out = out.replace(/(["'\\])\/api\/(?!subtitles|tmdb|football|hls)/g, "$1/vidlink/api/");
+  out = out.replace(/\/vidlink\/vidlink\//g, "/vidlink/");
   return out;
 }
 
@@ -845,50 +857,6 @@ const SOURCE_BUFFER_MUTE_JS = `(function() {
   } catch (_e) {
     console.warn = filteredWarn;
   }
-
-  if (typeof window !== "undefined") {
-    try {
-      window.addEventListener("error", function(e) {
-        try {
-          var msg = (e && (e.message || (e.error && e.error.message))) || "";
-          if (
-            msg.indexOf("SourceBuffer") !== -1 ||
-            msg.indexOf("SourceBufferSink") !== -1 ||
-            msg.indexOf("Minified React error #418") !== -1 ||
-            msg.indexOf("Minified React error #423") !== -1 ||
-            msg.indexOf("reading 'unshift'") !== -1 ||
-            msg.indexOf("clarity") !== -1 ||
-            msg.indexOf("Hydration failed") !== -1
-          ) {
-            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-            if (e.stopPropagation) e.stopPropagation();
-            if (e.preventDefault) e.preventDefault();
-            return true;
-          }
-        } catch (_err) {}
-      }, true);
-
-      window.addEventListener("unhandledrejection", function(e) {
-        try {
-          var reason = e && e.reason;
-          var msg = (typeof reason === "object" && reason !== null ? (reason.message || reason.stack || String(reason)) : String(reason || ""));
-          if (
-            msg.indexOf("SourceBuffer") !== -1 ||
-            msg.indexOf("SourceBufferSink") !== -1 ||
-            msg.indexOf("Minified React error #418") !== -1 ||
-            msg.indexOf("Minified React error #423") !== -1 ||
-            msg.indexOf("reading 'unshift'") !== -1 ||
-            msg.indexOf("clarity") !== -1 ||
-            msg.indexOf("Hydration failed") !== -1
-          ) {
-            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-            if (e.preventDefault) e.preventDefault();
-            return true;
-          }
-        } catch (_err) {}
-      }, true);
-    } catch (_e) {}
-  }
 })();`;
 
 function injectStrictlyIntoHead(htmlStr, injectContent) {
@@ -908,22 +876,27 @@ function sanitizeVidlinkHtml(html) {
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*>[\s\S]*?<\/script>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*\/>/gi, "");
-  out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js?v=6");
+  out = out.replace(
+    /https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi,
+    "/gtag-shield.js?v=7"
+  );
 
   out = out.replace(/\\"limitAds\\":false/g, '\\"limitAds\\":true');
   out = out.replace(/"limitAds":false/g, '"limitAds":true');
-  out = out.replace(/\\"referer\\":(null|\\"[^\\"]*\\")/g, '\\"referer\\":\\"https://vidlink.pro/\\"');
+  out = out.replace(
+    /\\"referer\\":(null|\\"[^\\"]*\\")/g,
+    '\\"referer\\":\\"https://vidlink.pro/\\"'
+  );
 
   out = sanitizePreloadLinks(out);
   out = rewriteVidlinkPaths(out);
 
   const headInject = `
 <script id="hwto-vidlink-sourcebuffer-mute">${SOURCE_BUFFER_MUTE_JS}</script>
-<link rel="preconnect" href="https://hwto.proteome626.workers.dev" />
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
-<script id="hwto-vidlink-interceptor" src="/gtag-shield.js?v=6"></script>
+<script id="hwto-vidlink-interceptor" src="/gtag-shield.js?v=7"></script>
 <script id="hwto-universal-subs-src" src="/hwto-subtitles.js"></script>
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
@@ -936,10 +909,13 @@ function sanitizeVidcoreHtml(html) {
   out = out.replace(/"ad":true/g, '"ad":false');
   out = out.replace(
     /\\"from\\":(null|\\"(?!https:\/\/vidcore\.io)[^\\]*\\")/g,
-    '\\"from\\":\\"https://vidcore.io\\"',
+    '\\"from\\":\\"https://vidcore.io\\"'
   );
   out = out.replace(/\\"from\\":\\"https:\/\/vidcore\.io\/\\"/g, '\\"from\\":\\"https://vidcore.io\\"');
-  out = out.replace(/https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi, "/gtag-shield.js?v=6");
+  out = out.replace(
+    /https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=[A-Z0-9-]+/gi,
+    "/gtag-shield.js?v=7"
+  );
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*>[\s\S]*?<\/script>/gi, "");
   out = out.replace(/<script\b[^>]*static\.cloudflareinsights\.com[^>]*\/>/gi, "");
   out = out.replace(/<script\b[^>]*clarity\.ms[^>]*>[\s\S]*?<\/script>/gi, "");
@@ -953,29 +929,28 @@ function sanitizeVidcoreHtml(html) {
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
-<script id="hwto-vidcore-interceptor" src="/gtag-shield.js?v=6"></script>
+<script id="hwto-vidcore-interceptor" src="/gtag-shield.js?v=7"></script>
 <script id="hwto-universal-subs-src" src="/hwto-subtitles.js"></script>
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
   return injectStrictlyIntoHead(out, headInject);
 }
 
-function patchPlayerChunk(jsCode, pathname = "") {
-  // Return JS chunk completely clean and untouched (100% original) to prevent SyntaxError
+function patchPlayerChunk(jsCode) {
   return jsCode;
 }
 
 const staticChunkCache = new Map();
 const vidcoreHtmlCache = new Map();
-const HTML_CACHE_TTL = 20 * 60 * 1000; // 20 minutes
+const HTML_CACHE_TTL = 20 * 60 * 1000;
 const CHUNK_CACHE_CONTROL = "public, max-age=31536000, immutable";
 const HTML_CACHE_CONTROL = "public, max-age=1200, s-maxage=1200, stale-while-revalidate=86400";
 
-function fetchWithTimeoutSignal(url, options = {}, ms = 2500) {
+function fetchWithTimeoutSignal(url, options = {}, ms = 4500) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
   return fetch(url, { ...options, signal: controller.signal }).finally(() =>
-    clearTimeout(timer),
+    clearTimeout(timer)
   );
 }
 
@@ -986,18 +961,30 @@ function getCleanUserAgent(rawUa) {
   return rawUa;
 }
 
-async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, useScrapeDoFallback = true) {
+async function fetchFromUpstream(
+  origin,
+  targetPathAndQuery,
+  req,
+  bodyBuffer,
+  useScrapeDoFallback = true
+) {
   const targetUrl = origin + targetPathAndQuery;
   const method = req.method || "GET";
   const forwardHeaders = {
     "User-Agent": getCleanUserAgent(req.headers["user-agent"]),
     Accept: req.headers["accept"] || "*/*",
     "Accept-Language": req.headers["accept-language"] || "en-US,en;q=0.9,ar;q=0.8",
-    Connection: "keep-alive",
     Referer: `${origin}/`,
     Origin: origin,
   };
-  const optionalHeaders = ["x-csrf-token", "content-type", "rsc", "next-router-state-tree", "next-router-prefetch", "next-url"];
+  const optionalHeaders = [
+    "x-csrf-token",
+    "content-type",
+    "rsc",
+    "next-router-state-tree",
+    "next-router-prefetch",
+    "next-url",
+  ];
   for (const h of optionalHeaders) {
     if (req.headers[h]) forwardHeaders[h] = req.headers[h];
   }
@@ -1009,32 +996,38 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
       !forwardHeaders[lower] &&
       !lower.startsWith("x-forwarded") &&
       !lower.startsWith("x-vercel") &&
-      !lower.startsWith("x-hwto")
+      !lower.startsWith("x-hwto") &&
+      !lower.startsWith("x-matched") &&
+      !lower.startsWith("x-invoke")
     ) {
       forwardHeaders[k] = v;
     }
   }
 
-  if (method === "POST" || targetPathAndQuery.startsWith("/APA91") || targetPathAndQuery.includes("APA91")) {
+  if (
+    method === "POST" ||
+    targetPathAndQuery.startsWith("/APA91") ||
+    targetPathAndQuery.includes("APA91")
+  ) {
     forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
     forwardHeaders["Origin"] = VIDCORE_ORIGIN;
     delete forwardHeaders["content-type"];
     if (req.headers && (req.headers["content-type"] || req.headers["Content-Type"])) {
-      forwardHeaders["Content-Type"] = req.headers["content-type"] || req.headers["Content-Type"];
+      forwardHeaders["Content-Type"] =
+        req.headers["content-type"] || req.headers["Content-Type"];
     } else {
       forwardHeaders["Content-Type"] = "application/octet-stream";
     }
-    delete forwardHeaders["content-length"];
-    if (bodyBuffer && bodyBuffer.length > 0) {
-      forwardHeaders["Content-Length"] = String(bodyBuffer.length);
-    } else {
-      forwardHeaders["Content-Length"] = "0";
-    }
   }
 
+  // Never set Content-Length or Connection manually
+  delete forwardHeaders["content-length"];
+  delete forwardHeaders["Content-Length"];
+  delete forwardHeaders["connection"];
+  delete forwardHeaders["Connection"];
+
   const isHtmlNavigation =
-    targetPathAndQuery.startsWith("/movie/") ||
-    targetPathAndQuery.startsWith("/tv/");
+    targetPathAndQuery.startsWith("/movie/") || targetPathAndQuery.startsWith("/tv/");
 
   const isDecryptionRoute =
     targetPathAndQuery.startsWith("/APA91") ||
@@ -1052,22 +1045,6 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     scrapeOptions.body = bodyBuffer;
   }
 
-  // 1. VidCore HTML navigation and APA91 decryption POST MUST go through Scrape.do directly!
-  // This guarantees VidCore sees the exact same residential proxy IP and session_number,
-  // preventing 555/403 blocks and infinite loading spinners.
-  if (
-    (isHtmlNavigation || isDecryptionRoute || method === "POST") &&
-    hasScrapeTokens &&
-    config.mode !== "direct"
-  ) {
-    try {
-      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
-    } catch (_err) {
-      // If Scrape.do fails, fall through to direct fetch attempt
-    }
-  }
-
-  // 2. Direct Fetch with 2500ms timeout for static assets and other routes
   const fetchOptions = {
     method,
     headers: forwardHeaders,
@@ -1076,28 +1053,47 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     fetchOptions.body = bodyBuffer;
   }
 
-  try {
-    const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 2500);
-    const status = directRes?.status;
+  // 1. For VidCore HTML navigation and APA91 decryption POST:
+  // Try Scrape.do first; if it returns >= 500 or throws, fall back to Direct Fetch immediately!
+  if (
+    (isHtmlNavigation || isDecryptionRoute || method === "POST") &&
+    hasScrapeTokens &&
+    config.mode !== "direct"
+  ) {
+    try {
+      const scrapeRes = await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
+      if (scrapeRes && scrapeRes.status < 500 && scrapeRes.status !== 555) {
+        return scrapeRes;
+      }
+    } catch (_err) {
+      // Fall through to Direct Fetch fallback
+    }
+  }
 
-    // Direct fetch is good if status is 200-399 and not 555 error
+  // 2. Direct Fetch attempt
+  try {
+    const directRes = await fetchWithTimeoutSignal(targetUrl, fetchOptions, 4500);
+    const status = directRes?.status;
     if (directRes && status >= 200 && status < 400 && status !== 555) {
       return directRes;
     }
-  } catch (_err) {
-    // Direct fetch timed out or network error, fall through to Scrape.do fallback
+  } catch (_err) {}
+
+  // 3. Scrape.do fallback for other routes
+  if (useScrapeDoFallback && config.mode !== "direct" && hasScrapeTokens) {
+    try {
+      const fallbackScrapeRes = await fetchViaScrapeDoWithRotation(
+        targetUrl,
+        fetch,
+        scrapeOptions
+      );
+      if (fallbackScrapeRes && fallbackScrapeRes.status < 500) {
+        return fallbackScrapeRes;
+      }
+    } catch (_err) {}
   }
 
-  // 3. Fallback to Scrape.do with session pinning
-  if (
-    useScrapeDoFallback &&
-    config.mode !== "direct" &&
-    hasScrapeTokens
-  ) {
-    return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
-  }
-
-  // 4. Fallback direct fetch without timeout
+  // 4. Final direct fetch fallback
   return await fetch(targetUrl, fetchOptions);
 }
 
@@ -1107,7 +1103,9 @@ function readRequestBody(req) {
   if (req.rawBody && typeof req.rawBody === "string") return Promise.resolve(Buffer.from(req.rawBody));
   if (req.body && Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
   if (req.body && typeof req.body === "string") return Promise.resolve(Buffer.from(req.body));
-  if (req.body && typeof req.body === "object") return Promise.resolve(Buffer.from(JSON.stringify(req.body)));
+  if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) {
+    return Promise.resolve(Buffer.from(JSON.stringify(req.body)));
+  }
   if (req.readableEnded) return Promise.resolve(Buffer.alloc(0));
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -1122,29 +1120,53 @@ async function handleVidcoreProxy(req, res) {
     const host = req.headers.host || "localhost:3000";
     const parsedUrl = new URL(req.url || "/", `http://${host}`);
     let pathname = parsedUrl.pathname;
-    const search = parsedUrl.search || "";
-    if (!req.query) {
-      req.query = Object.fromEntries(parsedUrl.searchParams.entries());
+
+    // Extract original path passed by vercel.json rewrite (__orig_path)
+    const origPathParam =
+      parsedUrl.searchParams.get("__orig_path") ||
+      (req.query && req.query.__orig_path);
+
+    // Always delete internal rewrite parameter so it is never forwarded upstream
+    parsedUrl.searchParams.delete("__orig_path");
+    if (req.query && req.query.__orig_path) {
+      delete req.query.__orig_path;
     }
 
-    if (pathname === "/api/vidcore" || pathname === "/api/vidcore/") {
-      const origPath =
-        (req.query && req.query.__orig_path) ||
-        (req.headers && (req.headers["x-matched-path"] || req.headers["x-invoke-path"]));
-      if (origPath && typeof origPath === "string" && origPath !== "/api/vidcore" && origPath !== "/api/vidcore/") {
-        try {
-          const matchedParsed = new URL(origPath, `http://${host}`);
-          pathname = matchedParsed.pathname;
-          for (const [k, v] of matchedParsed.searchParams.entries()) {
-            if (!parsedUrl.searchParams.has(k)) {
-              parsedUrl.searchParams.set(k, v);
-            }
+    if (
+      origPathParam &&
+      typeof origPathParam === "string" &&
+      !origPathParam.includes(":path*")
+    ) {
+      try {
+        const matchedParsed = new URL(
+          origPathParam.startsWith("/") ? origPathParam : `/${origPathParam}`,
+          `http://${host}`
+        );
+        pathname = matchedParsed.pathname;
+        for (const [k, v] of matchedParsed.searchParams.entries()) {
+          if (k !== "__orig_path" && !parsedUrl.searchParams.has(k)) {
+            parsedUrl.searchParams.set(k, v);
           }
-        } catch (_e) {
-          pathname = origPath.split("?")[0];
         }
+      } catch (_e) {
+        pathname = origPathParam.split("?")[0];
+      }
+    } else if (pathname === "/api/vidcore" || pathname === "/api/vidcore/") {
+      const headerPath =
+        req.headers && (req.headers["x-invoke-path"] || req.headers["x-matched-path"]);
+      if (
+        headerPath &&
+        typeof headerPath === "string" &&
+        !headerPath.includes(":path*") &&
+        !headerPath.includes("(.*)") &&
+        headerPath !== "/api/vidcore"
+      ) {
+        pathname = headerPath.split("?")[0];
       }
     }
+
+    const search = parsedUrl.search || "";
+    req.query = Object.fromEntries(parsedUrl.searchParams.entries());
 
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
@@ -1208,7 +1230,11 @@ async function handleVidcoreProxy(req, res) {
       } else {
         workerTarget = `${CF_WORKER_URL}${pathname}${search}`;
       }
-      res.writeHead(302, { Location: workerTarget, "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+      res.writeHead(302, {
+        Location: workerTarget,
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
       return res.end();
     }
 
@@ -1218,14 +1244,15 @@ async function handleVidcoreProxy(req, res) {
       return res.end();
     }
 
-    // Delegate any Vidlink request directly to dedicated fast Vidlink proxy
     const incomingRef = String(req.headers["referer"] || "");
-    if (pathname.startsWith("/vidlink/") || (incomingRef.includes("/vidlink/") && !pathname.startsWith("/vidcore/"))) {
+    if (
+      pathname.startsWith("/vidlink/") ||
+      (incomingRef.includes("/vidlink/") && !pathname.startsWith("/vidcore/"))
+    ) {
       const handleVidlinkProxy = require("./vidlink.js").handleVidlinkProxy;
       return handleVidlinkProxy(req, res);
     }
 
-    // Direct Subtitles Bridge Handler
     if (pathname.startsWith("/subtitles/") || pathname === "/api/subtitles") {
       const subtitlesHandler = require("./subtitles.js");
       return subtitlesHandler(req, res);
@@ -1245,7 +1272,6 @@ async function handleVidcoreProxy(req, res) {
       targetPath.startsWith("/embed/") ||
       (req.headers?.accept && req.headers.accept.includes("text/html"));
 
-    // Check in-memory HTML cache for instantaneous responses (< 1ms)
     if (isHtmlRoute && req.method === "GET") {
       const cacheKey = targetPath + search;
       if (vidcoreHtmlCache.has(cacheKey)) {
@@ -1264,10 +1290,8 @@ async function handleVidcoreProxy(req, res) {
       }
     }
 
-    // In-memory Caching for Static Assets / Chunks (normalized across prefixes)
     const isChunkStaticPath =
-      targetPath.startsWith("/_next/static/") ||
-      pathname.startsWith("/_next/static/");
+      targetPath.startsWith("/_next/static/") || pathname.startsWith("/_next/static/");
 
     if (isChunkStaticPath && req.method === "GET") {
       const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
@@ -1283,7 +1307,13 @@ async function handleVidcoreProxy(req, res) {
     }
 
     const bodyBuffer = await readRequestBody(req);
-    const upstreamRes = await fetchFromUpstream(origin, targetPath + search, req, bodyBuffer, true);
+    const upstreamRes = await fetchFromUpstream(
+      origin,
+      targetPath + search,
+      req,
+      bodyBuffer,
+      true
+    );
 
     const contentType =
       upstreamRes.headers.get("content-type") || "application/octet-stream";
@@ -1300,10 +1330,15 @@ async function handleVidcoreProxy(req, res) {
     if (isHtmlRoute) {
       const isFromVidlink = origin === VIDLINK_ORIGIN;
       const rawText = await upstreamRes.text();
-      const cleaned = isFromVidlink ? sanitizeVidlinkHtml(rawText) : sanitizeVidcoreHtml(rawText);
+      const cleaned = isFromVidlink
+        ? sanitizeVidlinkHtml(rawText)
+        : sanitizeVidcoreHtml(rawText);
       responseHeaders["Cache-Control"] = HTML_CACHE_CONTROL;
       if (upstreamRes.status === 200) {
-        vidcoreHtmlCache.set(targetPath + search, { html: cleaned, timestamp: Date.now() });
+        vidcoreHtmlCache.set(targetPath + search, {
+          html: cleaned,
+          timestamp: Date.now(),
+        });
       }
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(cleaned, "utf8");
@@ -1311,19 +1346,22 @@ async function handleVidcoreProxy(req, res) {
 
     const isChunkRoute =
       isChunkStaticPath ||
-      (contentType.includes("javascript") && (pathname.includes("/_next/") || targetPath.includes("/_next/")));
+      (contentType.includes("javascript") &&
+        (pathname.includes("/_next/") || targetPath.includes("/_next/")));
 
     if (isChunkRoute) {
       const rawJs = await upstreamRes.text();
       const patchedJs = patchPlayerChunk(rawJs, targetPath);
       responseHeaders["Cache-Control"] = CHUNK_CACHE_CONTROL;
       const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
-      staticChunkCache.set(cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
+      staticChunkCache.set(cacheKey, {
+        body: patchedJs,
+        contentType: "application/javascript; charset=utf-8",
+      });
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(patchedJs, "utf8");
     }
 
-    // Media streaming optimization for .ts / .m4s / .mp4 / video streams
     const isMediaSegment =
       /\.(ts|m4s|mp4|m4a|m4v)(\?|$)/i.test(targetPath) ||
       /\.(ts|m4s|mp4|m4a|m4v)(\?|$)/i.test(pathname) ||
@@ -1333,7 +1371,12 @@ async function handleVidcoreProxy(req, res) {
       responseHeaders["Cache-Control"] = "public, max-age=3600";
     }
 
-    if (isMediaSegment && upstreamRes.body && typeof Readable.fromWeb === "function" && req.method !== "HEAD") {
+    if (
+      isMediaSegment &&
+      upstreamRes.body &&
+      typeof Readable.fromWeb === "function" &&
+      req.method !== "HEAD"
+    ) {
       res.writeHead(upstreamRes.status, responseHeaders);
       return Readable.fromWeb(upstreamRes.body).pipe(res);
     }
@@ -1344,7 +1387,10 @@ async function handleVidcoreProxy(req, res) {
     return res.end(buffer);
   } catch (err) {
     if (!res.headersSent) {
-      res.writeHead(502, { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*" });
+      res.writeHead(502, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
       res.end(JSON.stringify({ ok: false, error: err.message }));
     }
   }
