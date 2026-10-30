@@ -98,7 +98,6 @@ function isProxyRoute(pathname, req) {
     return true;
   }
 
-  // Also check if Referer is from player iframe (/vidcore/, /vidlink/, /movie/, /tv/)
   const ref = String(req.headers["referer"] || "");
   if (
     ref.includes("/vidcore/") ||
@@ -124,138 +123,107 @@ function isProxyRoute(pathname, req) {
 }
 
 async function app(req, res) {
-  try {
-    let host = String(req.headers.host || `localhost:${PORT}`).trim();
-    if (!/^[a-zA-Z0-9.:_-]+$/.test(host)) {
-      host = `localhost:${PORT}`;
-    }
+  const host = req.headers.host || `localhost:${PORT}`;
+  const parsedUrl = new URL(req.url || "/", `http://${host}`);
+  const pathname = parsedUrl.pathname;
 
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(req.url || "/", `http://${host}`);
-    } catch {
-      res.statusCode = 400;
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      return res.end("Bad Request: Invalid URL");
-    }
+  decorateVercelHelpers(req, res, parsedUrl);
 
-    const pathname = parsedUrl.pathname;
+  // 1. TMDB API Proxy
+  if (pathname === "/api/tmdb") {
+    return tmdbHandler(req, res);
+  }
 
-    decorateVercelHelpers(req, res, parsedUrl);
+  // 2. Football API Proxy
+  if (pathname === "/api/football") {
+    return footballHandler(req, res);
+  }
 
-    // 1. TMDB API Proxy
-    if (pathname === "/api/tmdb") {
-      return tmdbHandler(req, res);
-    }
-
-    // 2. Football API Proxy
-    if (pathname === "/api/football") {
-      return footballHandler(req, res);
-    }
-
-    // 3. Subtitles API & Direct Subtitle Requests
-    if (pathname === "/api/subtitles" || pathname.startsWith("/subtitles/")) {
-      if (pathname.startsWith("/subtitles/")) {
-        const cleanSubFile = pathname.replace(/^\/subtitles\//, "");
-        parsedUrl.searchParams.set("file", cleanSubFile);
-        decorateVercelHelpers(req, res, parsedUrl);
-        req.url = `/api/subtitles?file=${encodeURIComponent(cleanSubFile)}`;
-      }
-      return subtitlesHandler(req, res);
-    }
-
-    // 4. HLS API Proxy (dynamic import since api/hls.js uses ESM)
-    if (pathname === "/api/hls") {
-      try {
-        const { default: hlsHandler } = await import("./api/hls.js");
-        return hlsHandler(req, res);
-      } catch (err) {
-        return res.status(500).json({ error: err.message });
-      }
-    }
-
-    // 5. Universal Embed Proxy for external servers (VidSrc.me, MultiEmbed, 2Embed)
-    if (pathname === "/embed-proxy" || pathname === "/api/embed-proxy") {
-      return handleEmbedProxy(req, res);
-    }
-
-    // 6. Explicit Vidlink Proxy route
-    if (pathname.startsWith("/vidlink/") || pathname === "/api/vidlink") {
-      return handleVidlinkProxy(req, res);
-    }
-
-    // 7. Explicit /api/vidcore or any VidCore / Stream Proxy route
-    if (pathname === "/api/vidcore" || isProxyRoute(pathname, req)) {
-      const ref = String(req.headers["referer"] || "");
-      if (ref.includes("/vidlink/") && !pathname.startsWith("/vidcore/")) {
-        return handleVidlinkProxy(req, res);
-      }
-      return handleVidcoreProxy(req, res);
-    }
-
-    // 8. Serve static files from dist/ (or public/)
-    let cleanRel = "";
-    try {
-      cleanRel = decodeURIComponent(pathname).replace(/^\/+/, "");
-    } catch {
-      res.statusCode = 400;
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      return res.end("Bad Request: Invalid URL encoding");
-    }
-
-    if (cleanRel && !cleanRel.includes("..")) {
-      for (const baseDir of [DIST_DIR, PUBLIC_DIR]) {
-        const candidate = path.join(baseDir, cleanRel);
-        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-          const ext = path.extname(candidate).toLowerCase();
-          res.writeHead(200, {
-            "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
-            "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=3600",
-          });
-          return fs.createReadStream(candidate).pipe(res);
-        }
-      }
-    }
-
-    // 9. Subtitles direct path fallback (return 404/remote subtitle instead of SPA index.html)
+  // 3. Subtitles API & Direct Subtitle Requests
+  if (pathname === "/api/subtitles" || pathname.startsWith("/subtitles/")) {
     if (pathname.startsWith("/subtitles/")) {
-      req.url = `/api/subtitles?file=${encodeURIComponent(pathname)}`;
-      return subtitlesHandler(req, res);
+      const cleanSubFile = pathname.replace(/^\/subtitles\//, "");
+      parsedUrl.searchParams.set("file", cleanSubFile);
+      decorateVercelHelpers(req, res, parsedUrl);
+      req.url = `/api/subtitles?file=${encodeURIComponent(cleanSubFile)}`;
     }
+    return subtitlesHandler(req, res);
+  }
 
-    // 10. SPA Fallback to dist/index.html
-    const indexHtml = path.join(DIST_DIR, "index.html");
-    if (fs.existsSync(indexHtml)) {
-      res.writeHead(200, {
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "no-cache",
-      });
-      return fs.createReadStream(indexHtml).pipe(res);
-    }
-
-    res.status(404).send("Not Found. Run `npm run build` first.");
-  } catch (err) {
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      res.end("Internal Server Error");
+  // 4. HLS API Proxy
+  if (pathname === "/api/hls") {
+    try {
+      const { default: hlsHandler } = await import("./api/hls.js");
+      return hlsHandler(req, res);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
     }
   }
-}
 
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
-});
+  // 5. Universal Embed Proxy
+  if (pathname === "/embed-proxy" || pathname === "/api/embed-proxy") {
+    return handleEmbedProxy(req, res);
+  }
+
+  // 6. Explicit Vidlink Proxy route
+  if (pathname.startsWith("/vidlink/") || pathname === "/api/vidlink") {
+    return handleVidlinkProxy(req, res);
+  }
+
+  // 7. Explicit /api/vidcore or any VidCore / Stream Proxy route
+  if (pathname === "/api/vidcore" || isProxyRoute(pathname, req)) {
+    const ref = String(req.headers["referer"] || "");
+    if (ref.includes("/vidlink/") && !pathname.startsWith("/vidcore/")) {
+      return handleVidlinkProxy(req, res);
+    }
+    return handleVidcoreProxy(req, res);
+  }
+
+  // 8. Serve static files from dist/ (or public/) with aggressive immutable caching for hashed assets
+  const cleanRel = decodeURIComponent(pathname).replace(/^\/+/, "");
+  if (cleanRel && !cleanRel.includes("..")) {
+    for (const baseDir of [DIST_DIR, PUBLIC_DIR]) {
+      const candidate = path.join(baseDir, cleanRel);
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        const ext = path.extname(candidate).toLowerCase();
+        const isImmutableAsset = pathname.startsWith("/assets/");
+        res.writeHead(200, {
+          "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
+          "Cache-Control":
+            ext === ".html"
+              ? "no-cache"
+              : isImmutableAsset
+                ? "public, max-age=31536000, immutable"
+                : "public, max-age=86400",
+        });
+        return fs.createReadStream(candidate).pipe(res);
+      }
+    }
+  }
+
+  // 9. Subtitles direct path fallback
+  if (pathname.startsWith("/subtitles/")) {
+    req.url = `/api/subtitles?file=${encodeURIComponent(pathname)}`;
+    return subtitlesHandler(req, res);
+  }
+
+  // 10. SPA Fallback to dist/index.html
+  const indexHtml = path.join(DIST_DIR, "index.html");
+  if (fs.existsSync(indexHtml)) {
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache",
+    });
+    return fs.createReadStream(indexHtml).pipe(res);
+  }
+
+  res.status(404).send("Not Found. Run `npm run build` first.");
+}
 
 if (require.main === module) {
   const server = http.createServer(app);
-  server.on("clientError", (err, socket) => {
-    if (socket.writable) {
-      socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-    } else {
-      socket.destroy(err);
-    }
-  });
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
   server.listen(PORT, () => {
     console.log(`\n=============================================================`);
     console.log(`🚀 hwto-kurd Server + Ad-Free Multi-Server Proxy is running!`);
