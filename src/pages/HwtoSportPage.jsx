@@ -328,6 +328,13 @@ export default function HwtoSportPage({ onBack }) {
     loadData();
   }, [loadData]);
 
+  // Listen for global Pull-to-Refresh
+  useEffect(() => {
+    const handleGlobalRefresh = () => loadData(true);
+    window.addEventListener("hwto:refresh", handleGlobalRefresh);
+    return () => window.removeEventListener("hwto:refresh", handleGlobalRefresh);
+  }, [loadData]);
+
   // Refresh only when enabled; the primary scoreboard is otherwise request-on-demand.
   useEffect(() => {
     if (!autoRefresh || activeTab !== "scoreboard") return;

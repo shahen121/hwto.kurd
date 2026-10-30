@@ -157,6 +157,17 @@ export default function AnimePage({ onBack }) {
     };
   }, [catalogFilters, page, retryKey, search]);
 
+  // Listen for global Pull-to-Refresh
+  useEffect(() => {
+    const handleGlobalRefresh = () => {
+      setRetryKey((k) => k + 1);
+      setScheduleRetryKey((k) => k + 1);
+      setNewsRetryKey((k) => k + 1);
+    };
+    window.addEventListener("hwto:refresh", handleGlobalRefresh);
+    return () => window.removeEventListener("hwto:refresh", handleGlobalRefresh);
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     const refreshSchedule = () => {

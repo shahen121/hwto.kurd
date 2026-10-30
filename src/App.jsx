@@ -62,6 +62,8 @@ import AuthScreen from "./components/AuthScreen";
 import CloseConfirmModal from "./components/CloseConfirmModal";
 import UpdateModal from "./components/UpdateModal";
 import PwaInstallBanner from "./components/PwaInstallBanner";
+import PullToRefreshIndicator from "./components/PullToRefreshIndicator";
+import { usePullToRefresh } from "./hooks/usePullToRefresh";
 import { useGamepadNav } from "./utils/useGamepadNav";
 
 // Lazy-loaded pages: each chunk is only downloaded when the user first visits
@@ -1020,6 +1022,48 @@ export default function App() {
     }
   }, [authUser, showToast]);
 
+  const mainScrollRef = useRef(null);
+
+  const handlePullRefresh = useCallback(async () => {
+    try {
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .getRegistration()
+          .then((reg) => reg?.update())
+          .catch(() => {});
+      }
+
+      window.dispatchEvent(new CustomEvent("hwto:refresh"));
+      setOffline(!navigator.onLine);
+
+      if (page === "home") {
+        retryHome();
+      } else if (page === "profile") {
+        await handleForceSync();
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 850));
+    } catch (err) {
+      console.warn("Pull-to-refresh error:", err);
+    }
+  }, [page, retryHome, handleForceSync]);
+
+  const isPlayerOpen = (page === "movie" || page === "tv") && !!selected;
+
+  const {
+    pullDistance,
+    isPulling,
+    isRefreshing: isPullRefreshing,
+    isSuccess: isPullSuccess,
+    canRefresh: canPullRefresh,
+    progress: pullProgress,
+    triggerRefresh: manualTriggerRefresh,
+  } = usePullToRefresh({
+    containerRef: mainScrollRef,
+    onRefresh: handlePullRefresh,
+    disabled: isPlayerOpen || showSearch,
+  });
+
   // Ref so toggleSave never needs `saved` as a dep (avoids recreation on every save)
   const savedRef = useRef(saved);
   useEffect(() => {
@@ -1321,6 +1365,7 @@ export default function App() {
         )}
 
         <div
+          ref={mainScrollRef}
           className={`main ${
             page === "sport"
               ? "main-sport"
@@ -1329,6 +1374,15 @@ export default function App() {
                 : ""
           }`}
         >
+          <PullToRefreshIndicator
+            pullDistance={pullDistance}
+            isPulling={isPulling}
+            isRefreshing={isPullRefreshing}
+            isSuccess={isPullSuccess}
+            canRefresh={canPullRefresh}
+            progress={pullProgress}
+            onManualRefresh={manualTriggerRefresh}
+          />
           <div
             key={transitionGroup}
             className={

@@ -234,6 +234,13 @@ export default function CategoryPage({
     fetchPageData(1, false);
   }, [fetchPageData]);
 
+  // Listen for global Pull-to-Refresh
+  useEffect(() => {
+    const handleGlobalRefresh = () => fetchPageData(1, false);
+    window.addEventListener("hwto:refresh", handleGlobalRefresh);
+    return () => window.removeEventListener("hwto:refresh", handleGlobalRefresh);
+  }, [fetchPageData]);
+
   const handleLoadMore = () => {
     if (loadingMore || page >= totalPages) return;
     fetchPageData(page + 1, true);

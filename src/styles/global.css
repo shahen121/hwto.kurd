@@ -5669,3 +5669,98 @@ html[dir="rtl"] .cat-hero-content {
         height: 220px;
     }
 }
+
+/* ── Pull-to-Refresh Cyberpunk Capsule Indicator ──────────────────────────── */
+.ptr-capsule-container {
+    position: fixed;
+    top: max(14px, env(safe-area-inset-top));
+    left: 50%;
+    z-index: 99999;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    will-change: transform, opacity;
+}
+
+.ptr-capsule-container.ptr-refreshing,
+.ptr-capsule-container.ptr-success {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.ptr-capsule-body {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 16px 7px 11px;
+    border-radius: 9999px;
+    background: rgba(16, 12, 26, 0.94);
+    border: 1px solid rgba(237, 34, 123, 0.45);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.7), 0 0 18px rgba(237, 34, 123, 0.32);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    direction: rtl;
+}
+
+[dir="ltr"] .ptr-capsule-body {
+    direction: ltr;
+}
+
+.ptr-capsule-container.ptr-success .ptr-capsule-body {
+    border-color: rgba(0, 230, 118, 0.6);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.7), 0 0 18px rgba(0, 230, 118, 0.35);
+}
+
+.ptr-ring-box,
+.ptr-spinner-box,
+.ptr-icon-box {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ptr-ring-svg {
+    transform: rotate(0deg);
+}
+
+.ptr-arrow-glyph {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.ptr-spinner-svg {
+    animation: ptr-spin 0.75s linear infinite;
+}
+
+@keyframes ptr-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.ptr-label {
+    letter-spacing: 0.2px;
+    color: #f7f7fa;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+    font-size: 12.5px;
+}
+

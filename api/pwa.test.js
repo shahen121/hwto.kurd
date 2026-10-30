@@ -94,3 +94,33 @@ test("Mobile CSS navigation and phone layout rules", () => {
     "Mobile layout must stack episode cards in 1 column on phone screens",
   );
 });
+
+test("Pull-to-Refresh mobile integration and capsule styling", () => {
+  const cssPath = path.resolve(__dirname, "../src/styles/global.css");
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(
+    css.includes(".ptr-capsule-container"),
+    "global.css must contain .ptr-capsule-container styling",
+  );
+  assert.ok(
+    css.includes("@keyframes ptr-spin"),
+    "global.css must define @keyframes ptr-spin animation",
+  );
+
+  const appPath = path.resolve(__dirname, "../src/App.jsx");
+  const app = fs.readFileSync(appPath, "utf8");
+  assert.ok(
+    app.includes("usePullToRefresh") && app.includes("PullToRefreshIndicator"),
+    "App.jsx must import and wire usePullToRefresh and PullToRefreshIndicator",
+  );
+  assert.ok(
+    app.includes('ref={mainScrollRef}'),
+    "App.jsx must attach mainScrollRef to .main container for touch pull tracking",
+  );
+
+  const hookPath = path.resolve(__dirname, "../src/hooks/usePullToRefresh.js");
+  assert.ok(fs.existsSync(hookPath), "src/hooks/usePullToRefresh.js must exist");
+
+  const indicatorPath = path.resolve(__dirname, "../src/components/PullToRefreshIndicator.jsx");
+  assert.ok(fs.existsSync(indicatorPath), "src/components/PullToRefreshIndicator.jsx must exist");
+});
