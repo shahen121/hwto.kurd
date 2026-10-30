@@ -1,5 +1,4 @@
 const { Readable } = require("stream");
-const { isPrivateIp } = require("./embed-proxy.js");
 
 // VidCore + Vidlink Ad-Free Proxy & Stream Gateway (Vercel Serverless + Node HTTP Server)
 
@@ -818,21 +817,6 @@ async function handleVidcoreProxy(req, res) {
           if (dec.startsWith("http")) rawTarget = dec;
         } catch (_e) {}
       }
-      try {
-        const parsedTarget = new URL(rawTarget);
-        if (
-          isPrivateIp(parsedTarget.hostname) ||
-          parsedTarget.hostname === "metadata.google.internal" ||
-          parsedTarget.hostname.endsWith(".local") ||
-          parsedTarget.hostname.endsWith(".internal")
-        ) {
-          res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-          return res.end("Target host blocked");
-        }
-      } catch {
-        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-        return res.end("Invalid stream proxy target URL");
-      }
       const redirectUrl = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(rawTarget)}`;
       res.writeHead(302, {
         Location: redirectUrl,
@@ -850,15 +834,6 @@ async function handleVidcoreProxy(req, res) {
         const scheme = m[2];
         const upHost = m[3];
         const restPath = m[4] || "/";
-        if (
-          isPrivateIp(upHost) ||
-          upHost === "metadata.google.internal" ||
-          upHost.endsWith(".local") ||
-          upHost.endsWith(".internal")
-        ) {
-          res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-          return res.end("Target host blocked");
-        }
         const rawStreamUrl = `${scheme}://${upHost}${restPath}${search}`;
         workerTarget = `${CF_WORKER_URL}/stream-proxy/${refMode}/${encodeURIComponent(rawStreamUrl)}`;
       } else {
@@ -869,8 +844,7 @@ async function handleVidcoreProxy(req, res) {
     }
 
     if (pathname.startsWith("/embed/")) {
-      let cleanTarget = pathname.replace(/^\/embed/, "") + search;
-      cleanTarget = "/" + cleanTarget.replace(/^\/+/, "");
+      const cleanTarget = pathname.replace(/^\/embed/, "") + search;
       res.writeHead(302, { Location: cleanTarget });
       return res.end();
     }
@@ -997,4 +971,3 @@ module.exports.patchPlayerChunk = patchPlayerChunk;
 module.exports.staticChunkCache = staticChunkCache;
 module.exports.getSessionTokenIndex = getSessionTokenIndex;
 module.exports.UNIVERSAL_SUBTITLE_INJECTOR_JS = UNIVERSAL_SUBTITLE_INJECTOR_JS;
-module.exports.isPrivateIp = isPrivateIp;
