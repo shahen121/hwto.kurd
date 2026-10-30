@@ -5406,6 +5406,14 @@ html[data-win-titlebar][data-maximized] .main {
         font-size: 13px !important;
         flex-shrink: 0;
     }
+
+    .profile-tabs-nav button svg {
+        width: 18px !important;
+        height: 18px !important;
+        max-width: 18px !important;
+        max-height: 18px !important;
+        flex-shrink: 0 !important;
+    }
 }
 
 @media (max-width: 320px) {
@@ -5762,5 +5770,27 @@ html[dir="rtl"] .cat-hero-content {
     color: #f7f7fa;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
     font-size: 12.5px;
+}
+
+/* Profile Tabs Sizing & Layout Protection */
+.profile-tabs-nav {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.profile-tabs-nav button {
+    display: inline-flex !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+}
+
+.profile-tabs-nav button svg {
+    width: 18px !important;
+    height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+    flex-shrink: 0 !important;
+    display: inline-block !important;
 }
 

@@ -351,3 +351,4 @@ module.exports.handleEmbedProxy = handleEmbedProxy;
 module.exports.stripAdScripts = stripAdScripts;
 module.exports.sanitizeEmbedHtml = sanitizeEmbedHtml;
 module.exports.ULTIMATE_AD_SHIELD = ULTIMATE_AD_SHIELD;
+module.exports.isPrivateIp = isPrivateIp;

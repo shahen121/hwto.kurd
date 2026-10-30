@@ -425,7 +425,7 @@ export default function ProfilePage({
               justifyContent: "center",
             }}
           >
-            <BookmarkIcon />
+            <BookmarkIcon size={24} />
           </div>
           <div>
             <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text)" }}>
@@ -520,6 +520,8 @@ export default function ProfilePage({
         style={{
           display: "flex",
           gap: 12,
+          flexWrap: "wrap",
+          alignItems: "center",
           borderBottom: "1px solid var(--border)",
           paddingBottom: 14,
           marginBottom: 28,
@@ -538,12 +540,13 @@ export default function ProfilePage({
             fontWeight: 600,
             cursor: "pointer",
             transition: "all 0.2s ease",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             gap: 8,
+            flexShrink: 0,
           }}
         >
-          <BookmarkIcon />
+          <BookmarkIcon size={18} />
           <span>{t("tabWatchlist")} ({watchlistItems.length})</span>
         </button>
 
@@ -560,12 +563,13 @@ export default function ProfilePage({
             fontWeight: 600,
             cursor: "pointer",
             transition: "all 0.2s ease",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             gap: 8,
+            flexShrink: 0,
           }}
         >
-          <PlayIcon />
+          <PlayIcon size={16} />
           <span>{t("tabContinueWatching")} ({continueItems.length})</span>
         </button>
 
@@ -582,9 +586,10 @@ export default function ProfilePage({
             fontWeight: 600,
             cursor: "pointer",
             transition: "all 0.2s ease",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             gap: 8,
+            flexShrink: 0,
           }}
         >
           <WatchedIcon size={18} />
@@ -598,7 +603,7 @@ export default function ProfilePage({
           {watchlistItems.length === 0 ? (
             <div className="empty-state" style={{ padding: "64px 20px", textAlign: "center" }}>
               <div style={{ color: "var(--text3)", marginBottom: 16 }}>
-                <BookmarkIcon />
+                <BookmarkIcon size={48} />
               </div>
               <h3 style={{ fontSize: 18, color: "var(--text)", marginBottom: 8 }}>
                 {t("emptyWatchlistTitle")}

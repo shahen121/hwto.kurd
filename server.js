@@ -180,7 +180,13 @@ async function app(req, res) {
   }
 
   // 8. Serve static files from dist/ (or public/) with aggressive immutable caching for hashed assets
-  const cleanRel = decodeURIComponent(pathname).replace(/^\/+/, "");
+  let cleanRel = "";
+  try {
+    cleanRel = decodeURIComponent(pathname).replace(/^\/+/, "");
+  } catch (_e) {
+    res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end("Bad Request: Malformed URI");
+  }
   if (cleanRel && !cleanRel.includes("..")) {
     for (const baseDir of [DIST_DIR, PUBLIC_DIR]) {
       const candidate = path.join(baseDir, cleanRel);
