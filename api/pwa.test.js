@@ -48,6 +48,10 @@ test("Index.html iOS Standalone, CSP & PWA Meta Tags", () => {
     html.includes("form-action 'self' https:"),
     "CSP form-action must allow https: for Google OAuth redirects and Firebase Auth handlers",
   );
+  assert.ok(
+    html.includes("script-src 'self' file: https://apis.google.com"),
+    "CSP script-src must allow Google and Firebase scripts for OAuth login without auth/internal-error",
+  );
 });
 
 test("Service Worker existence and handlers", () => {
