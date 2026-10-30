@@ -554,9 +554,6 @@ function sanitizeVidlinkHtml(html) {
 
   const headInject = `
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
-<script id="hwto-vidlink-inline-shield">${AD_SHIELD_JS}</script>
-<link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
-<link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
 `;
   return injectStrictlyIntoHead(out, headInject);
@@ -580,9 +577,6 @@ function sanitizeVidcoreHtml(html) {
 
   const headInject = `
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
-<script id="hwto-vidcore-inline-shield">${AD_SHIELD_JS}</script>
-<link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
-<link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
 `;
   return injectStrictlyIntoHead(out, headInject);
