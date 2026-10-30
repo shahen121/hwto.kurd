@@ -3,6 +3,7 @@ import {
   signInWithGoogle,
   signInWithGoogleRedirect,
   checkRedirectResult,
+  subscribeToAuthChanges,
   signInAsGuest,
   isFirebaseConfigured,
 } from "../utils/firebase";
@@ -17,9 +18,18 @@ export default function AuthScreen({ onAuthenticated }) {
 
   const firebaseReady = isFirebaseConfigured();
 
-  // Check if returning from a Google redirect login
+  // Check if returning from a Google redirect login or auth state restored
   useEffect(() => {
     let active = true;
+
+    // Listen to Firebase auth state as authoritative source
+    const unsub = subscribeToAuthChanges((user) => {
+      if (!active) return;
+      if (user) {
+        onAuthenticated?.(user);
+      }
+    });
+
     checkRedirectResult()
       .then((user) => {
         if (!active) return;
@@ -35,8 +45,16 @@ export default function AuthScreen({ onAuthenticated }) {
         setError(formatFirebaseError(err));
         setCheckingRedirect(false);
       });
+
+    // Safety timeout to avoid getting stuck in loading state
+    const timer = setTimeout(() => {
+      if (active) setCheckingRedirect(false);
+    }, 2500);
+
     return () => {
       active = false;
+      unsub();
+      clearTimeout(timer);
     };
   }, [onAuthenticated]);
 

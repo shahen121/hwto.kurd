@@ -66,6 +66,10 @@
   ],
   "rewrites": [
     {
+      "source": "/__/auth/(.*)",
+      "destination": "https://hwto-kurd.firebaseapp.com/__/auth/$1"
+    },
+    {
       "source": "/embed-proxy",
       "destination": "/api/embed-proxy"
     },

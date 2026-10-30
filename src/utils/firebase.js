@@ -197,16 +197,7 @@ export async function signInWithGoogle({ preferRedirect = false } = {}) {
   const auth = requireAuth();
   const provider = createGoogleProvider();
 
-  const isStandalone =
-    typeof window !== "undefined" &&
-    (window.matchMedia?.("(display-mode: standalone)")?.matches ||
-      window.navigator?.standalone === true);
-
-  const isMobile =
-    typeof window !== "undefined" &&
-    (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent || "") || isStandalone);
-
-  if (preferRedirect || isMobile) {
+  if (preferRedirect) {
     await signInWithRedirect(auth, provider);
     return null;
   }
@@ -218,12 +209,12 @@ export async function signInWithGoogle({ preferRedirect = false } = {}) {
     return user;
   } catch (err) {
     const code = err?.code || "";
-    // If popup was blocked or unsupported, automatically attempt redirect sign-in
+    // If popup was blocked or unsupported, automatically fall back to redirect sign-in
     if (
       code === "auth/popup-blocked" ||
       code === "auth/operation-not-supported-in-this-environment"
     ) {
-      console.warn("[Auth] Popup blocked or not supported, redirecting...", code);
+      console.warn("[Auth] Popup blocked or not supported, falling back to redirect...", code);
       await signInWithRedirect(auth, provider);
       return null;
     }
