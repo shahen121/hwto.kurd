@@ -1,47 +1,4 @@
 const { Readable } = require("stream");
-const net = require("net");
-
-function isPrivateIp(ip) {
-  if (!ip) return true;
-  if (net.isIPv4(ip)) {
-    const parts = ip.split(".").map(Number);
-    if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) return true;
-    const [a, b] = parts;
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      a >= 224
-    );
-  }
-  const v = ip.toLowerCase();
-  if (
-    v === "::1" ||
-    v === "::" ||
-    v.startsWith("fc") ||
-    v.startsWith("fd") ||
-    v.startsWith("fe80")
-  ) {
-    return true;
-  }
-  if (v.startsWith("::ffff:")) {
-    const v4 = v.slice(7);
-    if (net.isIPv4(v4)) return isPrivateIp(v4);
-  }
-  return false;
-}
-
-function setBoundedCache(cache, key, value, maxEntries = 200) {
-  if (cache.size >= maxEntries) {
-    const oldestKey = cache.keys().next().value;
-    if (oldestKey !== undefined) cache.delete(oldestKey);
-  }
-  cache.set(key, value);
-}
 
 // VidCore + Vidlink Ad-Free Proxy & Stream Gateway (Vercel Serverless + Node HTTP Server)
 
@@ -98,10 +55,10 @@ function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionId =
   const api = new URL("https://api.scrape.do/");
   api.searchParams.set("token", token);
   api.searchParams.set("url", targetUrl);
-  api.searchParams.set("customHeaders", useCustomHeaders ? "true" : "false");
+  if (useCustomHeaders) api.searchParams.set("customHeaders", "true");
   if (sessionId) {
     const cleanSessionId = String(sessionId).trim().slice(0, 10);
-    if (cleanSessionId) api.searchParams.set("session_number", cleanSessionId);
+    if (cleanSessionId) api.searchParams.set("sessionId", cleanSessionId);
   }
   return api.toString();
 }
@@ -170,7 +127,11 @@ async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, option
     const token = tokens[(startIdx + i) % tokens.length];
     const scrapeUrl = buildScrapeDoUrl(targetUrl, token, true, effectiveSessionId);
     try {
-      const res = await fetchImpl(scrapeUrl, fetchOpts);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8500);
+      const res = await fetchImpl(scrapeUrl, { ...fetchOpts, signal: controller.signal }).finally(() =>
+        clearTimeout(timer)
+      );
       const initialStatus =
         res.headers && typeof res.headers.get === "function"
           ? res.headers.get("scrape.do-initial-status-code")
@@ -181,18 +142,6 @@ async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, option
         initialStatus !== "200"
       ) {
         lastRes = res;
-        advanceSessionToken(sessionId, tokens.length);
-        continue;
-      }
-      if (res.status === 555) {
-        try {
-          const retryUrl = buildScrapeDoUrl(targetUrl, token, false, effectiveSessionId);
-          const retryRes = await fetchImpl(retryUrl, fetchOpts);
-          if (retryRes.status < 500) return retryRes;
-          lastRes = retryRes;
-        } catch (rErr) {
-          lastErr = rErr;
-        }
         advanceSessionToken(sessionId, tokens.length);
         continue;
       }
@@ -214,6 +163,66 @@ const AD_SHIELD_JS = `(function() {
   var lastMpdOrigin = "https://surge.flooderrr.store";
   var lastMpdBaseDir = "";
   var lastMpdQuery = "";
+
+  // 1. Unregister broken Service Workers (fixes sw.js:1 Uncaught TypeError: Failed to convert value to 'Response')
+  try {
+    if (typeof navigator !== "undefined" && navigator.serviceWorker && typeof navigator.serviceWorker.getRegistrations === "function") {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        for (var i = 0; i < regs.length; i++) {
+          try { regs[i].unregister(); } catch (_e) {}
+        }
+      }).catch(function() {});
+    }
+  } catch (_e) {}
+
+  // 2. Mute noisy SourceBufferSink console errors that slow down the browser
+  try {
+    if (typeof console !== "undefined") {
+      var __origErr = typeof console.error === "function" ? console.error.bind(console) : function() {};
+      var __origWarn = typeof console.warn === "function" ? console.warn.bind(console) : function() {};
+      var __shouldMute = function(args) {
+        if (!args || !args.length) return false;
+        var s = String(args[0] || "");
+        return (
+          s.indexOf("SourceBufferSink") !== -1 ||
+          s.indexOf("SourceBuffer") !== -1 ||
+          s.indexOf("getAllBufferRanges") !== -1 ||
+          s.indexOf("appendBuffer") !== -1 ||
+          s.indexOf("Failed to set append window") !== -1
+        );
+      };
+      var __activeErr = __origErr;
+      var __filteredErr = function() {
+        if (__shouldMute(arguments)) return;
+        return __activeErr.apply(console, arguments);
+      };
+      try {
+        Object.defineProperty(console, "error", {
+          configurable: true,
+          enumerable: true,
+          get: function() { return __filteredErr; },
+          set: function(fn) { if (typeof fn === "function" && fn !== __filteredErr) __activeErr = fn; }
+        });
+      } catch (_e) {
+        console.error = __filteredErr;
+      }
+      var __activeWarn = __origWarn;
+      var __filteredWarn = function() {
+        if (__shouldMute(arguments)) return;
+        return __activeWarn.apply(console, arguments);
+      };
+      try {
+        Object.defineProperty(console, "warn", {
+          configurable: true,
+          enumerable: true,
+          get: function() { return __filteredWarn; },
+          set: function(fn) { if (typeof fn === "function" && fn !== __filteredWarn) __activeWarn = fn; }
+        });
+      } catch (_e) {
+        console.warn = __filteredWarn;
+      }
+    }
+  } catch (_e) {}
 
   try {
     var __fakeLoc = new Proxy(window.location, {
@@ -296,40 +305,50 @@ const AD_SHIELD_JS = `(function() {
 
     var locOrigin = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "";
 
-    // Intercept all vidcore.io API/decryption calls (APA91, wyzie, servers, etc.)
+    // 3. Intercept direct https://vidcore.io/*, /wyzie/*, /APA91*, and /servers* calls to prevent CORS errors
     if (
-      rawUrl.indexOf("APA91") !== -1 ||
-      rawUrl.indexOf("/wyzie") !== -1 ||
-      rawUrl.indexOf("/servers") !== -1 ||
-      rawUrl.indexOf("vidcore.io/") !== -1
+      rawUrl.indexOf("vidcore.io/") !== -1 ||
+      rawUrl.indexOf("/wyzie/") !== -1 ||
+      rawUrl.indexOf("wyzie/") === 0 ||
+      rawUrl.indexOf("/APA91") !== -1 ||
+      rawUrl.indexOf("APA91") === 0 ||
+      rawUrl.indexOf("/servers") === 0
     ) {
-      var vcClean = rawUrl;
-      if (vcClean.indexOf("http://") === 0 || vcClean.indexOf("https://") === 0 || vcClean.indexOf("//") === 0) {
+      var vcPath = rawUrl;
+      if (/^(?:https?:)?\\/\\//i.test(vcPath)) {
         try {
-          var parsedVc = new URL(vcClean.indexOf("//") === 0 ? "https:" + vcClean : vcClean);
-          vcClean = parsedVc.pathname + (parsedVc.search || "");
+          var parsedVc = new URL(vcPath.indexOf("//") === 0 ? "https:" + vcPath : vcPath);
+          vcPath = parsedVc.pathname + (parsedVc.search || "");
         } catch (_e) {
-          var sIdx = vcClean.indexOf("/", 8);
-          vcClean = sIdx !== -1 ? vcClean.slice(sIdx) : vcClean;
+          var slashPos = vcPath.indexOf("/", 8);
+          vcPath = slashPos !== -1 ? vcPath.slice(slashPos) : ("/" + vcPath);
         }
-      } else {
-        try {
-          var parsedRelVc = new URL(vcClean, locOrigin || "http://localhost");
-          vcClean = parsedRelVc.pathname + (parsedRelVc.search || "");
-        } catch (_e) {}
       }
-      while (vcClean.charAt(0) === "/") {
-        vcClean = vcClean.slice(1);
+      if (vcPath.charAt(0) !== "/") vcPath = "/" + vcPath;
+      if (vcPath.indexOf("/vidcore/") === 0) {
+        vcPath = vcPath.slice("/vidcore".length);
       }
-      if (vcClean.indexOf("vidcore/") !== 0) {
-        vcClean = "vidcore/" + vcClean;
-      }
-      var proxiedVc = locOrigin ? (locOrigin + "/" + vcClean) : ("/" + vcClean);
       return {
         originalUrl: rawUrl,
-        proxiedUrl: proxiedVc
+        proxiedUrl: (locOrigin || "") + vcPath
       };
     }
+
+    // 4. Intercept external R2 subtitle fetches so they never trigger cross-origin errors
+    if (rawUrl.indexOf("r2.dev/") !== -1 && /\\.(vtt|srt)(\\?|$)/i.test(rawUrl)) {
+      try {
+        var r2Parsed = new URL(rawUrl);
+        var subPath = r2Parsed.pathname;
+        if (subPath.indexOf("/subtitles/") !== 0) {
+          subPath = "/subtitles" + (subPath.charAt(0) === "/" ? "" : "/") + subPath;
+        }
+        return {
+          originalUrl: rawUrl,
+          proxiedUrl: (locOrigin || "") + subPath
+        };
+      } catch (_e) {}
+    }
+
     if (rawUrl.indexOf("/sacdn/") === 0 || rawUrl.indexOf("/dash/") === 0 || rawUrl.indexOf("/proxy/") === 0 || rawUrl.indexOf("/mp/") === 0) {
       rawUrl = (lastMpdOrigin || "https://surge.flooderrr.store") + rawUrl;
     } else if (rawUrl.indexOf(CF_WORKER + "/") === 0) {
@@ -504,15 +523,17 @@ function addChunkCacheBusting(html) {
     }
   );
 }
+
 const { UNIVERSAL_SUBTITLE_INJECTOR_JS } = require("./subtitles.js");
 
+// Inject right at the opening <head> tag so subtitle and fetch interceptors run BEFORE any player script!
 function injectStrictlyIntoHead(htmlStr, injectContent) {
   if (!htmlStr || typeof htmlStr !== "string") return htmlStr;
-  if (htmlStr.includes("</head>")) {
-    return htmlStr.replace("</head>", injectContent + "</head>");
-  }
   if (/<head\b[^>]*>/i.test(htmlStr)) {
     return htmlStr.replace(/(<head\b[^>]*>)/i, "$1" + injectContent);
+  }
+  if (htmlStr.includes("</head>")) {
+    return htmlStr.replace("</head>", injectContent + "</head>");
   }
   return "<head>" + injectContent + "</head>" + htmlStr;
 }
@@ -532,12 +553,11 @@ function sanitizeVidlinkHtml(html) {
   out = addChunkCacheBusting(out);
 
   const headInject = `
-<link rel="preconnect" href="https://hwto.proteome626.workers.dev" />
+<script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
+<script id="hwto-vidlink-inline-shield">${AD_SHIELD_JS}</script>
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
-<script id="hwto-vidlink-interceptor" src="/gtag-shield.js"></script>
-<script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
   return injectStrictlyIntoHead(out, headInject);
 }
@@ -559,11 +579,11 @@ function sanitizeVidcoreHtml(html) {
   out = addChunkCacheBusting(out);
 
   const headInject = `
+<script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
+<script id="hwto-vidcore-inline-shield">${AD_SHIELD_JS}</script>
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
 <link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <style id="hwto-sub-fix">span[style*="text-shadow"],[class*="captions"],[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
-<script id="hwto-vidcore-interceptor" src="/gtag-shield.js"></script>
-<script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 `;
   return injectStrictlyIntoHead(out, headInject);
 }
@@ -571,23 +591,19 @@ function sanitizeVidcoreHtml(html) {
 function patchPlayerChunk(jsCode, pathname = "") {
   let out = jsCode;
 
-  // Never tamper with chunk 281 - keep it completely clean to eliminate SyntaxError: Unexpected token ';'
   if (pathname.includes("281-") || pathname.includes("/281") || pathname.includes("281.")) {
     return jsCode;
   }
 
-  // In Next.js webpack runtime chunk, prepend AD_SHIELD_JS
   if (pathname.includes("/webpack-")) {
     out = AD_SHIELD_JS + out;
   }
 
-  // Anti-freeze bypass (DevTools timing detection)
   out = out.replace(
     /return\s*console\.table\(t\),\s*console\.clear\(\),\s*Date\.now\(\)\s*-\s*a\s*<=\s*10/g,
     "return!0",
   );
 
-  // Sandbox bypass (iframe / top window restriction)
   if (out.includes("if(!tI.current&&(tI.current=!0,window.self!==window.top))")) {
     out = out.replace(
       "if(!tI.current&&(tI.current=!0,window.self!==window.top))",
@@ -598,12 +614,10 @@ function patchPlayerChunk(jsCode, pathname = "") {
     out = out.split("Please Disable Sandbox").join("");
   }
 
-  // 1. Force ad prop to false
   if (out.includes("let{en:l,from:b,ad:h,")) {
     out = out.replace("let{en:l,from:b,ad:h,", "let h=!1,{en:l,from:b,ad:_h_ignored,");
   }
 
-  // 2. Stream URL + failover flag
   if (out.includes("await A,tl.current=T[0];")) {
     out = out.replace(
       "await A,tl.current=T[0];",
@@ -617,10 +631,6 @@ function patchPlayerChunk(jsCode, pathname = "") {
     );
   }
 
-  // Note: Subtitle injection is handled cleanly and externally via AD_SHIELD_JS and
-  // UNIVERSAL_SUBTITLE_INJECTOR_JS in <head> without internal chunk function tampering.
-
-  // 4. Subtitle RTL rendering fix
   if (out.includes('sx:{whiteSpace:"nowrap",textAlign:"center"}')) {
     out = out.replace(
       'sx:{whiteSpace:"nowrap",textAlign:"center"}',
@@ -628,7 +638,6 @@ function patchPlayerChunk(jsCode, pathname = "") {
     );
   }
 
-  // 5. Prevent overly broad domain regex from dropping dialogue lines
   if (out.includes('/\\b[a-zA-Z0-9][-a-zA-Z0-9]*\\.[a-zA-Z]{2,}\\b/.test(d[t].text)')) {
     out = out.replace(
       '/\\b[a-zA-Z0-9][-a-zA-Z0-9]*\\.[a-zA-Z]{2,}\\b/.test(d[t].text)',
@@ -636,7 +645,6 @@ function patchPlayerChunk(jsCode, pathname = "") {
     );
   }
 
-  // 6. Intercept bytecode VM setState assignment to suppress 555 error
   const zTarget = '.map(function(e){return String.fromCharCode(30^e)}).join("")]=Z';
   if (out.includes(zTarget)) {
     out = out.replace(
@@ -645,7 +653,6 @@ function patchPlayerChunk(jsCode, pathname = "") {
     );
   }
 
-  // 7. Remove known ad scripts
   const adScripts = [
     "//kg." + "chiveyfewmets.com/rzgJYYsrJpx2H/kNmgM",
     "//cl." + "gogtib.com/rWXjzriQHyvUUDB/rwOme",
@@ -695,7 +702,12 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     }
   }
 
-  if (targetPathAndQuery.startsWith("/APA91ywF")) {
+  if (
+    targetPathAndQuery.startsWith("/APA91") ||
+    targetPathAndQuery.includes("APA91") ||
+    targetPathAndQuery.startsWith("/wyzie") ||
+    targetPathAndQuery.startsWith("/servers")
+  ) {
     forwardHeaders["Referer"] = `${VIDCORE_ORIGIN}/`;
     forwardHeaders["Origin"] = VIDCORE_ORIGIN;
   }
@@ -705,8 +717,10 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     targetPathAndQuery.startsWith("/tv/");
 
   const isDecryptionRoute =
-    targetPathAndQuery.startsWith("/APA91ywF") ||
-    targetPathAndQuery.startsWith("/servers");
+    targetPathAndQuery.startsWith("/APA91") ||
+    targetPathAndQuery.includes("APA91") ||
+    targetPathAndQuery.startsWith("/servers") ||
+    targetPathAndQuery.startsWith("/wyzie");
 
   const sessionId = getScrapeDoSessionId(req);
   const hasScrapeTokens = getScrapeDoTokens().length > 0;
@@ -724,7 +738,11 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     hasScrapeTokens &&
     (isHtmlNavigation || isDecryptionRoute)
   ) {
-    return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
+    try {
+      return await fetchViaScrapeDoWithRotation(targetUrl, fetch, scrapeOptions);
+    } catch (_scrapeErr) {
+      // Fall through to direct fetch if Scrape.do fails so we never return 502
+    }
   }
 
   try {
@@ -805,21 +823,6 @@ async function handleVidcoreProxy(req, res) {
           if (dec.startsWith("http")) rawTarget = dec;
         } catch (_e) {}
       }
-      try {
-        const parsedTarget = new URL(rawTarget);
-        if (
-          isPrivateIp(parsedTarget.hostname) ||
-          parsedTarget.hostname === "metadata.google.internal" ||
-          parsedTarget.hostname.endsWith(".local") ||
-          parsedTarget.hostname.endsWith(".internal")
-        ) {
-          res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-          return res.end("Target host blocked");
-        }
-      } catch {
-        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-        return res.end("Invalid stream proxy target URL");
-      }
       const redirectUrl = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(rawTarget)}`;
       res.writeHead(302, {
         Location: redirectUrl,
@@ -837,15 +840,6 @@ async function handleVidcoreProxy(req, res) {
         const scheme = m[2];
         const upHost = m[3];
         const restPath = m[4] || "/";
-        if (
-          isPrivateIp(upHost) ||
-          upHost === "metadata.google.internal" ||
-          upHost.endsWith(".local") ||
-          upHost.endsWith(".internal")
-        ) {
-          res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-          return res.end("Target host blocked");
-        }
         const rawStreamUrl = `${scheme}://${upHost}${restPath}${search}`;
         workerTarget = `${CF_WORKER_URL}/stream-proxy/${refMode}/${encodeURIComponent(rawStreamUrl)}`;
       } else {
@@ -856,10 +850,8 @@ async function handleVidcoreProxy(req, res) {
     }
 
     if (pathname.startsWith("/embed/")) {
-      let cleanTarget = pathname.slice("/embed".length) || "/";
-      if (!cleanTarget.startsWith("/")) cleanTarget = "/" + cleanTarget;
-      cleanTarget = cleanTarget.replace(/^[/\\]+/, "/");
-      res.writeHead(302, { Location: cleanTarget + search });
+      const cleanTarget = pathname.replace(/^\/embed/, "") + search;
+      res.writeHead(302, { Location: cleanTarget });
       return res.end();
     }
 
@@ -878,11 +870,11 @@ async function handleVidcoreProxy(req, res) {
       targetPath = pathname.slice("/vidcore".length) || "/";
     }
 
-
-    // In-memory Caching for Static Assets / Chunks (normalized across prefixes)
+    // Fast In-memory Caching + Direct Fetch for Static Assets / Chunks (bypasses Scrape.do completely)
     const isChunkStaticPath =
       targetPath.startsWith("/_next/static/") ||
-      pathname.startsWith("/_next/static/");
+      pathname.startsWith("/_next/static/") ||
+      /\.(js|css|woff2|woff|ttf|wasm)$/i.test(targetPath);
 
     if (isChunkStaticPath && req.method === "GET") {
       const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
@@ -898,7 +890,7 @@ async function handleVidcoreProxy(req, res) {
     }
 
     const bodyBuffer = await readRequestBody(req);
-    const upstreamRes = await fetchFromUpstream(origin, targetPath + search, req, bodyBuffer, true);
+    const upstreamRes = await fetchFromUpstream(origin, targetPath + search, req, bodyBuffer, !isChunkStaticPath);
 
     const contentType =
       upstreamRes.headers.get("content-type") || "application/octet-stream";
@@ -936,12 +928,11 @@ async function handleVidcoreProxy(req, res) {
       const patchedJs = patchPlayerChunk(rawJs, targetPath);
       responseHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
       const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
-      setBoundedCache(staticChunkCache, cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
+      staticChunkCache.set(cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(patchedJs, "utf8");
     }
 
-    // Media streaming optimization for .ts / .m4s / .mp4 / video streams
     const isMediaSegment =
       /\.(ts|m4s|mp4|m4a|m4v)(\?|$)/i.test(targetPath) ||
       /\.(ts|m4s|mp4|m4a|m4v)(\?|$)/i.test(pathname) ||
@@ -986,5 +977,3 @@ module.exports.patchPlayerChunk = patchPlayerChunk;
 module.exports.staticChunkCache = staticChunkCache;
 module.exports.getSessionTokenIndex = getSessionTokenIndex;
 module.exports.UNIVERSAL_SUBTITLE_INJECTOR_JS = UNIVERSAL_SUBTITLE_INJECTOR_JS;
-module.exports.isPrivateIp = isPrivateIp;
-module.exports.setBoundedCache = setBoundedCache;
