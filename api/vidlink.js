@@ -1,4 +1,5 @@
 const { Readable } = require("stream");
+const { isPrivateIp } = require("./embed-proxy.js");
 const {
   AD_SHIELD_JS,
   sanitizeVidlinkHtml,
@@ -7,7 +8,6 @@ const {
   fetchViaScrapeDoWithRotation,
   getScrapeDoSessionId,
   CF_WORKER_URL,
-  isPrivateIp,
   setBoundedCache,
 } = require("./vidcore.js");
 
@@ -16,11 +16,8 @@ const VIDLINK_ORIGIN = process.env.VIDLINK_ORIGIN || "https://vidlink.pro";
 // Strong in-memory cache for static chunks & assets
 const vidlinkStaticCache = new Map();
 
-function getCleanUserAgent(rawUa) {
-  if (!rawUa || /node|curl|python|axios|undici/i.test(rawUa)) {
-    return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-  }
-  return rawUa;
+function getCleanUserAgent() {
+  return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 }
 
 function fetchWithTimeout(url, options = {}, ms = 3000) {
@@ -40,7 +37,7 @@ function fetchWithTimeout(url, options = {}, ms = 3000) {
 async function fetchVidlinkHtmlFast(targetUrl, req, bodyBuffer = null) {
   const method = req ? req.method || "GET" : "GET";
   const headers = {
-    "User-Agent": getCleanUserAgent(req?.headers?.["user-agent"]),
+    "User-Agent": getCleanUserAgent(),
     Accept:
       req?.headers?.["accept"] ||
       "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -69,6 +66,10 @@ async function fetchVidlinkHtmlFast(targetUrl, req, bodyBuffer = null) {
       }
     }
   }
+
+  delete headers["sec-ch-ua"];
+  delete headers["sec-ch-ua-mobile"];
+  delete headers["sec-ch-ua-platform"];
 
   const fetchOpts = { method, headers };
   if (method === "POST" && bodyBuffer && bodyBuffer.length > 0) {
@@ -269,7 +270,7 @@ async function handleVidlinkProxy(req, res) {
           {
             method: "GET",
             headers: {
-              "User-Agent": getCleanUserAgent(req.headers?.["user-agent"]),
+              "User-Agent": getCleanUserAgent(),
               Accept: "*/*",
               Referer: `${VIDLINK_ORIGIN}/`,
               Origin: VIDLINK_ORIGIN,

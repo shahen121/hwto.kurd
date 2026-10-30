@@ -72,15 +72,26 @@ function getScrapeDoSessionId(req) {
   const rawHeader =
     (req.headers && (req.headers["x-forwarded-for"] || req.headers["x-real-ip"])) ||
     "";
-  const clientIp = rawHeader
+  let clientIp = rawHeader
     ? rawHeader.split(",")[0].trim()
     : (req.socket && req.socket.remoteAddress) || "";
+
   if (!clientIp || clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "localhost") {
     return "884422";
   }
-  const raw = String(clientIp);
+
+  // On modern iPhone/Android (IPv6 privacy extensions / 5G), only use the network prefix
+  // so the Scrape.do sessionId never changes mid-stream between HTML load and APA91 POST
+  if (clientIp.includes(":")) {
+    clientIp = clientIp.split(":").slice(0, 3).join(":");
+  } else if (clientIp.includes(".")) {
+    clientIp = clientIp.split(".").slice(0, 3).join(".");
+  }
+
   let hash = 0;
-  for (let i = 0; i < raw.length; i++) hash = (hash * 31 + raw.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < clientIp.length; i++) {
+    hash = (hash * 31 + clientIp.charCodeAt(i)) >>> 0;
+  }
   return String((hash % 900000) + 100000);
 }
 
@@ -553,6 +564,8 @@ function sanitizeVidlinkHtml(html) {
   out = addChunkCacheBusting(out);
 
   const headInject = `
+<link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
+<link rel="dns-prefetch" href="${CF_WORKER_URL}" />
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
 <style id="hwto-sub-fix">[class*="captions"],.vds-captions,[data-part="cue"],[data-part="cue-display"]{unicode-bidi:plaintext!important;font-family:"Tahoma","Segoe UI","Arial",sans-serif!important;}</style>
 `;
@@ -661,18 +674,15 @@ function patchPlayerChunk(jsCode, pathname = "") {
 
 const staticChunkCache = new Map();
 
-function getCleanUserAgent(rawUa) {
-  if (!rawUa || /node|curl|python|axios|undici/i.test(rawUa)) {
-    return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-  }
-  return rawUa;
+function getCleanUserAgent() {
+  return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 }
 
 async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, useScrapeDoFallback = true) {
   const targetUrl = origin + targetPathAndQuery;
   const method = req.method || "GET";
   const forwardHeaders = {
-    "User-Agent": getCleanUserAgent(req.headers["user-agent"]),
+    "User-Agent": getCleanUserAgent(),
     Accept: req.headers["accept"] || "*/*",
     "Accept-Language": req.headers["accept-language"] || "en-US,en;q=0.9,ar;q=0.8",
     Connection: "keep-alive",
@@ -695,6 +705,10 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
       forwardHeaders[k] = v;
     }
   }
+
+  delete forwardHeaders["sec-ch-ua"];
+  delete forwardHeaders["sec-ch-ua-mobile"];
+  delete forwardHeaders["sec-ch-ua-platform"];
 
   if (
     targetPathAndQuery.startsWith("/APA91") ||

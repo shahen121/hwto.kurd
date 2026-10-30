@@ -111,6 +111,12 @@ const UNIVERSAL_SUBTITLE_INJECTOR_JS = `(function() {
   function injectSubtitlesToVideo(v) {
     if (!v) return;
 
+    try {
+      v.setAttribute("playsinline", "");
+      v.setAttribute("webkit-playsinline", "");
+      v.playsInline = true;
+    } catch (_e) {}
+
     var tracks = [];
     if (kuUrl) {
       tracks.push({ lang: "ku", label: "Kurdî (hwto-kurd)", url: kuUrl, def: subLang !== "ar" });

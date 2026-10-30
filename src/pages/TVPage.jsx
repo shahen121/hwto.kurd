@@ -2435,7 +2435,8 @@ export default function TVPage({
                     }
                     allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                     allowFullScreen
-                    referrerPolicy="origin"
+                    playsInline
+                    referrerPolicy="strict-origin-when-cross-origin"
                     onLoad={() => setWebviewLoading(false)}
                     style={{
                       position: "absolute",
