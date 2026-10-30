@@ -463,7 +463,7 @@ export default function ProfilePage({
               justifyContent: "center",
             }}
           >
-            <PlayIcon />
+            <PlayIcon size={20} />
           </div>
           <div>
             <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text)" }}>
@@ -640,7 +640,7 @@ export default function ProfilePage({
 
                       <div className="card-overlay">
                         <div className="card-play-btn">
-                          <PlayIcon />
+                          <PlayIcon size={20} />
                         </div>
                       </div>
 
@@ -719,7 +719,7 @@ export default function ProfilePage({
           {continueItems.length === 0 ? (
             <div className="empty-state" style={{ padding: "64px 20px", textAlign: "center" }}>
               <div style={{ color: "var(--text3)", marginBottom: 16 }}>
-                <PlayIcon />
+                <PlayIcon size={32} />
               </div>
               <h3 style={{ fontSize: 18, color: "var(--text)", marginBottom: 8 }}>
                 {t("emptyContinueTitle")}
@@ -811,7 +811,7 @@ export default function ProfilePage({
                             color: "#fff",
                           }}
                         >
-                          <PlayIcon />
+                          <PlayIcon size={20} />
                         </div>
                       </div>
 
@@ -906,7 +906,7 @@ export default function ProfilePage({
                           gap: 6,
                         }}
                       >
-                        <PlayIcon />
+                        <PlayIcon size={16} />
                         <span>{t("resumeWatching")}</span>
                       </button>
 
@@ -934,7 +934,7 @@ export default function ProfilePage({
                             e.currentTarget.style.color = "var(--text3)";
                           }}
                         >
-                          <TrashIcon />
+                          <TrashIcon size={16} />
                         </button>
                       )}
                     </div>
@@ -1016,7 +1016,7 @@ export default function ProfilePage({
 
                       <div className="card-overlay">
                         <div className="card-play-btn">
-                          <PlayIcon />
+                          <PlayIcon size={20} />
                         </div>
                       </div>
 

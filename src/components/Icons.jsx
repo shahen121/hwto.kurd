@@ -54,11 +54,28 @@ export const BookmarkFillIcon = () => (
     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
   </svg>
 );
-export const PlayIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor">
-    <polygon points="5 3 19 12 5 21 5 3" />
-  </svg>
-);
+export const PlayIcon = ({ size = 16, width, height, style, ...props }) => {
+  const w = width || size;
+  const h = height || size;
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={w}
+      height={h}
+      fill="currentColor"
+      style={{
+        width: w,
+        height: h,
+        flexShrink: 0,
+        display: "inline-block",
+        ...style,
+      }}
+      {...props}
+    >
+      <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  );
+};
 export const CloseIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <line x1="18" y1="6" x2="6" y2="18" />
@@ -137,14 +154,33 @@ export const DownloadIcon = () => (
   </svg>
 );
 
-export const TrashIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6l-1 14H6L5 6" />
-    <path d="M10 11v6M14 11v6" />
-    <path d="M9 6V4h6v2" />
-  </svg>
-);
+export const TrashIcon = ({ size = 16, width, height, style, ...props }) => {
+  const w = width || size;
+  const h = height || size;
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={w}
+      height={h}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      style={{
+        width: w,
+        height: h,
+        flexShrink: 0,
+        display: "inline-block",
+        ...style,
+      }}
+      {...props}
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4h6v2" />
+    </svg>
+  );
+};
 export const FolderIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />

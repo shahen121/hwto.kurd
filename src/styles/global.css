@@ -1528,6 +1528,12 @@ body.no-anim *::after {
     margin-bottom: 8px;
 }
 
+button svg,
+.btn svg {
+    flex-shrink: 0;
+    max-width: 100%;
+}
+
 .library-sub {
     color: var(--text3);
     font-size: 14px;
