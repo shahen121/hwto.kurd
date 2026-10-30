@@ -14,6 +14,23 @@ export const HwtoLogo = ({ style }) => (
   />
 );
 
+export const LibraryUnifiedIcon = ({ size = 22 }) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+    <circle cx="12" cy="10" r="3" strokeWidth="1.7" />
+    <path d="M12 8.8v1.4l1 1" strokeWidth="1.7" />
+  </svg>
+);
+
 export const SearchIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="11" cy="11" r="8" />

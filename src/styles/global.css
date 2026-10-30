@@ -1533,6 +1533,143 @@ body.no-anim *::after {
     font-size: 14px;
 }
 
+/* ── Coordinated Library Tabs (Saved & History) ── */
+.library-page-container {
+    padding-bottom: 48px;
+}
+
+.library-tabs-nav {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 14px;
+    padding: 4px;
+    margin-top: 20px;
+    gap: 6px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+.library-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--text3);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.library-tab-btn svg {
+    width: 17px;
+    height: 17px;
+}
+
+.library-tab-btn:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.library-tab-btn.active {
+    background: #ed227b;
+    color: #fff;
+    box-shadow: 0 4px 16px rgba(237, 34, 123, 0.45);
+}
+
+.library-tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.16);
+    color: inherit;
+    min-width: 18px;
+}
+
+.library-tab-btn.active .library-tab-count {
+    background: rgba(255, 255, 255, 0.28);
+    color: #fff;
+}
+
+.library-empty-state {
+    padding: 64px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    max-width: 440px;
+    margin: 0 auto;
+}
+
+.library-empty-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 24px;
+    background: rgba(237, 34, 123, 0.1);
+    border: 1px solid rgba(237, 34, 123, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ed227b;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 24px rgba(237, 34, 123, 0.2);
+}
+
+.library-empty-icon svg {
+    width: 32px;
+    height: 32px;
+}
+
+.library-empty-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text);
+}
+
+.library-empty-desc {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text3);
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .library-header {
+        padding: 20px 16px 0;
+    }
+
+    .library-title {
+        font-size: 28px;
+    }
+
+    .library-tabs-nav {
+        width: 100%;
+        display: flex;
+    }
+
+    .library-tab-btn {
+        flex: 1;
+        justify-content: center;
+        padding: 9px 12px;
+        font-size: 13px;
+    }
+
+    .library-section {
+        padding: 20px 16px;
+    }
+}
+
 .library-section {
     padding: 32px 48px;
 }
@@ -4066,19 +4203,23 @@ html[data-win-titlebar][data-maximized] .main {
     align-items: center;
     cursor: pointer;
     flex-shrink: 0;
+    padding: 3px 6px;
+    border-radius: 12px;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
 }
 
 .top-cat-logo {
-    height: 30px;
+    height: 44px;
+    max-height: 48px;
     width: auto;
     object-fit: contain;
-    filter: drop-shadow(0 0 8px rgba(237, 34, 123, 0.45));
+    filter: drop-shadow(0 2px 12px rgba(237, 34, 123, 0.6));
     transition: transform 0.2s ease, filter 0.2s ease;
 }
 
 .top-cat-brand:hover .top-cat-logo {
-    transform: scale(1.05);
-    filter: drop-shadow(0 0 14px rgba(237, 34, 123, 0.8));
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 18px rgba(237, 34, 123, 0.9));
 }
 
 .top-cat-nav {
@@ -4731,18 +4872,18 @@ html[data-win-titlebar][data-maximized] .main {
         width: 100%;
         height: calc(64px + env(safe-area-inset-bottom));
         flex-direction: row;
-        justify-content: space-evenly;
+        justify-content: space-around;
         align-items: center;
-        padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
+        padding: 4px 20px calc(4px + env(safe-area-inset-bottom));
         gap: 0;
         border-right: none;
         border-left: none;
         border-top: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(14, 11, 23, 0.94);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
+        background: rgba(14, 11, 23, 0.95);
+        backdrop-filter: blur(28px);
+        -webkit-backdrop-filter: blur(28px);
         z-index: 1000;
-        box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 -4px 28px rgba(0, 0, 0, 0.6);
         overflow: hidden;
     }
 
@@ -4758,12 +4899,21 @@ html[data-win-titlebar][data-maximized] .main {
     }
 
     .sidebar-btn {
-        width: 44px;
-        height: 44px;
-        flex: 0 0 44px;
-        border-radius: 12px;
+        width: 58px;
+        height: 48px;
+        flex: 0 0 58px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         -webkit-tap-highlight-color: transparent;
-        transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, color 0.2s ease;
+        transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .sidebar-btn svg {
+        width: 24px;
+        height: 24px;
+        transition: transform 0.2s ease;
     }
 
     .sidebar-btn:active {
@@ -4776,13 +4926,35 @@ html[data-win-titlebar][data-maximized] .main {
         box-shadow: 0 0 16px rgba(237, 34, 123, 0.35);
     }
 
+    .sidebar-btn.active svg {
+        transform: scale(1.1);
+    }
+
+    .sidebar-btn-home {
+        width: 64px;
+        height: 48px;
+        flex: 0 0 64px;
+        border-radius: 16px;
+    }
+
+    .sidebar-btn-home.active {
+        background: linear-gradient(135deg, rgba(237, 34, 123, 0.24), rgba(237, 34, 123, 0.1));
+        border: 1px solid rgba(237, 34, 123, 0.4);
+    }
+
     .sidebar-btn .tooltip {
         display: none;
     }
 
     .top-cat-header {
-        padding: 8px 12px;
+        padding: 8px 14px;
         padding-top: max(8px, env(safe-area-inset-top));
+    }
+
+    .top-cat-logo {
+        height: 38px;
+        max-height: 42px;
+        filter: drop-shadow(0 2px 10px rgba(237, 34, 123, 0.65));
     }
 
     .top-cat-inner {
