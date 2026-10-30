@@ -714,9 +714,18 @@ export default function MoviePage({
   useEffect(() => {
     if (!playing) return;
     if (!isElectron) {
-      // Fallback timer in case iframe onLoad doesn't fire immediately
-      const t = setTimeout(() => setWebviewLoading(false), 400);
-      return () => clearTimeout(t);
+      const handleShieldMsg = (e) => {
+        if (e.data && e.data.type === "AD_SHIELD_READY") {
+          setWebviewLoading(false);
+        }
+      };
+      window.addEventListener("message", handleShieldMsg);
+      // Hard fallback timer: dismiss loading overlay after 1500ms max so mobile users are never blocked
+      const t = setTimeout(() => setWebviewLoading(false), 1500);
+      return () => {
+        window.removeEventListener("message", handleShieldMsg);
+        clearTimeout(t);
+      };
     }
     const wv = webviewRef.current;
     if (!wv) return;

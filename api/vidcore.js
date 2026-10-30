@@ -175,6 +175,40 @@ const AD_SHIELD_JS = `(function() {
   var lastMpdBaseDir = "";
   var lastMpdQuery = "";
 
+  // 0. Spoof navigator properties to match Windows Desktop Chrome & iOS MSE polyfill
+  try {
+    if (typeof window !== "undefined" && window.navigator) {
+      var nav = window.navigator;
+      var spoofNav = function(prop, val) {
+        try {
+          Object.defineProperty(nav, prop, {
+            get: function() { return val; },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (_e) {}
+      };
+      spoofNav("userAgent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+      spoofNav("platform", "Win32");
+      spoofNav("maxTouchPoints", 0);
+      spoofNav("vendor", "Google Inc.");
+      spoofNav("userAgentData", {
+        brands: [
+          { brand: "Chromium", version: "131" },
+          { brand: "Google Chrome", version: "131" }
+        ],
+        mobile: false,
+        platform: "Windows"
+      });
+    }
+  } catch (_e) {}
+
+  try {
+    if (typeof window !== "undefined" && typeof window.MediaSource === "undefined" && typeof window.ManagedMediaSource !== "undefined") {
+      window.MediaSource = window.ManagedMediaSource;
+    }
+  } catch (_e) {}
+
   // 1. Unregister broken Service Workers (fixes sw.js:1 Uncaught TypeError: Failed to convert value to 'Response')
   try {
     if (typeof navigator !== "undefined" && navigator.serviceWorker && typeof navigator.serviceWorker.getRegistrations === "function") {
@@ -562,6 +596,7 @@ function sanitizeVidlinkHtml(html) {
 
   out = sanitizePreloadLinks(out);
   out = addChunkCacheBusting(out);
+  out = out.replace(/(href|src)=["']\/_next\/static\//g, '$1="/vidlink/_next/static/');
 
   const headInject = `
 <link rel="preconnect" href="${CF_WORKER_URL}" crossorigin />
@@ -587,6 +622,7 @@ function sanitizeVidcoreHtml(html) {
 
   out = sanitizePreloadLinks(out);
   out = addChunkCacheBusting(out);
+  out = out.replace(/(href|src)=["']\/_next\/static\//g, '$1="/vidcore/_next/static/');
 
   const headInject = `
 <script id="hwto-universal-subs">${UNIVERSAL_SUBTITLE_INJECTOR_JS}</script>
@@ -729,6 +765,56 @@ async function fetchFromUpstream(origin, targetPathAndQuery, req, bodyBuffer, us
     targetPathAndQuery.includes("APA91") ||
     targetPathAndQuery.startsWith("/servers") ||
     targetPathAndQuery.startsWith("/wyzie");
+
+  const isStaticAsset =
+    targetPathAndQuery.startsWith("/_next/") ||
+    /\.(js|css|woff2|woff|ttf|wasm|png|jpg|svg|ico)(\?|$)/i.test(targetPathAndQuery);
+
+  if (isStaticAsset) {
+    // 1. Direct fetch with 3500ms timeout
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
+    try {
+      const fetchOptions = {
+        method,
+        headers: forwardHeaders,
+        signal: controller.signal,
+      };
+      const directRes = await fetch(targetUrl, fetchOptions);
+      clearTimeout(timer);
+
+      // Fallback cross-fetch for Next.js chunks if 404 (vidcore <-> vidlink)
+      if (directRes.status === 404 && origin === VIDCORE_ORIGIN && targetPathAndQuery.includes("/_next/")) {
+        const altUrl = `${VIDLINK_ORIGIN}${targetPathAndQuery}`;
+        try {
+          const altRes = await fetch(altUrl, { method, headers: { ...forwardHeaders, Referer: `${VIDLINK_ORIGIN}/` } });
+          if (altRes.ok) return altRes;
+        } catch (_altErr) {}
+      } else if (directRes.status === 404 && origin === VIDLINK_ORIGIN && targetPathAndQuery.includes("/_next/")) {
+        const altUrl = `${VIDCORE_ORIGIN}${targetPathAndQuery}`;
+        try {
+          const altRes = await fetch(altUrl, { method, headers: { ...forwardHeaders, Referer: `${VIDCORE_ORIGIN}/` } });
+          if (altRes.ok) return altRes;
+        } catch (_altErr) {}
+      }
+
+      if (directRes.ok) return directRes;
+    } catch (_timeoutErr) {
+      clearTimeout(timer);
+    }
+
+    // 2. Direct fetch failed or timed out: Fetch via Cloudflare Worker
+    try {
+      const workerUrl = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(targetUrl)}`;
+      const workerRes = await fetch(workerUrl, {
+        headers: { "User-Agent": getCleanUserAgent() },
+      });
+      if (workerRes.ok) return workerRes;
+    } catch (_wErr) {}
+
+    // 3. Fallback direct fetch without timeout (strictly never Scrape.do for static assets)
+    return await fetch(targetUrl, { method, headers: forwardHeaders });
+  }
 
   const sessionId = getScrapeDoSessionId(req);
   const hasScrapeTokens = getScrapeDoTokens().length > 0;
@@ -880,12 +966,13 @@ async function handleVidcoreProxy(req, res) {
 
     // Fast In-memory Caching + Direct Fetch for Static Assets / Chunks (bypasses Scrape.do completely)
     const isChunkStaticPath =
-      targetPath.startsWith("/_next/static/") ||
-      pathname.startsWith("/_next/static/") ||
-      /\.(js|css|woff2|woff|ttf|wasm)$/i.test(targetPath);
+      targetPath.startsWith("/_next/") ||
+      pathname.startsWith("/_next/") ||
+      /\.(js|css|woff2|woff|ttf|wasm|png|jpg|svg|ico)$/i.test(targetPath) ||
+      /\.(js|css|woff2|woff|ttf|wasm|png|jpg|svg|ico)$/i.test(pathname);
 
     if (isChunkStaticPath && req.method === "GET") {
-      const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
+      const cacheKey = targetPath.startsWith("/_next/") ? targetPath : pathname;
       if (staticChunkCache.has(cacheKey)) {
         const cached = staticChunkCache.get(cacheKey);
         res.writeHead(200, {
@@ -935,10 +1022,20 @@ async function handleVidcoreProxy(req, res) {
       const rawJs = await upstreamRes.text();
       const patchedJs = patchPlayerChunk(rawJs, targetPath);
       responseHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
-      const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
+      const cacheKey = targetPath.startsWith("/_next/") ? targetPath : pathname;
       staticChunkCache.set(cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(patchedJs, "utf8");
+    }
+
+    if (isChunkStaticPath && !contentType.includes("text/html") && upstreamRes.ok) {
+      const arr = await upstreamRes.arrayBuffer();
+      const body = Buffer.from(arr);
+      responseHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
+      const cacheKey = targetPath.startsWith("/_next/") ? targetPath : pathname;
+      staticChunkCache.set(cacheKey, { body, contentType });
+      res.writeHead(upstreamRes.status, responseHeaders);
+      return res.end(body);
     }
 
     const isMediaSegment =

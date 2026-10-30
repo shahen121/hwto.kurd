@@ -312,6 +312,53 @@ async function handleVidlinkProxy(req, res) {
           });
           return res.end(buffer);
         }
+
+        if (staticRes.status === 404 && targetPath.includes("/_next/")) {
+          const altUrl = `https://vidcore.io${targetPath}${search}`;
+          try {
+            const altRes = await fetchWithTimeout(
+              altUrl,
+              {
+                method: "GET",
+                headers: {
+                  "User-Agent": getCleanUserAgent(),
+                  Accept: "*/*",
+                  Referer: "https://vidcore.io/",
+                  Origin: "https://vidcore.io",
+                },
+              },
+              3500,
+            );
+            if (altRes.ok) {
+              const contentType =
+                altRes.headers.get("content-type") ||
+                "application/javascript; charset=utf-8";
+              if (contentType.includes("javascript")) {
+                const rawJs = await altRes.text();
+                const patchedJs = patchPlayerChunk(rawJs, targetPath);
+                setBoundedCache(vidlinkStaticCache, cacheKey, {
+                  body: patchedJs,
+                  contentType,
+                });
+                res.writeHead(200, {
+                  "Content-Type": contentType,
+                  "Cache-Control": "public, max-age=31536000, immutable",
+                  "Access-Control-Allow-Origin": "*",
+                });
+                return res.end(patchedJs, "utf8");
+              }
+              const ab = await altRes.arrayBuffer();
+              const buf = Buffer.from(ab);
+              setBoundedCache(vidlinkStaticCache, cacheKey, { body: buf, contentType });
+              res.writeHead(200, {
+                "Content-Type": contentType,
+                "Cache-Control": "public, max-age=31536000, immutable",
+                "Access-Control-Allow-Origin": "*",
+              });
+              return res.end(buf);
+            }
+          } catch (_altE) {}
+        }
       } catch (_err) {
         // Fall through to full upstream fetch if direct static fetch failed
       }

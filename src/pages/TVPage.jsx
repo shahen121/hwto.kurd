@@ -1402,8 +1402,17 @@ export default function TVPage({
   useEffect(() => {
     if (!playing) return;
     if (!isElectron) {
-      const t = setTimeout(() => setWebviewLoading(false), 400);
-      return () => clearTimeout(t);
+      const handleShieldMsg = (e) => {
+        if (e.data && e.data.type === "AD_SHIELD_READY") {
+          setWebviewLoading(false);
+        }
+      };
+      window.addEventListener("message", handleShieldMsg);
+      const t = setTimeout(() => setWebviewLoading(false), 1500);
+      return () => {
+        window.removeEventListener("message", handleShieldMsg);
+        clearTimeout(t);
+      };
     }
     const wv = webviewRef.current;
     if (!wv) return;
