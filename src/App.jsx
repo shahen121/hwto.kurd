@@ -34,6 +34,7 @@ import {
   getCachedAuthUser,
   subscribeToAuthChanges,
   signOutUser,
+  checkRedirectResult,
 } from "./utils/firebase";
 import {
   canSync,
@@ -60,6 +61,7 @@ import SearchModal from "./components/SearchModal";
 import AuthScreen from "./components/AuthScreen";
 import CloseConfirmModal from "./components/CloseConfirmModal";
 import UpdateModal from "./components/UpdateModal";
+import PwaInstallBanner from "./components/PwaInstallBanner";
 import { useGamepadNav } from "./utils/useGamepadNav";
 
 // Lazy-loaded pages: each chunk is only downloaded when the user first visits
@@ -127,6 +129,16 @@ export default function App() {
     };
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
+  useEffect(() => {
+    checkRedirectResult()
+      .then((user) => {
+        if (user) setAuthUser(user);
+      })
+      .catch((err) => {
+        console.error("[App] checkRedirectResult error:", err);
+      });
   }, []);
 
   // Navigation history stack for Ctrl+Z back navigation
@@ -1532,6 +1544,7 @@ export default function App() {
             offline={offline}
           />
         )}
+        <PwaInstallBanner />
         {updateBanner && (
           <div
             style={{

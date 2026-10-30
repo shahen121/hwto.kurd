@@ -391,6 +391,7 @@ export default function ProfilePage({
 
       {/* ── Quick Stats Grid ── */}
       <div
+        className="profile-stats-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
@@ -515,6 +516,7 @@ export default function ProfilePage({
 
       {/* ── Tabs Navigation ── */}
       <div
+        className="profile-tabs-nav"
         style={{
           display: "flex",
           gap: 12,

@@ -2,13 +2,25 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
         <meta
             http-equiv="Content-Security-Policy"
-            content="default-src 'self' file:; base-uri 'self'; object-src 'none'; script-src 'self' file:; style-src 'self' 'unsafe-inline' file:; img-src 'self' data: blob: https: file:; media-src 'self' blob: https: file:; font-src 'self' data: file:; connect-src 'self' https: wss: http://localhost:* ws://localhost:*; frame-src 'self' https: http://localhost:*; worker-src 'self' blob:; form-action 'self'"
+            content="default-src 'self' file:; base-uri 'self'; object-src 'none'; script-src 'self' file:; style-src 'self' 'unsafe-inline' file:; img-src 'self' data: blob: https: file:; media-src 'self' blob: https: file:; font-src 'self' data: file:; connect-src 'self' https: wss: http://localhost:* ws://localhost:*; frame-src 'self' https: http://localhost:*; worker-src 'self' blob:; manifest-src 'self' file:; form-action 'self' https: file:;"
         />
         <title>hwto-kurd</title>
         <link rel="icon" type="image/svg+xml" href="logo.svg" />
+        <link rel="manifest" href="manifest.webmanifest" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="hwto-kurd" />
+        <meta name="application-name" content="hwto-kurd" />
+        <meta name="theme-color" content="#0c0a14" />
+        <meta name="apple-touch-fullscreen" content="yes" />
+        <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="192x192" href="sized/192x192.png" />
+        <link rel="apple-touch-icon" sizes="512x512" href="sized/512x512.png" />
         <link rel="preconnect" href="https://hwto.proteome626.workers.dev" crossorigin />
         <link rel="dns-prefetch" href="https://hwto.proteome626.workers.dev" />
     </head>

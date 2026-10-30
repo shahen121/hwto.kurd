@@ -9,6 +9,8 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
 } from "firebase/auth";
@@ -156,11 +158,77 @@ export async function registerWithEmail(email, password, displayName) {
   return user;
 }
 
-export async function signInWithGoogle() {
-  const cred = await signInWithPopup(requireAuth(), new GoogleAuthProvider());
-  const user = formatUser(cred.user);
-  setCachedAuthUser(user);
-  return user;
+function createGoogleProvider() {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  return provider;
+}
+
+let _redirectPromise = null;
+
+export async function checkRedirectResult() {
+  const auth = getFirebaseAuth();
+  if (!auth) return null;
+  if (!_redirectPromise) {
+    _redirectPromise = getRedirectResult(auth)
+      .then((cred) => {
+        if (cred?.user) {
+          const user = formatUser(cred.user);
+          setCachedAuthUser(user);
+          return user;
+        }
+        return null;
+      })
+      .catch((err) => {
+        console.error("[Auth] Redirect sign-in result error:", err);
+        throw err;
+      });
+  }
+  return _redirectPromise;
+}
+
+export async function signInWithGoogleRedirect() {
+  const auth = requireAuth();
+  const provider = createGoogleProvider();
+  await signInWithRedirect(auth, provider);
+}
+
+export async function signInWithGoogle({ preferRedirect = false } = {}) {
+  const auth = requireAuth();
+  const provider = createGoogleProvider();
+
+  const isStandalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia?.("(display-mode: standalone)")?.matches ||
+      window.navigator?.standalone === true);
+
+  const isMobile =
+    typeof window !== "undefined" &&
+    (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent || "") || isStandalone);
+
+  if (preferRedirect || isMobile) {
+    await signInWithRedirect(auth, provider);
+    return null;
+  }
+
+  try {
+    const cred = await signInWithPopup(auth, provider);
+    const user = formatUser(cred.user);
+    setCachedAuthUser(user);
+    return user;
+  } catch (err) {
+    const code = err?.code || "";
+    // If popup was blocked or unsupported, automatically attempt redirect sign-in
+    if (
+      code === "auth/popup-blocked" ||
+      code === "auth/operation-not-supported-in-this-environment"
+    ) {
+      console.warn("[Auth] Popup blocked or not supported, redirecting...", code);
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function signInAsGuest() {

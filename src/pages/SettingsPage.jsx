@@ -24,10 +24,15 @@ import {
   getRatingCountry,
   RATING_COUNTRIES,
 } from "../utils/ageRating";
+import { usePwaInstall } from "../utils/pwa";
+import PwaInstallBanner from "../components/PwaInstallBanner";
+import { isElectron } from "../utils/storage";
 
 export default function SettingsPage({ onTriggerLanguageChange }) {
   const currentLang = getCurrentLanguage();
   const rtl = isRTL();
+  const { isStandalone, isIOS, isAndroid } = usePwaInstall();
+  const [showPwaModal, setShowPwaModal] = useState(false);
 
   // Accent & Theme
   const [accent, setAccent] = useState(
@@ -363,6 +368,78 @@ export default function SettingsPage({ onTriggerLanguageChange }) {
           </div>
         </div>
       </SettingsCard>
+
+      {/* ── SECTION 2.5: PWA & Mobile Installation (Web / Mobile only) ── */}
+      {!isElectron && (
+        <SettingsCard
+          title={t("groupPwa")}
+          subtitle={t("groupPwaSub")}
+          icon="📱"
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 16,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                {isStandalone ? t("installedStandalone") : t("installAppTitle")}
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text3)", maxWidth: 540 }}>
+                {isStandalone
+                  ? t("standaloneRunningDesc")
+                  : t("installAppSubtitle")}
+              </div>
+            </div>
+
+            {!isStandalone ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShowPwaModal(true)}
+                style={{
+                  padding: "9px 20px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  background: "var(--hwto-gradient)",
+                  boxShadow: "0 4px 15px rgba(237, 34, 123, 0.35)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <span>📲</span>
+                <span>{t("installApp")}</span>
+              </button>
+            ) : (
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "4px 12px",
+                  borderRadius: 16,
+                  backgroundColor: "rgba(0, 230, 118, 0.15)",
+                  color: "#00e676",
+                  border: "1px solid rgba(0, 230, 118, 0.3)",
+                }}
+              >
+                {t("installedStandalone")}
+              </span>
+            )}
+          </div>
+        </SettingsCard>
+      )}
+
+      {showPwaModal && (
+        <PwaInstallBanner
+          forceModal={true}
+          onClose={() => setShowPwaModal(false)}
+        />
+      )}
 
       {/* ── SECTION 3: Playback Experience ── */}
       <SettingsCard
