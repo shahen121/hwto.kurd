@@ -84,7 +84,7 @@ function isProxyRoute(pathname, req) {
     pathname.startsWith("/embed/") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/stream-proxy/") ||
-    pathname.startsWith("/APA91") ||
+    pathname.startsWith("/APA91ywF") ||
     pathname.startsWith("/wyzie") ||
     pathname.startsWith("/servers") ||
     pathname.startsWith("/api/b/") ||
@@ -98,6 +98,7 @@ function isProxyRoute(pathname, req) {
     return true;
   }
 
+  // Also check if Referer is from player iframe (/vidcore/, /vidlink/, /movie/, /tv/)
   const ref = String(req.headers["referer"] || "");
   if (
     ref.includes("/vidcore/") ||
@@ -150,7 +151,7 @@ async function app(req, res) {
     return subtitlesHandler(req, res);
   }
 
-  // 4. HLS API Proxy
+  // 4. HLS API Proxy (dynamic import since api/hls.js uses ESM)
   if (pathname === "/api/hls") {
     try {
       const { default: hlsHandler } = await import("./api/hls.js");
@@ -160,7 +161,7 @@ async function app(req, res) {
     }
   }
 
-  // 5. Universal Embed Proxy
+  // 5. Universal Embed Proxy for external servers (VidSrc.me, MultiEmbed, 2Embed)
   if (pathname === "/embed-proxy" || pathname === "/api/embed-proxy") {
     return handleEmbedProxy(req, res);
   }
@@ -179,35 +180,30 @@ async function app(req, res) {
     return handleVidcoreProxy(req, res);
   }
 
-  // 8. Serve static files from dist/ (or public/) with aggressive immutable caching for hashed assets
+  // 5. Serve static files from dist/ (or public/)
   const cleanRel = decodeURIComponent(pathname).replace(/^\/+/, "");
   if (cleanRel && !cleanRel.includes("..")) {
     for (const baseDir of [DIST_DIR, PUBLIC_DIR]) {
       const candidate = path.join(baseDir, cleanRel);
       if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
         const ext = path.extname(candidate).toLowerCase();
-        const isImmutableAsset = pathname.startsWith("/assets/");
         res.writeHead(200, {
           "Content-Type": MIME_TYPES[ext] || "application/octet-stream",
-          "Cache-Control":
-            ext === ".html"
-              ? "no-cache"
-              : isImmutableAsset
-                ? "public, max-age=31536000, immutable"
-                : "public, max-age=86400",
+          "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=3600",
         });
         return fs.createReadStream(candidate).pipe(res);
       }
     }
   }
 
-  // 9. Subtitles direct path fallback
+  // 6. Subtitles direct path fallback (return 404/remote subtitle instead of SPA index.html)
   if (pathname.startsWith("/subtitles/")) {
     req.url = `/api/subtitles?file=${encodeURIComponent(pathname)}`;
     return subtitlesHandler(req, res);
   }
 
-  // 10. SPA Fallback to dist/index.html
+  // 7. SPA Fallback to dist/index.html
+
   const indexHtml = path.join(DIST_DIR, "index.html");
   if (fs.existsSync(indexHtml)) {
     res.writeHead(200, {
@@ -222,8 +218,6 @@ async function app(req, res) {
 
 if (require.main === module) {
   const server = http.createServer(app);
-  server.keepAliveTimeout = 65000;
-  server.headersTimeout = 66000;
   server.listen(PORT, () => {
     console.log(`\n=============================================================`);
     console.log(`🚀 hwto-kurd Server + Ad-Free Multi-Server Proxy is running!`);
