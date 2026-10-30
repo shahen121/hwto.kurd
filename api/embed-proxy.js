@@ -106,23 +106,117 @@ function sanitizeEmbedHtml(html, targetOrigin) {
   return cleaned;
 }
 
+const net = require("net");
+
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  if (net.isIPv4(ip)) {
+    const parts = ip.split(".").map(Number);
+    if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) return true;
+    const [a, b] = parts;
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a >= 224
+    );
+  }
+  const v = ip.toLowerCase();
+  if (
+    v === "::1" ||
+    v === "::" ||
+    v.startsWith("fc") ||
+    v.startsWith("fd") ||
+    v.startsWith("fe80")
+  ) {
+    return true;
+  }
+  if (v.startsWith("::ffff:")) {
+    const v4 = v.slice(7);
+    if (net.isIPv4(v4)) return isPrivateIp(v4);
+  }
+  return false;
+}
+
+const DEFAULT_ALLOWED_EMBED_HOSTS = [
+  "vidsrc.me",
+  "vidsrc.to",
+  "vidsrc.net",
+  "vidsrc.xyz",
+  "vidsrc.in",
+  "vidsrc.pm",
+  "vidsrc.cc",
+  "vidsrc.vip",
+  "vidsrc.stream",
+  "2embed.cc",
+  "2embed.to",
+  "2embed.org",
+  "2embed.skin",
+  "multiembed.mov",
+];
+
+function isAllowedEmbedHost(hostname) {
+  if (!hostname) return false;
+  const host = hostname.toLowerCase();
+
+  const isTest =
+    process.env.NODE_ENV === "test" ||
+    process.env.EMBED_ALLOW_LOCALHOST === "1";
+
+  if (isTest && (host === "127.0.0.1" || host === "localhost")) {
+    return true;
+  }
+
+  if (
+    isPrivateIp(host) ||
+    host === "metadata.google.internal" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) {
+    return false;
+  }
+
+  const extra = (process.env.EMBED_ALLOWED_HOSTS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  const allowedList = [...DEFAULT_ALLOWED_EMBED_HOSTS, ...extra];
+  return allowedList.some((allowed) => host === allowed || host.endsWith("." + allowed));
+}
+
+function sendPlainText(res, statusCode, message) {
+  res.statusCode = statusCode;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  return res.end(message);
+}
+
+const MAX_EMBED_BYTES = 15 * 1024 * 1024; // 15 MB
+
 async function handleEmbedProxy(req, res) {
   const urlParam = req.query?.url || new URL(req.url || "/", "http://localhost").searchParams.get("url");
 
   if (!urlParam) {
-    res.statusCode = 400;
-    return res.end("Missing required ?url= parameter");
+    return sendPlainText(res, 400, "Missing required ?url= parameter");
   }
 
   let targetUrlObj;
   try {
     targetUrlObj = new URL(urlParam);
-    if (!targetUrlObj.protocol.startsWith("http")) {
+    if (targetUrlObj.protocol !== "http:" && targetUrlObj.protocol !== "https:") {
       throw new Error("Invalid protocol");
     }
   } catch (err) {
-    res.statusCode = 400;
-    return res.end(`Invalid target URL: ${urlParam}`);
+    return sendPlainText(res, 400, "Invalid target URL");
+  }
+
+  if (!isAllowedEmbedHost(targetUrlObj.hostname)) {
+    return sendPlainText(res, 403, "Target host is not permitted by embed proxy whitelist");
   }
 
   const targetOrigin = targetUrlObj.origin;
@@ -149,18 +243,58 @@ async function handleEmbedProxy(req, res) {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
-    const fetchRes = await fetch(targetHref, {
-      headers: reqHeaders,
-      signal: controller.signal,
-      redirect: "follow",
-    });
+
+    let currentUrl = targetUrlObj;
+    let fetchRes = null;
+    let redirectCount = 0;
+    const maxRedirects = 3;
+
+    while (redirectCount <= maxRedirects) {
+      fetchRes = await fetch(currentUrl.href, {
+        headers: reqHeaders,
+        signal: controller.signal,
+        redirect: "manual",
+      });
+
+      if (fetchRes.status >= 300 && fetchRes.status < 400 && fetchRes.headers.get("location")) {
+        redirectCount++;
+        if (redirectCount > maxRedirects) {
+          clearTimeout(timer);
+          return sendPlainText(res, 502, "Too many redirects");
+        }
+        const loc = fetchRes.headers.get("location");
+        let nextUrl;
+        try {
+          nextUrl = new URL(loc, currentUrl.href);
+          if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
+            clearTimeout(timer);
+            return sendPlainText(res, 400, "Invalid redirect protocol");
+          }
+        } catch {
+          clearTimeout(timer);
+          return sendPlainText(res, 400, "Invalid redirect target");
+        }
+        if (!isAllowedEmbedHost(nextUrl.hostname)) {
+          clearTimeout(timer);
+          return sendPlainText(res, 403, "Redirect to disallowed host blocked");
+        }
+        currentUrl = nextUrl;
+        continue;
+      }
+      break;
+    }
+
     clearTimeout(timer);
 
     if (fetchRes.status === 403 || fetchRes.status === 401 || fetchRes.status === 429) {
       throw new Error(`Direct fetch rejected with status ${fetchRes.status}`);
     }
     contentType = fetchRes.headers.get("content-type") || contentType;
-    bodyBuf = Buffer.from(await fetchRes.arrayBuffer());
+    const arrayBuf = await fetchRes.arrayBuffer();
+    if (arrayBuf.byteLength > MAX_EMBED_BYTES) {
+      return sendPlainText(res, 413, "Response payload too large");
+    }
+    bodyBuf = Buffer.from(arrayBuf);
   } catch (directErr) {
     // Fallback to Scrape.do with rotation if configured
     try {
@@ -169,13 +303,25 @@ async function handleEmbedProxy(req, res) {
           headers: reqHeaders,
         });
         contentType = scrapeRes.headers.get("content-type") || contentType;
-        bodyBuf = Buffer.from(await scrapeRes.arrayBuffer());
+        const arrayBuf = await scrapeRes.arrayBuffer();
+        if (arrayBuf.byteLength > MAX_EMBED_BYTES) {
+          return sendPlainText(res, 413, "Response payload too large");
+        }
+        bodyBuf = Buffer.from(arrayBuf);
       } else {
         throw directErr;
       }
     } catch (scrapeErr) {
-      res.statusCode = 502;
-      return res.end(`Failed to load external embed: ${directErr.message}`);
+      return sendPlainText(res, 502, `Failed to load external embed: ${directErr.message}`);
+    }
+  }
+
+  if (rawMode) {
+    const isDocType = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|application\/xml|text\/xml)/i.test(contentType);
+    const snip = bodyBuf.slice(0, 256).toString("utf8").trim().toLowerCase();
+    const hasDocTag = snip.startsWith("<!doctype") || snip.startsWith("<html") || snip.startsWith("<svg") || snip.startsWith("<?xml");
+    if (isDocType || hasDocTag) {
+      return sendPlainText(res, 403, "Document content is not permitted in raw mode");
     }
   }
 
@@ -183,6 +329,7 @@ async function handleEmbedProxy(req, res) {
     res.statusCode = 200;
     res.setHeader("Content-Type", contentType);
     res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("X-Content-Type-Options", "nosniff");
     return res.end(bodyBuf);
   }
 
@@ -192,6 +339,7 @@ async function handleEmbedProxy(req, res) {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("X-Content-Type-Options", "nosniff");
   res.removeHeader("X-Frame-Options");
   res.removeHeader("Content-Security-Policy");
 

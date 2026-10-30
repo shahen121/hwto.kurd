@@ -7,6 +7,7 @@ const fs = require("fs");
 const https = require("https");
 const http = require("http");
 const os = require("os");
+const crypto = require("crypto");
 
 let _updateAbortController = null;
 
@@ -303,7 +304,7 @@ function register(getMainWindow, { writeSecretMigration }) {
     return null;
   });
 
-  ipcMain.handle("download-and-install-update", async (_, { url, format }) => {
+  ipcMain.handle("download-and-install-update", async (_, { url, format, expectedSha256 }) => {
     try {
       const ALLOWED_FORMATS = [
         "exe",
@@ -397,6 +398,7 @@ function register(getMainWindow, { writeSecretMigration }) {
               const total = parseInt(res.headers["content-length"] || "0", 10);
               let downloaded = 0;
               const file = fs.createWriteStream(destPath);
+              const sha256 = crypto.createHash("sha256");
 
               res.on("data", (chunk) => {
                 if (signal.aborted) {
@@ -407,6 +409,7 @@ function register(getMainWindow, { writeSecretMigration }) {
                 }
                 downloaded += chunk.length;
                 file.write(chunk);
+                sha256.update(chunk);
                 const percent =
                   total > 0 ? Math.round((downloaded / total) * 100) : 0;
                 const mb = (downloaded / 1e6).toFixed(1);
@@ -422,7 +425,23 @@ function register(getMainWindow, { writeSecretMigration }) {
               });
               res.on("end", () => {
                 file.end();
-                file.on("finish", resolve);
+                file.on("finish", () => {
+                  const computedSha = sha256.digest("hex");
+                  if (expectedSha256) {
+                    const cleanExpected = String(expectedSha256).trim().toLowerCase();
+                    if (computedSha.toLowerCase() !== cleanExpected) {
+                      try {
+                        if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+                      } catch {}
+                      return reject(
+                        new Error(
+                          `Update SHA-256 verification failed (expected ${cleanExpected}, got ${computedSha})`,
+                        ),
+                      );
+                    }
+                  }
+                  resolve();
+                });
                 file.on("error", reject);
               });
               res.on("error", reject);

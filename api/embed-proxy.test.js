@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const vm = require("node:vm");
 const { URL } = require("node:url");
+process.env.EMBED_ALLOW_LOCALHOST = "1";
 const {
   stripAdScripts,
   sanitizeEmbedHtml,

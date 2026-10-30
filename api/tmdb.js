@@ -91,8 +91,7 @@ function isRateLimited(ip) {
 // Reject browser requests coming from other websites (hot-linking the proxy).
 function isForeignOrigin(req) {
   const origin = req.headers?.origin || req.headers?.referer;
-  const host =
-    req.headers?.["x-forwarded-host"] || req.headers?.host || "";
+  const host = (req.headers?.host || "").trim();
   if (!origin || !host) return false; // same-origin GETs often omit Origin
   try {
     const originHost = new URL(origin).host;

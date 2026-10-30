@@ -83,6 +83,7 @@ export async function checkForUpdates(source = DEFAULT_UPDATE_SOURCE) {
 
   // Map release assets to install formats.
   const assets = {};
+  const hashes = {};
   for (const asset of data.assets || []) {
     const name = (asset.name || "").toLowerCase();
     const downloadUrl = asset.browser_download_url;
@@ -93,6 +94,19 @@ export async function checkForUpdates(source = DEFAULT_UPDATE_SOURCE) {
     else if (name.endsWith(".dmg")) assets.dmg = downloadUrl;
   }
 
+  // Extract SHA-256 hashes from release body if present
+  if (data.body && typeof data.body === "string") {
+    const lines = data.body.split("\n");
+    for (const line of lines) {
+      const match = line.match(/\b([a-fA-F0-9]{64})\b.*?(\.(appimage|deb|exe|pacman|dmg))/i);
+      if (match) {
+        const hash = match[1].toLowerCase();
+        const fmt = match[3].toLowerCase();
+        hashes[fmt] = hash;
+      }
+    }
+  }
+
   return {
     source: cfg.id,
     sourceLabel: cfg.label,
@@ -101,6 +115,7 @@ export async function checkForUpdates(source = DEFAULT_UPDATE_SOURCE) {
     url,
     changelog: data.body || "",
     assets,
+    hashes,
     hasUpdate: latestRaw !== "" && semverGt(latestParts, currentParts),
   };
 }

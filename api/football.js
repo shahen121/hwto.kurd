@@ -166,7 +166,7 @@ function isRateLimited(ip) {
 
 function isForeignOrigin(req) {
   const origin = req.headers?.origin || req.headers?.referer;
-  const host = req.headers?.["x-forwarded-host"] || req.headers?.host || "";
+  const host = (req.headers?.host || "").trim();
   if (!origin || !host) return false;
   try {
     const originHost = new URL(origin).host;

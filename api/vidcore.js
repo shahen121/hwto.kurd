@@ -1,4 +1,47 @@
 const { Readable } = require("stream");
+const net = require("net");
+
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  if (net.isIPv4(ip)) {
+    const parts = ip.split(".").map(Number);
+    if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) return true;
+    const [a, b] = parts;
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a >= 224
+    );
+  }
+  const v = ip.toLowerCase();
+  if (
+    v === "::1" ||
+    v === "::" ||
+    v.startsWith("fc") ||
+    v.startsWith("fd") ||
+    v.startsWith("fe80")
+  ) {
+    return true;
+  }
+  if (v.startsWith("::ffff:")) {
+    const v4 = v.slice(7);
+    if (net.isIPv4(v4)) return isPrivateIp(v4);
+  }
+  return false;
+}
+
+function setBoundedCache(cache, key, value, maxEntries = 200) {
+  if (cache.size >= maxEntries) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey !== undefined) cache.delete(oldestKey);
+  }
+  cache.set(key, value);
+}
 
 // VidCore + Vidlink Ad-Free Proxy & Stream Gateway (Vercel Serverless + Node HTTP Server)
 
@@ -55,10 +98,10 @@ function buildScrapeDoUrl(targetUrl, token, useCustomHeaders = true, sessionId =
   const api = new URL("https://api.scrape.do/");
   api.searchParams.set("token", token);
   api.searchParams.set("url", targetUrl);
-  if (useCustomHeaders) api.searchParams.set("customHeaders", "true");
+  api.searchParams.set("customHeaders", useCustomHeaders ? "true" : "false");
   if (sessionId) {
     const cleanSessionId = String(sessionId).trim().slice(0, 10);
-    if (cleanSessionId) api.searchParams.set("sessionId", cleanSessionId);
+    if (cleanSessionId) api.searchParams.set("session_number", cleanSessionId);
   }
   return api.toString();
 }
@@ -138,6 +181,18 @@ async function fetchViaScrapeDoWithRotation(targetUrl, fetchImpl = fetch, option
         initialStatus !== "200"
       ) {
         lastRes = res;
+        advanceSessionToken(sessionId, tokens.length);
+        continue;
+      }
+      if (res.status === 555) {
+        try {
+          const retryUrl = buildScrapeDoUrl(targetUrl, token, false, effectiveSessionId);
+          const retryRes = await fetchImpl(retryUrl, fetchOpts);
+          if (retryRes.status < 500) return retryRes;
+          lastRes = retryRes;
+        } catch (rErr) {
+          lastErr = rErr;
+        }
         advanceSessionToken(sessionId, tokens.length);
         continue;
       }
@@ -715,6 +770,21 @@ async function handleVidcoreProxy(req, res) {
           if (dec.startsWith("http")) rawTarget = dec;
         } catch (_e) {}
       }
+      try {
+        const parsedTarget = new URL(rawTarget);
+        if (
+          isPrivateIp(parsedTarget.hostname) ||
+          parsedTarget.hostname === "metadata.google.internal" ||
+          parsedTarget.hostname.endsWith(".local") ||
+          parsedTarget.hostname.endsWith(".internal")
+        ) {
+          res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+          return res.end("Target host blocked");
+        }
+      } catch {
+        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+        return res.end("Invalid stream proxy target URL");
+      }
       const redirectUrl = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(rawTarget)}`;
       res.writeHead(302, {
         Location: redirectUrl,
@@ -732,6 +802,15 @@ async function handleVidcoreProxy(req, res) {
         const scheme = m[2];
         const upHost = m[3];
         const restPath = m[4] || "/";
+        if (
+          isPrivateIp(upHost) ||
+          upHost === "metadata.google.internal" ||
+          upHost.endsWith(".local") ||
+          upHost.endsWith(".internal")
+        ) {
+          res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+          return res.end("Target host blocked");
+        }
         const rawStreamUrl = `${scheme}://${upHost}${restPath}${search}`;
         workerTarget = `${CF_WORKER_URL}/stream-proxy/${refMode}/${encodeURIComponent(rawStreamUrl)}`;
       } else {
@@ -742,8 +821,10 @@ async function handleVidcoreProxy(req, res) {
     }
 
     if (pathname.startsWith("/embed/")) {
-      const cleanTarget = pathname.replace(/^\/embed/, "") + search;
-      res.writeHead(302, { Location: cleanTarget });
+      let cleanTarget = pathname.slice("/embed".length) || "/";
+      if (!cleanTarget.startsWith("/")) cleanTarget = "/" + cleanTarget;
+      cleanTarget = cleanTarget.replace(/^[/\\]+/, "/");
+      res.writeHead(302, { Location: cleanTarget + search });
       return res.end();
     }
 
@@ -820,7 +901,7 @@ async function handleVidcoreProxy(req, res) {
       const patchedJs = patchPlayerChunk(rawJs, targetPath);
       responseHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
       const cacheKey = targetPath.startsWith("/_next/static/") ? targetPath : pathname;
-      staticChunkCache.set(cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
+      setBoundedCache(staticChunkCache, cacheKey, { body: patchedJs, contentType: "application/javascript; charset=utf-8" });
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(patchedJs, "utf8");
     }
@@ -870,3 +951,5 @@ module.exports.patchPlayerChunk = patchPlayerChunk;
 module.exports.staticChunkCache = staticChunkCache;
 module.exports.getSessionTokenIndex = getSessionTokenIndex;
 module.exports.UNIVERSAL_SUBTITLE_INJECTOR_JS = UNIVERSAL_SUBTITLE_INJECTOR_JS;
+module.exports.isPrivateIp = isPrivateIp;
+module.exports.setBoundedCache = setBoundedCache;

@@ -7,16 +7,24 @@ const { restoreEnglishMetadata } = require("./tmdbResponse");
 const TMDB_BASE = "https://api.themoviedb.org/3";
 let cachedToken = null;
 
+const ALLOWED_PATH =
+  /^\/(movie|tv|trending|discover|search|collection|genre|configuration|person|find|keyword|watch)(\/|\?|$)/;
+
+function resolvePath(rawPath) {
+  if (typeof rawPath !== "string" || !rawPath.startsWith("/")) return null;
+  if (rawPath.includes("..") || rawPath.includes("//")) return null;
+  return ALLOWED_PATH.test(rawPath) ? rawPath : null;
+}
+
 function getTmdbToken() {
   if (cachedToken) return cachedToken;
   if (process.env.TMDB_TOKEN) {
     cachedToken = process.env.TMDB_TOKEN.trim();
     return cachedToken;
   }
-  // Fallback: read .env from workspace or app path
+  // Fallback: read .env from app path (never untrusted process.cwd())
   try {
     const envPaths = [
-      path.resolve(process.cwd(), ".env"),
       path.resolve(__dirname, "../../.env"),
       path.resolve(__dirname, "../.env"),
     ];
@@ -45,6 +53,14 @@ function register() {
       };
     }
     const cleanPath = (reqPath || "").startsWith("/") ? reqPath : `/${reqPath}`;
+    const safePath = resolvePath(cleanPath);
+    if (!safePath) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Invalid or unauthorized TMDB path",
+      };
+    }
     try {
       const headers = {
         Authorization: `Bearer ${token}`,

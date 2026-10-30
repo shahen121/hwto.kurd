@@ -7,6 +7,7 @@ const { ipcMain } = require("electron");
 const https = require("https");
 const http = require("http");
 const crypto = require("crypto");
+const net = require("net");
 
 // ── AllAnime hex cipher (from ani-cli) ────────────────────────────────────────
 
@@ -641,8 +642,43 @@ async function trySourceUrls(sourceUrls) {
   return null;
 }
 
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  if (net.isIPv4(ip)) {
+    const parts = ip.split(".").map(Number);
+    if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) return true;
+    const [a, b] = parts;
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a >= 224
+    );
+  }
+  const v = ip.toLowerCase();
+  if (
+    v === "::1" ||
+    v === "::" ||
+    v.startsWith("fc") ||
+    v.startsWith("fd") ||
+    v.startsWith("fe80")
+  ) {
+    return true;
+  }
+  if (v.startsWith("::ffff:")) {
+    const v4 = v.slice(7);
+    if (net.isIPv4(v4)) return isPrivateIp(v4);
+  }
+  return false;
+}
+
 // ── Local player server ───────────────────────────────────────────────────────
 
+const _localServerSecret = crypto.randomBytes(24).toString("hex");
 let _playerServer = null;
 let _currentVideoUrl = null;
 let _currentVideoReferer = "https://allmanga.to";
@@ -654,7 +690,7 @@ function buildPlayerHtml(videoUrl, startTime) {
 <html><head><meta charset="utf-8">
 <style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;background:#000;overflow:hidden}video{width:100%;height:100%;object-fit:contain;display:block}</style>
 </head><body>
-<video id="v" src="${isM3u8 ? "" : "/proxy?url=" + encodeURIComponent(videoUrl)}" autoplay controls playsinline crossorigin="anonymous"></video>
+<video id="v" src="${isM3u8 ? "" : "/proxy?token=" + _localServerSecret + "&url=" + encodeURIComponent(videoUrl)}" autoplay controls playsinline crossorigin="anonymous"></video>
 ${
   isM3u8
     ? `
@@ -687,11 +723,30 @@ function getPlayerServer() {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       const url = new URL(req.url, "http://localhost");
+      const port = server.address() ? server.address().port : 0;
+      const expectedOrigin = `http://127.0.0.1:${port}`;
+
+      // Enforce secret token authentication on all endpoints
+      const reqToken = url.searchParams.get("token");
+      if (reqToken !== _localServerSecret) {
+        res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Forbidden: invalid session token");
+        return;
+      }
+
+      // If browser Origin is present, ensure it belongs to the local player server
+      const origin = req.headers.origin;
+      if (origin && origin !== expectedOrigin && origin !== `http://localhost:${port}`) {
+        res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Forbidden: unauthorized origin");
+        return;
+      }
 
       if (url.pathname === "/player" || url.pathname === "/") {
         res.writeHead(200, {
-          "Content-Type": "text/html",
+          "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
         });
         res.end(
           buildPlayerHtml(_currentVideoUrl || "", _currentVideoStartTime || 0),
@@ -702,16 +757,33 @@ function getPlayerServer() {
       if (url.pathname === "/proxy") {
         const target = url.searchParams.get("url");
         if (!target) {
-          res.writeHead(400);
-          res.end();
+          res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("Missing url parameter");
           return;
         }
         try {
           const targetUrl = new URL(target);
+          if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
+            res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+            res.end("Invalid protocol");
+            return;
+          }
+          if (
+            isPrivateIp(targetUrl.hostname) ||
+            targetUrl.hostname === "metadata.google.internal" ||
+            targetUrl.hostname.endsWith(".local") ||
+            targetUrl.hostname.endsWith(".internal")
+          ) {
+            res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+            res.end("Private or metadata IP access blocked");
+            return;
+          }
+
           const lib = targetUrl.protocol === "https:" ? https : http;
           const proxyReq = lib.request(
             {
               hostname: targetUrl.hostname,
+              port: targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80),
               path: targetUrl.pathname + targetUrl.search,
               method: req.method || "GET",
               headers: {
@@ -734,26 +806,27 @@ function getPlayerServer() {
               ]) {
                 if (proxyRes.headers[h]) passHeaders[h] = proxyRes.headers[h];
               }
-              passHeaders["Access-Control-Allow-Origin"] = "*";
+              passHeaders["Access-Control-Allow-Origin"] = expectedOrigin;
               passHeaders["Cache-Control"] = "no-store";
+              passHeaders["X-Content-Type-Options"] = "nosniff";
               res.writeHead(proxyRes.statusCode, passHeaders);
               proxyRes.pipe(res);
             },
           );
           proxyReq.on("error", () => {
-            res.writeHead(502);
-            res.end();
+            res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" });
+            res.end("Upstream fetch failed");
           });
           req.pipe(proxyReq);
         } catch {
-          res.writeHead(500);
-          res.end();
+          res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+          res.end("Internal proxy error");
         }
         return;
       }
 
-      res.writeHead(404);
-      res.end();
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not Found");
     });
 
     server.listen(0, "127.0.0.1", () => {
@@ -772,7 +845,9 @@ function register() {
     _currentVideoReferer = referer || "https://allmanga.to";
     _currentVideoStartTime = startTime || 0;
     const server = await getPlayerServer();
-    return { playerUrl: `http://127.0.0.1:${server.address().port}/player` };
+    return {
+      playerUrl: `http://127.0.0.1:${server.address().port}/player?token=${_localServerSecret}`,
+    };
   });
 
   ipcMain.handle(
@@ -936,10 +1011,22 @@ function register() {
 
   ipcMain.handle("debug-allmanga", async (_, args) => {
     try {
-      if (args.path) {
-        const url = args.path.startsWith("http")
-          ? args.path
-          : "https://allmanga.to" + args.path;
+      if (args && args.path) {
+        let url;
+        if (args.path.startsWith("http://") || args.path.startsWith("https://")) {
+          const parsed = new URL(args.path);
+          if (
+            !parsed.hostname.endsWith("allmanga.to") &&
+            !parsed.hostname.endsWith("allanime.to") &&
+            !parsed.hostname.endsWith("allanime.day")
+          ) {
+            return { status: 403, body: "Disallowed target host" };
+          }
+          url = parsed.toString();
+        } else {
+          const cleanRel = args.path.startsWith("/") ? args.path : "/" + args.path;
+          url = "https://allmanga.to" + cleanRel;
+        }
         const r = await httpsGet(url);
         return { status: r.status, body: r.body.slice(0, 3000) };
       }

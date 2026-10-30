@@ -440,7 +440,7 @@ export default function UpdateModal({
   activeDownloads = 0,
   onClose,
 }) {
-  const { latest, current, url, changelog, assets, sourceLabel } = updateInfo;
+  const { latest, current, url, changelog, assets, hashes, sourceLabel } = updateInfo;
 
   const [phase, setPhase] = useState("idle"); // idle | downloading | installing | done | error
   const [format, setFormat] = useState(null); // "appimage" | "deb" | "exe" | "dmg" | null
@@ -486,6 +486,7 @@ export default function UpdateModal({
       const result = await window.electron.downloadAndInstallUpdate({
         url: assetUrl,
         format,
+        expectedSha256: hashes?.[format] || null,
       });
       if (cancelRef.current) return;
       if (!result.ok) throw new Error(result.error || t("updateFailed"));

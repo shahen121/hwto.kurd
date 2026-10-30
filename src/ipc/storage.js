@@ -201,10 +201,19 @@ function register() {
 
   ipcMain.handle("perform-scheduled-backup", (_, { data, settings }) => {
     try {
-      const backupDir = settings.path;
-      if (!backupDir) return { ok: false, error: "No backup path set" };
+      if (!data || typeof data !== "object") {
+        return { ok: false, error: "Invalid backup data" };
+      }
+      const stored = loadScheduledBackupSettings();
+      const backupDir = stored?.path || settings?.path;
+      if (!backupDir || typeof backupDir !== "string") {
+        return { ok: false, error: "No backup path set" };
+      }
 
       const resolvedDir = path.resolve(backupDir);
+      if (resolvedDir === path.resolve("/")) {
+        return { ok: false, error: "Cannot use root filesystem as backup directory" };
+      }
 
       fs.mkdirSync(resolvedDir, { recursive: true });
 

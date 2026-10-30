@@ -112,13 +112,8 @@ function downloadSubtitleFile(url, destPath) {
   return new Promise((resolve) => {
     try {
       const parsedUrl = new URL(url);
-      if (parsedUrl.protocol === "file:") {
-        try {
-          fs.copyFileSync(decodeURIComponent(parsedUrl.pathname), destPath);
-          resolve(true);
-        } catch {
-          resolve(false);
-        }
+      if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+        resolve(false);
         return;
       }
       const lib = parsedUrl.protocol === "https:" ? https : http;
@@ -728,14 +723,27 @@ function register(getMainWindow) {
         } catch {}
         activeProcs.delete(id);
       }
-      if (filePath) {
-        try {
-          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        } catch {}
+      const targetToDelete = filePath || dlEntry?.filePath;
+      if (targetToDelete && dlEntry) {
+        const allowedBase = dlEntry.downloadPath;
+        const resolvedTarget = path.resolve(targetToDelete);
+        const isExactMatch = resolvedTarget === path.resolve(dlEntry.filePath || "");
+        const isInsideBase = allowedBase && resolvedTarget.startsWith(path.resolve(allowedBase) + path.sep);
+        if (isExactMatch || isInsideBase) {
+          try {
+            if (fs.existsSync(resolvedTarget)) fs.unlinkSync(resolvedTarget);
+          } catch {}
+        }
       }
       for (const sp of dlEntry?.subtitlePaths || []) {
         try {
-          if (sp?.path && fs.existsSync(sp.path)) fs.unlinkSync(sp.path);
+          if (sp?.path && fs.existsSync(sp.path)) {
+            const resolvedSp = path.resolve(sp.path);
+            const isSpInside = dlEntry.downloadPath && resolvedSp.startsWith(path.resolve(dlEntry.downloadPath) + path.sep);
+            if (isSpInside || resolvedSp.endsWith(".vtt") || resolvedSp.endsWith(".srt")) {
+              fs.unlinkSync(resolvedSp);
+            }
+          }
         } catch {}
       }
       const dlPath = dlEntry?.downloadPath;

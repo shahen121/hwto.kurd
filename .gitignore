@@ -10,3 +10,6 @@ dist/
 !.env.example
 firebase.txt
 firebase-debug.log
+.DS_Store
+**/.DS_Store
+

@@ -507,17 +507,33 @@ function register({ getDownloads, saveDownloads }) {
   // ── Delete a single subtitle file ─────────────────────────────────────────
   ipcMain.handle("delete-subtitle-file", (_, { downloadId, subtitlePath }) => {
     try {
-      if (subtitlePath && fs.existsSync(subtitlePath))
-        fs.unlinkSync(subtitlePath);
+      if (!subtitlePath || typeof subtitlePath !== "string") {
+        return { ok: false, error: "Invalid path" };
+      }
+      const lower = subtitlePath.toLowerCase();
+      if (!lower.endsWith(".vtt") && !lower.endsWith(".srt") && !lower.endsWith(".sub") && !lower.endsWith(".ass")) {
+        return { ok: false, error: "Disallowed subtitle extension" };
+      }
+      const resolved = path.resolve(subtitlePath);
+      let allowed = false;
       if (downloadId) {
         const downloads = getDownloads();
         const idx = downloads.findIndex((d) => d.id === downloadId);
         if (idx >= 0) {
-          downloads[idx].subtitlePaths = (
-            downloads[idx].subtitlePaths || []
-          ).filter((sp) => sp.path !== subtitlePath);
-          saveDownloads();
+          const dl = downloads[idx];
+          const hasInSubs = (dl.subtitlePaths || []).some((sp) => path.resolve(sp.path) === resolved);
+          const isUnderDl = dl.downloadPath && resolved.startsWith(path.resolve(dl.downloadPath) + path.sep);
+          if (hasInSubs || isUnderDl) {
+            allowed = true;
+            downloads[idx].subtitlePaths = (
+              downloads[idx].subtitlePaths || []
+            ).filter((sp) => path.resolve(sp.path) !== resolved);
+            saveDownloads();
+          }
         }
+      }
+      if (allowed && fs.existsSync(resolved)) {
+        fs.unlinkSync(resolved);
       }
       return { ok: true };
     } catch (e) {

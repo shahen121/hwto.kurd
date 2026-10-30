@@ -164,8 +164,13 @@ function setupSession(playerSession, trailerSession) {
     const headers = { ...details.responseHeaders };
     for (const key of Object.keys(headers)) {
       const lower = key.toLowerCase();
-      if (lower === "x-frame-options" || lower === "content-security-policy")
+      if (lower === "x-frame-options") {
         delete headers[key];
+      } else if (lower === "content-security-policy") {
+        headers[key] = (Array.isArray(headers[key]) ? headers[key] : [headers[key]]).map((csp) =>
+          csp.replace(/frame-ancestors\s+[^;]+;?/gi, ""),
+        );
+      }
     }
     callback({ responseHeaders: headers });
   };
@@ -174,6 +179,12 @@ function setupSession(playerSession, trailerSession) {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
   playerSession.setUserAgent(UA);
   trailerSession.setUserAgent(UA);
+
+  // Deny intrusive permissions (camera, microphone, notifications, etc.)
+  playerSession.setPermissionRequestHandler((_, permission, callback) => callback(false));
+  playerSession.setPermissionCheckHandler(() => false);
+  trailerSession.setPermissionRequestHandler((_, permission, callback) => callback(false));
+  trailerSession.setPermissionCheckHandler(() => false);
 
   playerSession.webRequest.onHeadersReceived(
     { urls: ["*://*/*"] },
@@ -277,6 +288,7 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
       webviewTag: true,
       backgroundThrottling: true,
       spellcheck: false,
@@ -284,6 +296,9 @@ function createWindow() {
       additionalArguments: ["--js-flags=--max-old-space-size=256 --expose-gc"],
     },
   });
+
+  session.defaultSession.setPermissionRequestHandler((_, permission, callback) => callback(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
 
   // Force long-lived disk caching for TMDB images in the default session.
   session.defaultSession.webRequest.onHeadersReceived(
@@ -296,6 +311,15 @@ function createWindow() {
       callback({ responseHeaders: headers });
     },
   );
+
+  // Strip preloads and enforce strict isolation on any attached webview
+  mainWindow.webContents.on("will-attach-webview", (event, webPreferences) => {
+    delete webPreferences.preload;
+    delete webPreferences.preloadURL;
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+  });
 
   // -- Lazy session setup ----------------------------------------------------
   // Player/trailer sessions are configured on the first webview attach or

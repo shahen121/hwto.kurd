@@ -7,6 +7,8 @@ const {
   fetchViaScrapeDoWithRotation,
   getScrapeDoSessionId,
   CF_WORKER_URL,
+  isPrivateIp,
+  setBoundedCache,
 } = require("./vidcore.js");
 
 const VIDLINK_ORIGIN = process.env.VIDLINK_ORIGIN || "https://vidlink.pro";
@@ -170,6 +172,21 @@ async function handleVidlinkProxy(req, res) {
           if (dec.startsWith("http")) rawTarget = dec;
         } catch (_e) {}
       }
+      try {
+        const parsedTarget = new URL(rawTarget);
+        if (
+          isPrivateIp(parsedTarget.hostname) ||
+          parsedTarget.hostname === "metadata.google.internal" ||
+          parsedTarget.hostname.endsWith(".local") ||
+          parsedTarget.hostname.endsWith(".internal")
+        ) {
+          res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+          return res.end("Target host blocked");
+        }
+      } catch {
+        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+        return res.end("Invalid stream proxy target URL");
+      }
       const redirectUrl = `${CF_WORKER_URL}/stream-proxy/ref/${encodeURIComponent(rawTarget)}`;
       res.writeHead(302, {
         Location: redirectUrl,
@@ -187,6 +204,15 @@ async function handleVidlinkProxy(req, res) {
         const scheme = m[2];
         const upHost = m[3];
         const restPath = m[4] || "/";
+        if (
+          isPrivateIp(upHost) ||
+          upHost === "metadata.google.internal" ||
+          upHost.endsWith(".local") ||
+          upHost.endsWith(".internal")
+        ) {
+          res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+          return res.end("Target host blocked");
+        }
         const rawStreamUrl = `${scheme}://${upHost}${restPath}${search}`;
         workerTarget = `${CF_WORKER_URL}/stream-proxy/${refMode}/${encodeURIComponent(rawStreamUrl)}`;
       } else {
@@ -201,8 +227,10 @@ async function handleVidlinkProxy(req, res) {
     }
 
     if (pathname.startsWith("/embed/")) {
-      const cleanTarget = pathname.replace(/^\/embed/, "") + search;
-      res.writeHead(302, { Location: cleanTarget });
+      let cleanTarget = pathname.slice("/embed".length) || "/";
+      if (!cleanTarget.startsWith("/")) cleanTarget = "/" + cleanTarget;
+      cleanTarget = cleanTarget.replace(/^[/\\]+/, "/");
+      res.writeHead(302, { Location: cleanTarget + search });
       return res.end();
     }
 
@@ -258,7 +286,7 @@ async function handleVidlinkProxy(req, res) {
           if (contentType.includes("javascript")) {
             const rawJs = await staticRes.text();
             const patchedJs = patchPlayerChunk(rawJs, targetPath);
-            vidlinkStaticCache.set(cacheKey, {
+            setBoundedCache(vidlinkStaticCache, cacheKey, {
               body: patchedJs,
               contentType,
             });
@@ -272,7 +300,7 @@ async function handleVidlinkProxy(req, res) {
 
           const arrayBuffer = await staticRes.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
-          vidlinkStaticCache.set(cacheKey, {
+          setBoundedCache(vidlinkStaticCache, cacheKey, {
             body: buffer,
             contentType,
           });
@@ -328,13 +356,13 @@ async function handleVidlinkProxy(req, res) {
       if (contentType.includes("javascript")) {
         const rawJs = await upstreamRes.text();
         const patchedJs = patchPlayerChunk(rawJs, targetPath);
-        vidlinkStaticCache.set(targetPath, { body: patchedJs, contentType });
+        setBoundedCache(vidlinkStaticCache, targetPath, { body: patchedJs, contentType });
         res.writeHead(upstreamRes.status, responseHeaders);
         return res.end(patchedJs, "utf8");
       }
       const arrayBuffer = await upstreamRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      vidlinkStaticCache.set(targetPath, { body: buffer, contentType });
+      setBoundedCache(vidlinkStaticCache, targetPath, { body: buffer, contentType });
       res.writeHead(upstreamRes.status, responseHeaders);
       return res.end(buffer);
     }
